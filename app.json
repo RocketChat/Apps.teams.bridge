@@ -1,0 +1,16 @@
+{
+    "id": "30d2e4bf-2402-4197-b844-e7082b07dc65",
+    "version": "0.0.1",
+    "requiredApiVersion": "^1.19.0",
+    "iconFile": "icon.png",
+    "author": {
+        "name": "Yuqing Bian",
+        "homepage": "https://github.com/Yuq-Bian/Yuq-Bian",
+        "support": "https://github.com/Yuq-Bian/Yuq-Bian"
+    },
+    "name": "TeamsBridge",
+    "nameSlug": "teamsbridge",
+    "classFile": "TeamsBridgeApp.ts",
+    "description": "Rocket.Chat app to support connecting collaborators across Rocket.Chat and Microsoft Teams",
+    "implements": []
+}
