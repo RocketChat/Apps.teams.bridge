@@ -1,0 +1,6 @@
+{
+    "teamsbridge_aad_tenant_id": "Azure Active Directory Directory (tenant) ID",
+    "teamsbridge_aad_client_id": "Azure Active Directory Application (client) ID",
+    "teamsbridge_aad_client_secret": "Azure Active Directory Client Secret",
+    "setup_verification_slash_command_description": "Verify TeamsBridge app setup correcly for your organization"
+}
