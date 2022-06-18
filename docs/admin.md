@@ -4,12 +4,12 @@
 
 To enable Rocket.Chat and Microsoft Teams collaboration for your organization with TeamsBridge App, there are some actions required for the organization admin. Please make sure you have access for both your organization's `Rocket.Chat admin account` and `Microsoft Teams admin account`.
 
-### Install the TeamsBridge App
+### 1. Install the TeamsBridge App
 
 - On Rocket.Chat Marketplace, find the Teams Bridge App and install.
 - Navigate to App Admin Page, scroll to APIs, and copy `GET auth endpoint URL`. This endpoint URL will be used in following steps. If it’s a localhost url, tunnel service such as Ngrok is required to expose the localhost port to the internet.
 
-### Setup an Azure Active Directory App for your organization
+### 2. Setup an Azure Active Directory App for your organization
 
 - Login to [Microsoft Azure Portal](portal.azure.com) with Microsoft Teams admin account of your organization. Find and select `Azure Active Directory` service with the search box.
 - Select `Add` => `App registration`.
@@ -19,11 +19,11 @@ To enable Rocket.Chat and Microsoft Teams collaboration for your organization wi
 - Navigate to the `API permissions` blade. Select `Add a permission`, add the set of required permissions, and click `grant admin consent for org`.
    - **TODO: YUQING - figure the minimum required permissions set and add a required permissions list here**
 
-### Configure the TeamsBridge App
+### 3. Configure the TeamsBridge App
 
 - Navigate to the App Admin Page again, scroll to Settings. Paste `Directory (tenant) ID`, `Application (client) ID`, and `Client Secret` copied in previous step to corresponding box and click `Save changes`.
 
-### Verify the TeamsBridge App setup correctly
+### 4. Verify the TeamsBridge App setup correctly
 
 - You're almost there! Now run slash command `teamsbridge-setup-verification` to verify whether you setup the TeamsBridge App correctly for your organization.
 
