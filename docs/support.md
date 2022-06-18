@@ -1,12 +1,11 @@
-**Rocket.Chat TeamsBridge App**
-----
+# Rocket.Chat TeamsBridge App
 
 Rocket.Chat TeamsBridge App is a tool to support connecting collaborators across Rocket.Chat and Microsoft Teams.
 
-# As an organization Admin
+## As an organization Admin
 
 To enable Rocket.Chat and Microsoft Teams collaboration for your organization with TeamsBridge App, see [Organization Admin Guide](./admin.md).
 
-# As a Rocket.Chat user
+## As a Rocket.Chat user
 
 Document under development.
