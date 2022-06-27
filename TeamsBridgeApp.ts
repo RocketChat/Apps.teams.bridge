@@ -8,6 +8,7 @@ import { App } from '@rocket.chat/apps-engine/definition/App';
 import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
 import { settings } from './config/Settings';
 import { AuthenticationEndpoint } from './endpoints/AuthenticationEndpoint';
+import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
 
 export class TeamsBridgeApp extends App {
@@ -21,6 +22,7 @@ export class TeamsBridgeApp extends App {
         
         // Register slash commands
         await configuration.slashCommands.provideSlashCommand(new SetupVerificationSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
         
         // Register API endpoints
         await configuration.api.provideApi({
