@@ -49,7 +49,7 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
         let url = getMicrosoftAuthorizeUrl(aadTenantId);
         url += `?client_id=${aadClientId}`;
         url += '&response_type=code';
-        url += `&redirect_uri=${encodeURI(authEndpointUrl)}`;
+        url += `&redirect_uri=${authEndpointUrl}`;
         url += '&response_mode=query';
         url += `&scope=${AuthenticationScopes.join('%20')}`;
         url += `&state=${userId}`;
@@ -60,6 +60,6 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
     private getLoginMessage(loginUrl: string): string {
         return 'To start cross platform collaboration, you need to login to Microsoft with your Teams account or guest account. '
             + 'You\'ll be able to keep using Rocket.Chat, but you\'ll also be able to chat with colleagues using Microsoft Teams. '
-            + `\n Please click this link to [Login Teams](${loginUrl}).`;
+            + `\n Please click this link to login Teams : ${loginUrl}`;
     }
 }

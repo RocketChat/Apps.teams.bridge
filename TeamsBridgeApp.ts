@@ -41,10 +41,6 @@ export class TeamsBridgeApp extends App {
         configurationModify: IConfigurationModify,
         read: IRead,
         http: IHttp): Promise<void> {
-        const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
-        const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
-        const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
-
         console.log(`onSettingUpdated for setting ${setting.id} with new value ${setting.value}`);
     }
 }

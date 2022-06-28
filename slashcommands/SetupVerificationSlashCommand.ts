@@ -30,17 +30,17 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
         modify: IModify,
         http: IHttp,
         persis: IPersistence): Promise<void> {
-        const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
-        const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
-        const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
-        const room = context.getRoom();
-
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
         const messageReceiver = context.getSender();
+        const room = context.getRoom();
 
         try {
-            const result = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
-            await persistApplicationAccessTokenAsync(persis, result.accessToken);
+            const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
+            const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
+            const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
+    
+            const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
+            await persistApplicationAccessTokenAsync(persis, response.accessToken);
             await nofityRocketChatUserInRoomAsync(this.verificationPassMessage, appUser, messageReceiver, room, modify);
         } catch (error) {
             await nofityRocketChatUserInRoomAsync(this.verificationFailMessage, appUser, messageReceiver, room, modify);
