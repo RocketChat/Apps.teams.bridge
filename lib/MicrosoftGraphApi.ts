@@ -2,49 +2,50 @@ import {
     HttpStatusCode,
     IHttp,
     IHttpRequest,
-    IPersistence,
-    IRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
-import { RocketChatAssociationModel, RocketChatAssociationRecord } from "@rocket.chat/apps-engine/definition/metadata";
-import { AppSetting } from "../config/Settings";
-import { getMicrosoftOAuthUrl } from "./Const";
+import { getMicrosoftTokenUrl } from "./Const";
 
-export const getApplicationAccessTokenAsync = async (read: IRead, http: IHttp, persis: IPersistence) : Promise<boolean> => {
-    const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
-    const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
-    const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
+export interface TokenResponse {
+    tokenType: string;
+    expiresIn: number;
+    extExpiresIn: number;
+    accessToken: string;
+};
 
-    const requestBody = "scope=https://graph.microsoft.com/.default&grant_type=client_credentials"
+export const getApplicationAccessTokenAsync = async (
+    http: IHttp,
+    aadTenantId: string,
+    aadClientId: string,
+    aadClientSecret: string) : Promise<TokenResponse> => {
+    const requestBody = 'scope=https://graph.microsoft.com/.default&grant_type=client_credentials'
         + `&client_id=${aadClientId}&client_secret=${aadClientSecret}`;
 
     const httpRequest: IHttpRequest = {
         headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
+            'Content-Type': 'application/x-www-form-urlencoded'
         },
         content: requestBody,
     };
 
-    const url = getMicrosoftOAuthUrl(aadTenantId);
+    const url = getMicrosoftTokenUrl(aadTenantId);
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
         const responseBody = response.content;
         if (responseBody === undefined) {
-            return false;
+            throw new Error('Get application access token failed!');
         }
 
         const jsonBody = JSON.parse(responseBody);
-
-        const associations: Array<RocketChatAssociationRecord> = [
-            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, 'ApplicationAccessToken'),
-        ];
-        const data = {
-            'ApplicationAccessToken': jsonBody.access_token,
+        const result : TokenResponse = {
+            tokenType: jsonBody.token_type,
+            expiresIn: jsonBody.expires_in,
+            extExpiresIn: jsonBody.ext_expires_in,
+            accessToken: jsonBody.access_token,
         };
-        await persis.updateByAssociations(associations, data, true);
 
-        return true;
+        return result;
     } else {
-        return false;
+        throw new Error(`Get application access token failed with http status code ${response.statusCode}.`);
     }
 };

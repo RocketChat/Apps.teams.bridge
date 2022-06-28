@@ -7,7 +7,9 @@ import {
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { getApplicationAccessTokenAsync } from "../lib/MicrosoftGraphApi";
-import { nofityRocketChatUserInRoomAsync, sendRocketChatOneOnOneMessageAsync } from "../lib/Messages";
+import { nofityRocketChatUserInRoomAsync } from "../lib/Messages";
+import { AppSetting } from "../config/Settings";
+import { persistApplicationAccessTokenAsync } from "../lib/PersistHelper";
 
 export class SetupVerificationSlashCommand implements ISlashCommand {
     private verificationPassMessage: string = 'TeamsBridge app setup verification PASSED!';
@@ -28,14 +30,19 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
         modify: IModify,
         http: IHttp,
         persis: IPersistence): Promise<void> {
+        const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
+        const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
+        const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
         const room = context.getRoom();
-        const result = await getApplicationAccessTokenAsync(read, http, persis);
 
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
         const messageReceiver = context.getSender();
-        if (result) {
+
+        try {
+            const result = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
+            await persistApplicationAccessTokenAsync(persis, result.accessToken);
             await nofityRocketChatUserInRoomAsync(this.verificationPassMessage, appUser, messageReceiver, room, modify);
-        } else {
+        } catch (error) {
             await nofityRocketChatUserInRoomAsync(this.verificationFailMessage, appUser, messageReceiver, room, modify);
         }
     }

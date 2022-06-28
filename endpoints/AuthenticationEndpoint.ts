@@ -10,7 +10,7 @@ import {
     IApiRequest,
     IApiResponse,
 } from "@rocket.chat/apps-engine/definition/api";
-import { AuthenticationEndpointPath } from "../lib/TeamsBridgeConst";
+import { AuthenticationEndpointPath } from "../lib/Const";
 
 export class AuthenticationEndpoint extends ApiEndpoint {
     private embeddedLoginSuccessMessage: string = 'Login to Teams succeed! You can close this window now.'
