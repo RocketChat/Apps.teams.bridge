@@ -36,4 +36,24 @@ If the slash command `teamsbridge-setup-verification` prompts nagative result, y
 
 ## Setup Microsoft Teams access for Rocket.Chat users in your organization
 
-Document under development.
+Microsoft Teams data access is controlled by Microsoft Authorization policies. TeamsBridge App is a tool to centralize a user's access instead of extending their access. Rocket.Chat users will have to authorize the TeamsBridge App with their Microsoft Teams access in order to enable themselves collaborate with their colleagues on Microsoft Teams. People who use Microsoft Teams will be able to chat with Rocket.Chat users as if they were also on Microsoft Teams. Rocket.Chat users will be able to chat with Microsoft Teams people while staying in Rocket.Chat.
+
+Organization admin will have to grant Microsoft Teams access to Rocket.Chat users by providing Microsoft Teams accounts so that they can authorize the TeamsBridge App to start the collaboration. Both `Guest Access account` and `general Teams account` work for the TeamsBridge App. We highly recommand setting up `Guest Access account` for Rocket.Chat users who do not have a Teams account in the organization to minimize the cost.
+
+### Setup Guest Access account
+
+- `Guest Access account` grants `Guest Access` to someone who doesn't have a school or work account with the organization. For details, see [Guest access in Microsoft Teams](https://docs.microsoft.com/en-us/microsoftteams/guest-access).
+
+- Organization Admin need to make sure `Guest Access` is turned `ON` for the organization. For details, see [Teams guest access settings](https://docs.microsoft.com/en-us/microsoft-365/solutions/collaborate-as-team?view=o365-worldwide#teams-guest-access-settings).
+
+- Once the `Guest Access` is turned `ON`, organization Admin can invite guest to the organization. This can be done either via [Teams Admin Center](https://admin.teams.microsoft.com/) or [Azure Portal](https://portal.azure.com). For details, see [Teams Admin Center solution](https://support.microsoft.com/en-us/office/add-guests-to-a-team-in-teams-fccb4fa6-f864-4508-bdde-256e7384a14f?ui=en-us&rs=en-us&ad=us) and [Azure Portal solution](https://docs.microsoft.com/en-us/azure/active-directory/external-identities/b2b-quickstart-add-guest-users-portal).
+
+- `Guest Access` is available for limited Microsoft 365 subscription types. But the cost for a `Guest Access` is significantly lower than `general Teams account`, For details, see [Licensing for guest access](https://docs.microsoft.com/en-us/microsoftteams/guest-access#licensing-for-guest-access).
+
+### Setup general Teams account
+
+- To create a `general Teams account`, organization admin need to add a user via [Microsoft 365 Admin Center](https://admin.microsoft.com/Adminportal/Home#/homepage) with their Microsoft admin account. For details, see [Microsoft official document](https://docs.microsoft.com/en-us/microsoft-365/admin/add-users/add-new-employee?view=o365-worldwide).
+
+- Then, organization admin need to assign a Teams license to the newly created user. For details, see [Microsoft official document](https://docs.microsoft.com/en-us/microsoftteams/user-access#using-the-microsoft-365-admin-center).
+
+- The cost for a `general Teams account` depends on the plan your organization choose. For details, see [Microsoft official document](https://www.microsoft.com/en-us/microsoft-teams/compare-microsoft-teams-options?activetab=pivot%3aprimaryr1).

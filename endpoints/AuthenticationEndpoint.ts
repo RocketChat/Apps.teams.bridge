@@ -10,9 +10,12 @@ import {
     IApiRequest,
     IApiResponse,
 } from "@rocket.chat/apps-engine/definition/api";
+import { AuthenticationEndpointPath } from "../lib/TeamsBridgeConst";
 
 export class AuthenticationEndpoint extends ApiEndpoint {
-    public path = 'auth';
+    private embeddedLoginSuccessMessage: string = 'Login to Teams succeed! You can close this window now.'
+
+    public path = AuthenticationEndpointPath;
 
     public async get(
         request: IApiRequest,
@@ -25,6 +28,14 @@ export class AuthenticationEndpoint extends ApiEndpoint {
         // Now this is an empty endpoint for having an endpoint URL under App Info.
         // The organization admin need to config this URL in the AAD app they created for Teams interop.
         // TODO: implement this empoint.
-        return this.success();
+
+        // 1. Get RC user id
+        // 2. Get user access Token & fresh Token
+        // 3. Persist the access
+        // 4. Setup token refresh mechenism
+
+        // TODO: setup incoming message webhook with Microsoft
+
+        return this.success(this.embeddedLoginSuccessMessage);
     }
 }
