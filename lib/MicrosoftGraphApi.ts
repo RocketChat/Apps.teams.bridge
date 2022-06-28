@@ -7,6 +7,7 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { RocketChatAssociationModel, RocketChatAssociationRecord } from "@rocket.chat/apps-engine/definition/metadata";
 import { AppSetting } from "../config/Settings";
+import { getMicrosoftOAuthUrl } from "./Const";
 
 export const getApplicationAccessTokenAsync = async (read: IRead, http: IHttp, persis: IPersistence) : Promise<boolean> => {
     const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
@@ -23,7 +24,7 @@ export const getApplicationAccessTokenAsync = async (read: IRead, http: IHttp, p
         content: requestBody,
     };
 
-    const url = `https://login.microsoftonline.com/${aadTenantId}/oauth2/v2.0/token`;
+    const url = getMicrosoftOAuthUrl(aadTenantId);
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
