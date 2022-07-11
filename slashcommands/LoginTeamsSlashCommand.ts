@@ -38,6 +38,8 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
         const loginUrl = this.getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id);
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
 
+        // TODO: check whether current user has already logged in
+        // If the user has already logged, print some other information instead of the login url
         const message = this.getLoginMessageWithButton(loginUrl, appUser, room);
 
         await nofityRocketChatUserAsync(message, commandSender, modify);

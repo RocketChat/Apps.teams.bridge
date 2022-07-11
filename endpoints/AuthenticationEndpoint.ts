@@ -58,7 +58,13 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 aadClientId,
                 aadClientSecret);
 
-            await persistUserAccessTokenAsync(persis, rocketChatUserId, response.accessToken, response.refreshToken as string);
+            await persistUserAccessTokenAsync(
+                persis,
+                rocketChatUserId,
+                response.accessToken,
+                response.refreshToken as string,
+                response.expiresIn,
+                response.extExpiresIn);
 
             // TODO: setup token refresh mechenism in future PR
             // TODO: setup incoming message webhook in future PR

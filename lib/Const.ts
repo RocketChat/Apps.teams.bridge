@@ -1,3 +1,5 @@
+import { DummyUserModel } from "./PersistHelper";
+
 export const AuthenticationEndpointPath: string = 'auth';
 
 export const MicrosoftBaseUrl: string = 'https://login.microsoftonline.com';
@@ -27,4 +29,18 @@ export const getMicrosoftTokenUrl = (aadTenantId: string) => {
 
 export const getMicrosoftAuthorizeUrl = (aadTenantId: string) => {
     return `${MicrosoftBaseUrl}/${aadTenantId}/oauth2/v2.0/authorize`;
+};
+
+export const TestEnvironment = {
+    // Set enable to true for local testing with mock data
+    enable: true,
+    // Put url here when running locally & using tunnel service such as Ngrok to expose the localhost port to the internet
+    tunnelServiceUrl: '',
+    mockDummyUsers: [
+        {
+            // Mock dummy user for alexw.l4cf.onmicrosoft.com 
+            rocketChatUserId: 'WDWqKXJCRiRKTR7k8',
+            teamsUserId: 'ffa3322f-670c-4887-b193-a04cca6073f8',
+        }
+    ] as DummyUserModel[],
 };

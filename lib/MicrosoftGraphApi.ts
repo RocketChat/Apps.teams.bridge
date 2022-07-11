@@ -96,3 +96,7 @@ export const getUserAccessTokenAsync = async (
         throw new Error(`Get application access token failed with http status code ${response.statusCode}.`);
     }
 };
+
+export const getUserInfomationAsync = async () : Promise<void> => {
+
+};
