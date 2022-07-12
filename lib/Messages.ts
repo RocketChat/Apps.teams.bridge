@@ -44,12 +44,20 @@ export const nofityRocketChatUserInRoomAsync = async (
     user: IUser,
     room: IRoom,
     modify: IModify) : Promise<void> => {
-    const notifier: INotifier = modify.getNotifier();
-
     const messageTemplate: IMessage = {
         text: message,
         sender: appUser,
         room
     };
-    await notifier.notifyUser(user, messageTemplate);
+
+    await nofityRocketChatUserAsync(messageTemplate, user, modify);
+};
+
+export const nofityRocketChatUserAsync = async (
+    message: IMessage,
+    user: IUser,
+    modify: IModify) : Promise<void> => {
+    const notifier: INotifier = modify.getNotifier();
+
+    await notifier.notifyUser(user, message);
 };
