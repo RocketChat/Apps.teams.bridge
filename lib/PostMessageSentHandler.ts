@@ -1,9 +1,11 @@
 import { IHttp, IModify, IPersistence, IRead } from "@rocket.chat/apps-engine/definition/accessors";
-import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
+import { IMessage, IMessageAction, IMessageAttachment, MessageActionType } from "@rocket.chat/apps-engine/definition/messages";
 import { IRoom, RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { nofityRocketChatUserInRoomAsync } from "./Messages";
-import { checkDummyUserAsync, retrieveDummyUserAsync, retrieveUserAccessTokenAsync } from "./PersistHelper";
+import { LoginRequiredHintMessageText, SupportDocumentButtonText, SupportDocumentUrl } from "./Const";
+import { nofityRocketChatUserAsync } from "./Messages";
+import { createOneOnOneChatThreadAsync, sendTextMessageToChatThreadAsync } from "./MicrosoftGraphApi";
+import { checkDummyUserAsync, retrieveDummyUserAsync, retrieveUserAccessTokenAsync, retrieveUserAsync } from "./PersistHelper";
 
 export const handlePostMessageSentAsync = async (
     message: IMessage,
@@ -14,7 +16,7 @@ export const handlePostMessageSentAsync = async (
     // In first version, we'll only support sending text message in 1:1 chat with Teams user
 
     // If the message is not a text message, stop processing
-    if (!isTextMessage(message)) {
+    if (!message || !message.text || !isTextMessage(message)) {
         return;
     }
 
@@ -45,14 +47,53 @@ export const handlePostMessageSentAsync = async (
 
     // All checks passed, find the dummy user record
     const dummyUser = await retrieveDummyUserAsync(read, receiverId);
+    const senderUser = await retrieveUserAsync(read, senderId);
+
+    if (!dummyUser || !senderUser) {
+        // If any of dummy user or sender user information is missing, stop processing
+        return;
+    }
+
+    // Create a 1 on 1 chat thread in Teams
+    const teamsThread = await createOneOnOneChatThreadAsync(
+        http,
+        senderUser.teamsUserId,
+        dummyUser.teamsUserId,
+        senderUserAccessToken);
+
+    // Send the message to the chat thread
+    await sendTextMessageToChatThreadAsync(
+        http,
+        message.text,
+        teamsThread.threadId,
+        senderUserAccessToken);
 };
 
 const notifyNotLoggedInUserAsync = async (read: IRead, user: IUser, room: IRoom, modify: IModify) : Promise<void> => {
-    const errorHintMessage = 'The Rocket.Chat user you are messaging represents a colleague in your organization using Microsoft Teams. '
-    + 'The message can NOT be delivered to the user on Microsoft Teams before you start cross platform collaboration for your account. '
-    + 'For details, see https://github.com/RocketChat/Apps.teams.bridge/blob/main/docs/support.md.';
     const appUser = (await read.getUserReader().getAppUser()) as IUser;
-    await nofityRocketChatUserInRoomAsync(errorHintMessage, appUser, user, room, modify);
+    
+    const buttonAction: IMessageAction = {
+        type: MessageActionType.BUTTON,
+        text: SupportDocumentButtonText,
+        url: SupportDocumentUrl,
+    };
+
+    const buttonAttachment: IMessageAttachment = {
+        actions: [
+            buttonAction
+        ]
+    };
+
+    const message: IMessage = {
+        text: LoginRequiredHintMessageText,
+        sender: appUser,
+        room,
+        attachments: [
+            buttonAttachment
+        ]
+    };
+    
+    await nofityRocketChatUserAsync(message, user, modify);
 };
 
 const getDirectMessageReceiverId = (message: IMessage, room: IRoom) : string | undefined => {

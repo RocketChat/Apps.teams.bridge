@@ -15,8 +15,8 @@ import { IApiResponseJSON } from "@rocket.chat/apps-engine/definition/api/IRespo
 import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
 import { AppSetting } from "../config/Settings";
 import { AuthenticationEndpointPath } from "../lib/Const";
-import { getUserAccessTokenAsync } from "../lib/MicrosoftGraphApi";
-import { persistUserAccessTokenAsync } from "../lib/PersistHelper";
+import { getUserAccessTokenAsync, getUserProfileAsync } from "../lib/MicrosoftGraphApi";
+import { persistUserAccessTokenAsync, persistUserAsync } from "../lib/PersistHelper";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 
 export class AuthenticationEndpoint extends ApiEndpoint {
@@ -58,13 +58,19 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 aadClientId,
                 aadClientSecret);
 
+            const userAccessToken = response.accessToken;
+
+            const teamsUserProfile = await getUserProfileAsync(http, userAccessToken);
+
             await persistUserAccessTokenAsync(
                 persis,
                 rocketChatUserId,
-                response.accessToken,
+                userAccessToken,
                 response.refreshToken as string,
                 response.expiresIn,
                 response.extExpiresIn);
+
+            await persistUserAsync(persis, rocketChatUserId, teamsUserProfile.id);
 
             // TODO: setup token refresh mechenism in future PR
             // TODO: setup incoming message webhook in future PR

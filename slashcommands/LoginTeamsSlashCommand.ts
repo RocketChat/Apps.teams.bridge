@@ -2,7 +2,7 @@ import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/de
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AppSetting } from "../config/Settings";
-import { nofityRocketChatUserAsync, nofityRocketChatUserInRoomAsync } from "../lib/Messages";
+import { nofityRocketChatUserAsync } from "../lib/Messages";
 import { AuthenticationEndpointPath, AuthenticationScopes, getMicrosoftAuthorizeUrl, LoginButtonText, LoginMessageText } from "../lib/Const";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
