@@ -2,6 +2,7 @@ import {
     IMessageBuilder,
     IModify,
     IModifyCreator,
+    INotifier,
     IRead,
     IRoomBuilder,
 } from "@rocket.chat/apps-engine/definition/accessors";
@@ -25,7 +26,7 @@ export const sendRocketChatOneOnOneMessageAsync = async (
         .addMemberToBeAddedByUsername(receiver.username);
 
     const roomId = await creator.finish(roomBuilder);
-    var room = (await read.getRoomReader().getById(roomId)) as IRoom;
+    const room = (await read.getRoomReader().getById(roomId)) as IRoom;
 
     const messageTemplate: IMessage = {
         text: message,
@@ -35,4 +36,28 @@ export const sendRocketChatOneOnOneMessageAsync = async (
 
     const messageBuilder: IMessageBuilder = creator.startMessage(messageTemplate);
     await creator.finish(messageBuilder);
+};
+
+export const nofityRocketChatUserInRoomAsync = async (
+    message: string,
+    appUser: IUser,
+    user: IUser,
+    room: IRoom,
+    modify: IModify) : Promise<void> => {
+    const messageTemplate: IMessage = {
+        text: message,
+        sender: appUser,
+        room
+    };
+
+    await nofityRocketChatUserAsync(messageTemplate, user, modify);
+};
+
+export const nofityRocketChatUserAsync = async (
+    message: IMessage,
+    user: IUser,
+    modify: IModify) : Promise<void> => {
+    const notifier: INotifier = modify.getNotifier();
+
+    await notifier.notifyUser(user, message);
 };

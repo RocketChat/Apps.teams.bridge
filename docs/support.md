@@ -8,4 +8,4 @@ To enable Rocket.Chat and Microsoft Teams collaboration for your organization wi
 
 ## As a Rocket.Chat user
 
-Document under development.
+To start Rocket.Chat and Microsoft Teams cross platform collaboration, see [Rocket.Chat User Guide](./user.md).

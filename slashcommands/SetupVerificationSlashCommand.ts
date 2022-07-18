@@ -7,7 +7,9 @@ import {
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { getApplicationAccessTokenAsync } from "../lib/MicrosoftGraphApi";
-import { sendRocketChatOneOnOneMessageAsync } from "../lib/RocketChatMessageSender";
+import { nofityRocketChatUserInRoomAsync } from "../lib/Messages";
+import { AppSetting } from "../config/Settings";
+import { persistApplicationAccessTokenAsync } from "../lib/PersistHelper";
 
 export class SetupVerificationSlashCommand implements ISlashCommand {
     private verificationPassMessage: string = 'TeamsBridge app setup verification PASSED!';
@@ -28,14 +30,20 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
         modify: IModify,
         http: IHttp,
         persis: IPersistence): Promise<void> {
-        const result = await getApplicationAccessTokenAsync(read, http, persis);
-
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
         const messageReceiver = context.getSender();
-        if (result) {
-            await sendRocketChatOneOnOneMessageAsync(this.verificationPassMessage, appUser, messageReceiver, read, modify);
-        } else {
-            await sendRocketChatOneOnOneMessageAsync(this.verificationFailMessage, appUser, messageReceiver, read, modify);
+        const room = context.getRoom();
+
+        try {
+            const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
+            const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
+            const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
+    
+            const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
+            await persistApplicationAccessTokenAsync(persis, response.accessToken);
+            await nofityRocketChatUserInRoomAsync(this.verificationPassMessage, appUser, messageReceiver, room, modify);
+        } catch (error) {
+            await nofityRocketChatUserInRoomAsync(this.verificationFailMessage, appUser, messageReceiver, room, modify);
         }
     }
 }
