@@ -24,10 +24,27 @@ The required action for you to authorize the TeamsBridge App is called `Embedded
 - Click `Yes` if you see the login page ask authorization for specific permissions from you.
 - If you successfully login to Teams and authorize the TeamsBridge App, the web pages will show `Login to Teams succeed! You can close this window now.`. You can just close the window.
 
-## Send Direct Message to a collaborator who use Microsoft Teams
+## Collaboration Experience
 
-Document under development.
+One of the most important goals of Rocket.Chat TeamsBridge App is to build a smooth user experience for both users on Rocket.Chat and Microsoft Teams. To achieve this, TeamsBridge App introduces a concept called `Dummy User` in Rocket.Chat world. Each Rocket.Chat `Dummy User` represents a real user on Microsoft Teams. When a Rocket.Chat user that has already `embedded login` to his Teams account sends a message to a `Dummy User`, the message will be delivered to Microsoft Teams world with the original sender's Teams account as the sender and the `Dummy User`'s corresponding Teams account as the receiver. As a result, from the Rocket.Chat users' perspective, they are just collaborating with someone on Rocket.Chat. Meanwhile, from the Teams users' perspective, they are just messaging someone on Teams. With the `Dummy User` approach, the TeamsBridge App delivers messages between Rocket.Chat and Microsoft Teams while keeping the orginal collaboration experience for users on both platforms.
 
-## Send Message to a group chat with participant(s) who use Microsoft Teams
+### Send one on one Direct Message to a collaborator who use Microsoft Teams
 
-Document under development.
+To send a one on one Direct Message from Rocket.Chat to a collaborator who use Microsoft Teams, the Rocket.Chat user just need to search the `Dummy User` that represent the Teams user in Rocket.Chat client and send a message to them. The message will be delivered to Microsoft Teams world with the original sender's Teams account as the sender and the `Dummy User`'s corresponding Teams account as the receiver.
+
+### Receive one on one Direct Message from a collaborator who use Microsoft Teams
+
+This feature is under development and will be available soon.
+
+### Send Message to a group chat with participant(s) who use Microsoft Teams
+
+Currently, this is NOT a supported scenario, which is under developer and will be added soon in the future.
+
+### Receive Message in a group chat with participant(s) who use Microsoft Teams
+
+This feature is under development and will be available soon.
+
+### Supported Message Types
+
+Currently, the following message types are supported:
+- Text Message

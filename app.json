@@ -16,5 +16,7 @@
         "Communication",
         "Omnichannel"
     ],
-    "implements": []
+    "implements": [
+        "IPostMessageSent"
+    ]
 }
