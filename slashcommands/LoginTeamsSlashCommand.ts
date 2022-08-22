@@ -2,7 +2,7 @@ import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/de
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AppSetting } from "../config/Settings";
-import { nofityRocketChatUserAsync, nofityRocketChatUserInRoomAsync } from "../lib/Messages";
+import { nofityRocketChatUserAsync } from "../lib/Messages";
 import { AuthenticationEndpointPath, AuthenticationScopes, getMicrosoftAuthorizeUrl, LoginButtonText, LoginMessageText } from "../lib/Const";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
@@ -38,6 +38,8 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
         const loginUrl = this.getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id);
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
 
+        // TODO: check whether current user has already logged in
+        // If the user has already logged, print some other information instead of the login url
         const message = this.getLoginMessageWithButton(loginUrl, appUser, room);
 
         await nofityRocketChatUserAsync(message, commandSender, modify);
