@@ -7,7 +7,7 @@ Here are some commands to get started:
 - `rc-apps deploy`: this will do what `package` does but will then ask you for your server url, username, and password to deploy it for you
 
 ## Getting Started with TeamsBridge App
-See [Support document](./docs/support.md).
+See [Support document](./docs/support.md) for how to use TeamsBridge App.
 
 ## Documentation
 Here are some links to examples and documentation:

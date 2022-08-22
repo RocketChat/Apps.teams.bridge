@@ -6,9 +6,13 @@ import {
 import {
     AuthenticationScopes,
     getGraphApiChatUrl,
+    getGraphApiMessageDeleteUrl,
     getGraphApiMessageUrl,
     getGraphApiProfileUrl,
-    getMicrosoftTokenUrl
+    getGraphApiResourceUrl,
+    getGraphApiSubscriptionUrl,
+    getMicrosoftTokenUrl,
+    SubscriptionMaxExpireTimeInSecond
 } from "./Const";
 
 export interface TokenResponse {
@@ -33,6 +37,28 @@ export interface CreateThreadResponse {
 
 export interface SendMessageResponse {
     messageId: string;
+};
+
+export interface CreateSubscriptionResponse {
+    subscriptionId: string;
+    expirationTime: Date;
+};
+
+export enum MessageType {
+    Message = 'message'
+};
+
+export enum MessageContentType {
+    Html = 'html'
+};
+
+export interface GetMessageResponse {
+    threadId: string;
+    messageId: string;
+    messageType: MessageType | undefined;
+    fromUserTeamsId: string;
+    messageContentType: MessageContentType | undefined;
+    messageContent: string;
 };
 
 export const getApplicationAccessTokenAsync = async (
@@ -209,7 +235,8 @@ export const sendTextMessageToChatThreadAsync = async (
 
     const body = {
         'body' : {
-            'content': textMessage
+            'content': textMessage,
+            'contentType': 'html'
         }
     }
 
@@ -238,4 +265,176 @@ export const sendTextMessageToChatThreadAsync = async (
     } else {
         throw new Error(`Send message to chat thread failed with http status code ${response.statusCode}.`);
     }
+};
+
+export const updateTextMessageInChatThreadAsync = async (
+    http: IHttp,
+    textMessage: string,
+    messageId: string,
+    threadId: string,
+    userAccessToken: string) : Promise<void> => {
+    const url = getGraphApiMessageUrl(threadId, messageId, true);
+
+    const body = {
+        'body' : {
+            'content': textMessage
+        }
+    }
+
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+        content: JSON.stringify(body)
+    };
+
+    const response = await http.patch(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.NO_CONTENT) {
+        const responseBody = response.content;
+        if (responseBody === undefined) {
+            throw new Error('Update message in chat thread failed!');
+        }
+    } else {
+        throw new Error(`Update message in chat thread failed with http status code ${response.statusCode}.`);
+    }
+};
+
+export const deleteTextMessageInChatThreadAsync = async (
+    http: IHttp,
+    teamsUserId: string,
+    messageId: string,
+    threadId: string,
+    userAccessToken: string) : Promise<void> => {
+    const url = getGraphApiMessageDeleteUrl(teamsUserId, threadId, messageId);
+
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+    };
+
+    const response = await http.post(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.NO_CONTENT) {
+        const responseBody = response.content;
+        if (responseBody === undefined) {
+            throw new Error('Delete message in chat thread failed!');
+        }
+    } else {
+        throw new Error(`Delete message in chat thread failed with http status code ${response.statusCode}.`);
+    }
+};
+
+export const getMessageWithResourceStringAsync = async (
+    http: IHttp,
+    resourceString: string,
+    userAccessToken: string) : Promise<GetMessageResponse> => {
+
+    const url = getGraphApiResourceUrl(resourceString);
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+    };
+
+    const response = await http.get(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.OK) {
+        const responseBody = response.content;
+        if (responseBody === undefined) {
+            throw new Error('Get message with resource string failed!');
+        }
+
+        const jsonBody = JSON.parse(responseBody);
+        const result : GetMessageResponse = {
+            threadId: jsonBody.chatId,
+            messageId: jsonBody.id,
+            messageType: parseMessageType(jsonBody.messageType),
+            fromUserTeamsId: jsonBody.from?.user?.id,
+            messageContentType: parseMessageContentType(jsonBody.body?.contentType),
+            messageContent: jsonBody.body?.content,
+        };
+
+        return result;
+    } else {
+        throw new Error(`Get message with resource string failed with http status code ${response.statusCode}.`);
+    }
+}
+
+export const subscribeToAllMessagesForOneUserAsync = async (
+    http: IHttp,
+    rocketChatUserId: string,
+    teamsUserId: string,
+    subscriberEndpointUrl: string,
+    userAccessToken: string,
+    expirationDateTime?: Date
+) : Promise<CreateSubscriptionResponse> => {
+
+    if (!expirationDateTime) {
+        expirationDateTime = new Date();
+        expirationDateTime.setSeconds(expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond);
+    }
+
+    const url = getGraphApiSubscriptionUrl();
+
+    const body = {
+        'changeType': 'created',
+        'notificationUrl': `${subscriberEndpointUrl}?userId=${rocketChatUserId}`,
+        'resource': `/users/${teamsUserId}/chats/getAllMessages`,
+        'includeResourceData': false,
+        'expirationDateTime': expirationDateTime.toISOString()
+    }
+    
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+        content: JSON.stringify(body)
+    };
+
+    const response = await http.post(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.CREATED) {
+        const responseBody = response.content;
+        if (responseBody === undefined) {
+            throw new Error('Subscribe to notification for user failed!');
+        }
+
+        const jsonBody = JSON.parse(responseBody);
+        const result : CreateSubscriptionResponse = {
+            subscriptionId: jsonBody.id,
+            expirationTime: new Date(jsonBody.expirationDateTime),
+        };
+
+        return result;
+    } else {
+        throw new Error(`Subscribe to notification for user failed with http status code ${response.statusCode}.`);
+    }
+};
+
+const parseMessageType = (messageType: string) : MessageType | undefined => {
+    if (!messageType) {
+        return undefined;
+    }
+
+    if (messageType === 'message') {
+        return MessageType.Message;
+    }
+
+    return undefined;
+};
+
+const parseMessageContentType = (messageContentType: string) : MessageContentType | undefined => {
+    if (!messageContentType) {
+        return undefined;
+    }
+
+    if (messageContentType === 'html') {
+        return MessageContentType.Html;
+    }
+
+    return undefined;
 };

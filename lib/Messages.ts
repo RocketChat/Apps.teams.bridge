@@ -6,16 +6,17 @@ import {
     IRead,
     IRoomBuilder,
 } from "@rocket.chat/apps-engine/definition/accessors";
-import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
+import { IMessage, IMessageAction, IMessageAttachment, MessageActionType } from "@rocket.chat/apps-engine/definition/messages";
 import { IRoom, RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
+import { LoginButtonText } from "./Const";
 
 export const sendRocketChatOneOnOneMessageAsync = async (
     message: string,
     sender: IUser,
     receiver: IUser,
     read: IRead,
-    modify: IModify) : Promise<void> => {
+    modify: IModify) : Promise<string> => {
     const creator: IModifyCreator = modify.getCreator();
     const roomBuilder: IRoomBuilder = creator
         .startRoom()
@@ -35,29 +36,56 @@ export const sendRocketChatOneOnOneMessageAsync = async (
     };
 
     const messageBuilder: IMessageBuilder = creator.startMessage(messageTemplate);
-    await creator.finish(messageBuilder);
+    return await creator.finish(messageBuilder);
 };
 
-export const nofityRocketChatUserInRoomAsync = async (
+export const notifyRocketChatUserInRoomAsync = async (
     message: string,
     appUser: IUser,
     user: IUser,
     room: IRoom,
-    modify: IModify) : Promise<void> => {
+    notifier: INotifier) : Promise<void> => {
     const messageTemplate: IMessage = {
         text: message,
         sender: appUser,
         room
     };
 
-    await nofityRocketChatUserAsync(messageTemplate, user, modify);
+    await notifyRocketChatUserAsync(messageTemplate, user, notifier);
 };
 
-export const nofityRocketChatUserAsync = async (
+export const notifyRocketChatUserAsync = async (
     message: IMessage,
     user: IUser,
-    modify: IModify) : Promise<void> => {
-    const notifier: INotifier = modify.getNotifier();
-
+    notifier: INotifier) : Promise<void> => {
     await notifier.notifyUser(user, message);
+};
+
+export const generateHintMessageWithTeamsLoginButton = (
+    loginUrl: string,
+    sender: IUser,
+    room: IRoom,
+    hintMessageText: string) : IMessage  =>{
+    const buttonAction: IMessageAction = {
+        type: MessageActionType.BUTTON,
+        text: LoginButtonText,
+        url: loginUrl,
+    };
+
+    const buttonAttachment: IMessageAttachment = {
+        actions: [
+            buttonAction
+        ]
+    };
+
+    const message: IMessage = {
+        text: hintMessageText,
+        sender: sender,
+        room,
+        attachments: [
+            buttonAttachment
+        ]
+    };
+
+    return message;
 };

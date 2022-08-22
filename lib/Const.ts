@@ -1,22 +1,30 @@
 import { UserModel } from "./PersistHelper";
 
 export const AuthenticationEndpointPath: string = 'auth';
+export const SubscriberEndpointPath: string = 'subscriber';
 
 const LoginBaseUrl: string = 'https://login.microsoftonline.com';
 const GraphApiBaseUrl: string = 'https://graph.microsoft.com';
-export const SupportDocumentUrl: string = 'https://github.com/RocketChat/Apps.teams.bridge/blob/main/docs/support.md';
+
+export const SubscriptionMaxExpireTimeInSecond: number = 3600;
 
 const GraphApiVersion = {
     V1: 'v1.0',
     Beta: 'beta',
-}
+};
 
 const GraphApiEndpoint = {
     Profile: 'me',
     Chat: 'chats',
     Message: (threadId: string) => `chats/${threadId}/messages`,
+    DeleteMessage: (userId: string, threadId: string, messageId: string) => 
+        `users/${userId}/chats/${threadId}/messages/${messageId}/softDelete`,
+    Subscription: 'subscriptions',
 };
 
+export const AppSetupVerificationPassMessageText: string = 'TeamsBridge app setup verification PASSED!';
+export const AppSetupVerificationFailMessageText: string =
+    'TeamsBridge app setup verification FAILED! Please check trouble shooting guide for further actions.';
 export const LoginMessageText: string =
     'To start cross platform collaboration, you need to login to Microsoft with your Teams account or guest account. '
     + 'You\'ll be able to keep using Rocket.Chat, but you\'ll also be able to chat with colleagues using Microsoft Teams. '
@@ -24,10 +32,12 @@ export const LoginMessageText: string =
 export const LoginRequiredHintMessageText: string = 
     'The Rocket.Chat user you are messaging represents a colleague in your organization using Microsoft Teams. '
     + 'The message can NOT be delivered to the user on Microsoft Teams before you start cross platform collaboration for your account. '
-    + 'For details, see:';
+    + 'Please click this button to login Teams:';
+export const UnsupportedMessageTypeHintMessageText = (messageType: string) =>
+    `${messageType} is not supported by TeamsBridge app for cross platform collaboration.`
+    + ' This message won\'t be delivered to target user on Teams.';
 
 export const LoginButtonText: string = 'Login Teams';
-export const SupportDocumentButtonText: string = 'Support Document';
 
 export const AuthenticationScopes = [
     'offline_access',
@@ -38,7 +48,8 @@ export const AuthenticationScopes = [
     'chatmember.read',
     'chatmember.readwrite',
     'chatmessage.read',
-    'chatmessage.send'
+    'chatmessage.send',
+    'files.readwrite',
 ];
 
 export const getMicrosoftTokenUrl = (aadTenantId: string) => {
@@ -57,8 +68,44 @@ export const getGraphApiChatUrl = () => {
     return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.Chat}`;
 };
 
-export const getGraphApiMessageUrl = (threadId: string) => {
+export const getGraphApiMessageUrl = (
+    threadId: string,
+    messageId?: string,
+    useBetaVersion?: boolean) => {
+    let version = GraphApiVersion.V1;
+    if (useBetaVersion) {
+        version = GraphApiVersion.Beta;
+    }
+
+    let url = `${GraphApiBaseUrl}/${version}/${GraphApiEndpoint.Message(threadId)}`;
+    if (messageId) {
+        url = `${url}/${messageId}`;
+    }
+
+    return url;
+};
+
+export const getGraphApiMessageDeleteUrl = (
+    userId: string,
+    threadId: string,
+    messageId: string) => {
+    return `${GraphApiBaseUrl}/${GraphApiVersion.Beta}/${GraphApiEndpoint.DeleteMessage(userId, threadId, messageId)}`;
+};
+
+export const getGraphApiMessageBetaUrl = (threadId: string, messageId?: string) => {
+    if (messageId) {
+        return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.Message(threadId)}/${messageId}`;
+    }
+
     return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.Message(threadId)}`;
+};
+
+export const getGraphApiSubscriptionUrl = () => {
+    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.Subscription}`;
+};
+
+export const getGraphApiResourceUrl = (resourceString: string) => {
+    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${resourceString}`;
 };
 
 export const TestEnvironment = {

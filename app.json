@@ -17,6 +17,11 @@
         "Omnichannel"
     ],
     "implements": [
-        "IPostMessageSent"
+        "IPreMessageSentPrevent",
+        "IPostMessageSent",
+        "IPostMessageUpdated",
+        "IPreMessageUpdatedPrevent",
+        "IPostMessageDeleted",
+        "IPreMessageDeletePrevent"
     ]
 }
