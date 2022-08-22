@@ -32,7 +32,6 @@ import {
     handlePreMessageOperationPreventAsync,
     handlePreMessageSentPreventAsync
 } from './lib/EventHandler';
-import { CreateUserSlashCommand } from './slashcommands/CreateUserSlashCommand';
 import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
 
