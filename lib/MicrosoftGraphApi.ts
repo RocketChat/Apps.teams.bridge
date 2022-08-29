@@ -12,6 +12,7 @@ import {
     getGraphApiResourceUrl,
     getGraphApiSubscriptionUrl,
     getMicrosoftTokenUrl,
+    SupportedNotificationChangeTypes,
     SubscriptionMaxExpireTimeInSecond
 } from "./Const";
 
@@ -226,6 +227,59 @@ export const createOneOnOneChatThreadAsync = async (
     }
 };
 
+export const createChatThreadAsync = async (
+    http: IHttp,
+    membersTeamsIds: string[],
+    bridgeUserName: string,
+    userAccessToken: string) : Promise<CreateThreadResponse> => {
+    const url = getGraphApiChatUrl();
+
+    const members: any[] = [];
+    for (const teamsIds of membersTeamsIds) {
+        const member = {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            'roles': ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${teamsIds}')`,
+        };
+        members.push(member);
+    }
+
+    const body = {
+        'chatType': 'group',
+        'members': members,
+        'topic': `Rocket.Chat interop bridged by ${bridgeUserName}`,
+    }
+
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+        content: JSON.stringify(body)
+    };
+
+    const response = await http.post(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.CREATED) {
+        const responseBody = response.content;
+        if (responseBody === undefined) {
+            throw new Error('Create group chat thread failed!');
+        }
+
+        const jsonBody = JSON.parse(responseBody);
+        const result : CreateThreadResponse = {
+            threadId: jsonBody.id,
+        };
+
+        console.log('teams group thread created!');
+        console.log(result);
+
+        return result;
+    } else {
+        throw new Error(`Create group chat thread failed with http status code ${response.statusCode}.`);
+    }
+};
+
 export const sendTextMessageToChatThreadAsync = async (
     http: IHttp,
     textMessage: string,
@@ -380,7 +434,7 @@ export const subscribeToAllMessagesForOneUserAsync = async (
     const url = getGraphApiSubscriptionUrl();
 
     const body = {
-        'changeType': 'created',
+        'changeType': SupportedNotificationChangeTypes.join(','),
         'notificationUrl': `${subscriberEndpointUrl}?userId=${rocketChatUserId}`,
         'resource': `/users/${teamsUserId}/chats/getAllMessages`,
         'includeResourceData': false,
@@ -408,7 +462,11 @@ export const subscribeToAllMessagesForOneUserAsync = async (
             subscriptionId: jsonBody.id,
             expirationTime: new Date(jsonBody.expirationDateTime),
         };
-
+    
+        console.log("VVV==CreateSubscriptionResponse==VVV");
+        console.log(result);
+        console.log("^^^==CreateSubscriptionResponse==^^^");
+    
         return result;
     } else {
         throw new Error(`Subscribe to notification for user failed with http status code ${response.statusCode}.`);

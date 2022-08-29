@@ -32,8 +32,10 @@ import {
     handlePreMessageOperationPreventAsync,
     handlePreMessageSentPreventAsync
 } from './lib/EventHandler';
+import { AddMemberSlashCommand } from './slashcommands/AddMemberSlashCommand';
 import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
+import { TestSlashCommand } from './slashcommands/TestSlashCommand';
 
 export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPostMessageSent, IPostMessageUpdated, IPreMessageUpdatedPrevent, IPostMessageDeleted, IPreMessageDeletePrevent {
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
@@ -47,6 +49,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         // Register slash commands
         await configuration.slashCommands.provideSlashCommand(new SetupVerificationSlashCommand());
         await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
+        await configuration.slashCommands.provideSlashCommand(new AddMemberSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new TestSlashCommand(this));
         
         // Register API endpoints
         await configuration.api.provideApi({
@@ -72,7 +76,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persistence: IPersistence): Promise<boolean> {
-        return await handlePreMessageSentPreventAsync(message, read);
+        return await handlePreMessageSentPreventAsync(message, read, persistence, this);
     }
 
     public async executePostMessageSent(
@@ -81,7 +85,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         http: IHttp,
         persistence: IPersistence,
         modify: IModify): Promise<void> {
-        await handlePostMessageSentAsync(message, read, http, persistence, modify, this);
+        await handlePostMessageSentAsync(message, read, http, persistence);
     }
     
     public async executePreMessageUpdatedPrevent(

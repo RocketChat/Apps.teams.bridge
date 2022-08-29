@@ -20,7 +20,7 @@ export const getLoginUrl = (
     aadTenantId: string,
     aadClientId: string,
     authEndpointUrl: string,
-    userId: string): string  => {
+    userId: string): string => {
     let url = getMicrosoftAuthorizeUrl(aadTenantId);
     url += `?client_id=${aadClientId}`;
     url += '&response_type=code';
@@ -30,4 +30,4 @@ export const getLoginUrl = (
     url += `&state=${userId}`;
 
     return url;
-}
+};

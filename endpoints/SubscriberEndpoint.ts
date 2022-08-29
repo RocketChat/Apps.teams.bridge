@@ -11,7 +11,7 @@ import {
     IApiResponse
 } from "@rocket.chat/apps-engine/definition/api";
 import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
-import { SubscriberEndpointPath } from "../lib/Const";
+import { SubscriberEndpointPath, SupportedNotificationChangeTypes } from "../lib/Const";
 import {
     handleInboundNotificationAsync,
     InBoundNotification,
@@ -20,11 +20,13 @@ import {
 } from "../lib/InboundNotificationHelper";
 
 export class SubscriberEndpoint extends ApiEndpoint {
-    private supportedChangeType = {
+    private supportedChangeTypeMapping = {
         'created': NotificationChangeType.Created,
+        'updated': NotificationChangeType.Updated,
+        // 'deleted': NotificationChangeType.Deleted,
     };
 
-    private supportedResourceType = {
+    private supportedResourceTypeMapping = {
         '#Microsoft.Graph.chatMessage': NotificationResourceType.ChatMessage,
     };
 
@@ -54,7 +56,11 @@ export class SubscriberEndpoint extends ApiEndpoint {
         for (let index = 0; index < notifications.length; index++) {
             try {
                 const rawNotification = notifications[index];
-        
+
+                console.log("VVV==rawNotification==VVV");
+                console.log(rawNotification);
+                console.log("^^^==rawNotification==^^^");
+
                 const changeType = this.parseChangeType(rawNotification.changeType);
                 if (!changeType) {
                     continue;
@@ -90,10 +96,10 @@ export class SubscriberEndpoint extends ApiEndpoint {
     }
 
     private parseChangeType(changeType: string) : NotificationChangeType | undefined {
-        return this.supportedChangeType[changeType];
+        return this.supportedChangeTypeMapping[changeType];
     }
 
     private parseResourceType(resourceType: string) : NotificationResourceType | undefined {
-        return this.supportedResourceType[resourceType];
+        return this.supportedResourceTypeMapping[resourceType];
     }
 }

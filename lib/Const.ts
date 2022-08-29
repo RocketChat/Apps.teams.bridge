@@ -33,9 +33,17 @@ export const LoginRequiredHintMessageText: string =
     'The Rocket.Chat user you are messaging represents a colleague in your organization using Microsoft Teams. '
     + 'The message can NOT be delivered to the user on Microsoft Teams before you start cross platform collaboration for your account. '
     + 'Please click this button to login Teams:';
-export const UnsupportedMessageTypeHintMessageText = (messageType: string) =>
-    `${messageType} is not supported by TeamsBridge app for cross platform collaboration.`
+export const LoggedInBridgeUserRequiredHintMessageText: string = 
+    'The Rocket.Chat room you are messaging includes at least one dummy user that represents a colleague in your organization using Microsoft Teams. '
+    + 'The message can NOT be delivered to Microsoft Teams before there is at least one user in this room start cross platform collaboration. '
+    + 'To start cross platform collaboration for your account, please click this button to login Teams:';
+export const UnsupportedScenarioHintMessageText = (scenario: string) =>
+    `${scenario} is not supported by TeamsBridge app for cross platform collaboration.`
     + ' This message won\'t be delivered to target user on Teams.';
+export const BridgeUserNotificationMessageText: string = 
+    'This Rocket.Chat room includes at least one dummy user that represents a colleague in your organization using Microsoft Teams. '
+    + 'You have became the bridge user of this room. '
+    + 'All messages sent by unlogged-in user to this room will be delivered to Microsoft Teams by you.';
 
 export const LoginButtonText: string = 'Login Teams';
 
@@ -50,6 +58,12 @@ export const AuthenticationScopes = [
     'chatmessage.read',
     'chatmessage.send',
     'files.readwrite',
+];
+
+export const SupportedNotificationChangeTypes = [
+    'created',
+    'updated',
+    // 'deleted',
 ];
 
 export const getMicrosoftTokenUrl = (aadTenantId: string) => {
@@ -112,11 +126,11 @@ export const TestEnvironment = {
     // Set enable to true for local testing with mock data
     enable: true,
     // Put url here when running locally & using tunnel service such as Ngrok to expose the localhost port to the internet
-    tunnelServiceUrl: '',
+    tunnelServiceUrl: 'https://cce3-50-35-80-12.ngrok.io',
     mockDummyUsers: [
         {
             // Mock dummy user for alexw.l4cf.onmicrosoft.com 
-            rocketChatUserId: 'v4ECCH3pTAE6nBXyJ',
+            rocketChatUserId: 'LXrarr3m2NJi9fSQd',
             teamsUserId: 'ffa3322f-670c-4887-b193-a04cca6073f8',
         }
     ] as UserModel[],

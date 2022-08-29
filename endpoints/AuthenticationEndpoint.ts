@@ -75,9 +75,11 @@ export class AuthenticationEndpoint extends ApiEndpoint {
             // TODO: setup token refresh mechenism in future PR
 
             // TODO: if the subscription exist, we need to skip this step to prevent error
+            //*
             const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.app.getAccessors(), SubscriberEndpointPath);
 
-            const subscription = await subscribeToAllMessagesForOneUserAsync(
+            // Make this an async operation
+            const subscription = subscribeToAllMessagesForOneUserAsync(
                 http,
                 rocketChatUserId,
                 teamsUserProfile.id,
@@ -85,6 +87,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 userAccessToken);
 
             // TODO: setup incoming message subscription refresh mechenism in future PR
+            //*/
 
             return this.success(this.embeddedLoginSuccessMessage);
         } catch (error) {

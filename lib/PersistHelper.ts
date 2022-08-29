@@ -9,6 +9,7 @@ const MiscKeys = {
     DummyUser: 'DummyUser',
     Subscription: 'Subscription',
     MessageIdMapping: 'MessageIdMapping',
+    Room: 'Room',
 };
 
 interface ApplicationAccessTokenModel {
@@ -38,6 +39,12 @@ export interface MessageIdModel {
     rocketChatMessageId: string,
     teamsMessageId: string,
     teamsThreadId: string,
+};
+
+export interface RoomModel {
+    rocketChatRoomId: string,
+    teamsThreadId?: string,
+    bridgeUserRocketChatUserId?: string,
 };
 
 export const persistApplicationAccessTokenAsync = async (
@@ -77,6 +84,12 @@ export const persistUserAccessTokenAsync = async (
     };
 
     await persis.updateByAssociations(associations, data, true);
+
+    
+    console.log("VVV==persistUserAccessTokenAsync==VVV");
+    console.log(data);
+    console.log("^^^==persistUserAccessTokenAsync==^^^");
+
 };
 
 export const persistDummyUserAsync = async (
@@ -138,6 +151,11 @@ export const persistSubscriptionAsync = async (
     };
 
     await persis.updateByAssociations(associations, data, true);
+
+    console.log("VVV==persistSubscriptionAsync==VVV");
+    console.log(data);
+    console.log("^^^==persistSubscriptionAsync==^^^");
+
 };
 
 export const persistMessageIdMappingAsync = async (
@@ -163,6 +181,35 @@ export const persistMessageIdMappingAsync = async (
     await persis.updateByAssociations(associationsByTeamsMessageId, data, true);
 };
 
+export const persistRoomAsync = async (
+    persis: IPersistence,
+    rocketChatRoomId: string,
+    teamsThreadId?: string,
+    bridgeUserRocketChatUserId?: string) : Promise<void> => {
+    const associationsByRocketChatRoomId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.Room),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, rocketChatRoomId),
+    ];
+
+    const data : RoomModel = {
+        rocketChatRoomId: rocketChatRoomId,
+        teamsThreadId: teamsThreadId,
+        bridgeUserRocketChatUserId: bridgeUserRocketChatUserId,
+    };
+
+    await persis.updateByAssociations(associationsByRocketChatRoomId, data, true);
+    console.log('room persisted!');
+
+    if (teamsThreadId) {
+        const associationsByTeamsThreadId: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.Room),
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, teamsThreadId),
+        ];
+    
+        await persis.updateByAssociations(associationsByTeamsThreadId, data, true);
+    }
+};
+
 export const checkDummyUserByRocketChatUserIdAsync = async (read: IRead, rocketChatUserId: string) : Promise<boolean> => {
     const data = await retrieveDummyUserByRocketChatUserIdAsync(read, rocketChatUserId);
     
@@ -180,6 +227,8 @@ export const retrieveDummyUserByRocketChatUserIdAsync = async (read: IRead, rock
         if (mockDummyUser && mockDummyUser.length === 1) {
             return mockDummyUser[0];
         }
+
+        return null;
     }
 
     const associations: Array<RocketChatAssociationRecord> = [
@@ -375,6 +424,54 @@ export const retrieveMessageIdMappingByTeamsMessageIdAsync = async (
     }
 
     const data : MessageIdModel = results[0] as MessageIdModel;
+
+    return data;
+};
+
+export const retrieveRoomByRocketChatRoomIdAsync = async (
+    read: IRead,
+    rocketChatRoomId: string) : Promise<RoomModel | null> => {
+    const associationsByRocketChatRoomId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.Room),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, rocketChatRoomId),
+    ];
+
+    const persistenceRead : IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociations(associationsByRocketChatRoomId);
+
+    if (results === undefined || results === null || results.length == 0) {
+        return null;
+    }
+
+    if (results.length > 1) {
+        throw new Error(`More than one Room record for room ${rocketChatRoomId}`);
+    }
+
+    const data : RoomModel = results[0] as RoomModel;
+
+    return data;
+};
+
+export const retrieveRoomByTeamsThreadIdAsync = async (
+    read: IRead,
+    teamsThreadId: string) : Promise<RoomModel | null> => {
+    const associationsByRocketChatRoomId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.Room),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, teamsThreadId),
+    ];
+
+    const persistenceRead : IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociations(associationsByRocketChatRoomId);
+
+    if (results === undefined || results === null || results.length == 0) {
+        return null;
+    }
+
+    if (results.length > 1) {
+        throw new Error(`More than one Room record for Teams thread ${teamsThreadId}`);
+    }
+
+    const data : RoomModel = results[0] as RoomModel;
 
     return data;
 };
