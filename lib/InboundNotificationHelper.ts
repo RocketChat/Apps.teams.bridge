@@ -41,8 +41,6 @@ export const handleInboundNotificationAsync = async (
     modify: IModify,
     http: IHttp,
     persis: IPersistence) : Promise<void> => {
-    console.log('Processing inbound notification!');
-    
     const receiverRocketChatUserId = inBoundNotification.receiverRocketChatUserId;
     if (!receiverRocketChatUserId) {
         // If there's not a receiver, stop processing
@@ -70,7 +68,7 @@ export const handleInboundNotificationAsync = async (
             break;
 
         default:
-            console.log(`Unsupported notification change type`);
+            console.error(`Unsupported notification change type`);
             return;
     }
 };
@@ -82,26 +80,21 @@ const handleInboundMessageCreatedAsync = async (
     modify: IModify,
     http: IHttp,
     persis: IPersistence) : Promise<void> => {
-    console.log('Processing message created!');
-
     const receiverRocketChatUserId = inBoundNotification.receiverRocketChatUserId;
     const resourceString = inBoundNotification.resourceString;
     const getMessageResponse = await getMessageWithResourceStringAsync(http, resourceString, userAccessToken);
 
-    console.log("getMessageResponse:");
-    console.log(getMessageResponse);
-
     const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
     if (!fromUserTeamsId) {
         // If there's not a sender, stop processing
-        console.log("No sender");
+        console.error("No sender");
         return;
     }
 
     const roomRecord = await retrieveRoomByTeamsThreadIdAsync(read, getMessageResponse.threadId);
     if (!roomRecord) {
         // TODO: handle thread created in Teams scenario
-        console.log("No room record");
+        console.error("No room record");
         return;
     }
 
@@ -162,8 +155,6 @@ const handleInboundMessageUpdatedAsync = async (
     modify: IModify,
     http: IHttp,
     persis: IPersistence) : Promise<void> => {
-    console.log('Processing message updated!');
-
     const receiverRocketChatUserId = inBoundNotification.receiverRocketChatUserId;
 
     const resourceString = inBoundNotification.resourceString;
@@ -188,8 +179,6 @@ const handleInboundMessageUpdatedAsync = async (
     }
 
     const message = await read.getMessageReader().getById(messageIdMapping.rocketChatMessageId);
-    console.log("message to update:");
-    console.log(message);
     if (!message) {
         // If there's not an existing rocket chat message, stop processing
         return;
@@ -218,9 +207,6 @@ const handleInboundMessageDeletedAsync = async (
     modify: IModify,
     http: IHttp,
     persis: IPersistence) : Promise<void> => {
-    console.log('Processing message deleted!');
-    console.log(inBoundNotification);
-
     const resourceString = inBoundNotification.resourceId;
 
     const messageIdMapping = await retrieveMessageIdMappingByTeamsMessageIdAsync(read, resourceString);
@@ -230,8 +216,6 @@ const handleInboundMessageDeletedAsync = async (
     }
 
     const message = await read.getMessageReader().getById(messageIdMapping.rocketChatMessageId);
-    console.log("message to delete:");
-    console.log(message);
     if (!message) {
         // If there's not an existing rocket chat message, stop processing
         return;

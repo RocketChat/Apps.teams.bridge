@@ -130,18 +130,14 @@ export const mapTeamsMessageToRocketChatMessage = (
         const nbspPattern = /&nbsp;/g;
         const htmpTagPattern = /<\/?[^>]+>/g;
 
-        console.log("Processing Teams Message!");
-
         rocketChatMessage = rocketChatMessage.replace(nbspPattern, ' ');
         rocketChatMessage = rocketChatMessage.replace(htmpTagPattern, match => {
             if (match.indexOf('itemtype="http://schema.skype.com/Emoji"') > 0) {
-                console.log("find emoji!");
                 const index = match.indexOf('alt="');
                 return match.substring(index + 5, index + 7);
             }
 
             if (match.indexOf('img') > 0) {
-                console.log("find img!");
                 const urlStartIndex = match.indexOf('src="');
                 const urlPrefixString = match.substring(urlStartIndex + 5);
                 const urlEndIndex = urlPrefixString.indexOf('"');
@@ -152,15 +148,12 @@ export const mapTeamsMessageToRocketChatMessage = (
                 const fileNameEndIndex = fileNamePrefixString.indexOf('"');
                 const fileName = fileNamePrefixString.substring(0, fileNameEndIndex);
 
-                console.log(`Find an URL: ${url}`);
-
                 downloadInlineImgFromExternalAndUploadToRocketChatAsync(url, fileName, accessToken, room, sender, http, modify);
 
                 return '';
             }
 
             if (match.indexOf('attachment') > 0) {
-                console.log("find attachment!");
                 const attachmentIdStartIndex = match.indexOf('id="');
                 const attachmentIdPrefixString = match.substring(attachmentIdStartIndex + 4);
                 const attachmentIdEndIndex = attachmentIdPrefixString.indexOf('"');
@@ -171,8 +164,6 @@ export const mapTeamsMessageToRocketChatMessage = (
                         if (attachment.id === attachmentId && attachment.contentType === FileAttachmentContentType) {
                             const fileName = attachment.name;
                             const url = attachment.contentUrl;
-
-                            console.log(`Find an URL: ${url}`);
 
                             downloadAttachmentFileFromExternalAndUploadToRocketChatAsync(url, fileName, accessToken, room, sender, http, modify);
                            
@@ -220,7 +211,6 @@ const downloadAttachmentFileFromExternalAndUploadToRocketChatAsync = async (
     http: IHttp,
     modify: IModify) : Promise<void> => {
     const encodedUrl = `u!${base64Encode(url).replace(/=+$/, '').replace('/','_').replace('+','-')}`;
-    console.log(encodedUrl);
 
     const buff = await downloadOneDriveFileAsync(http, encodedUrl, accessToken);
     const uploadCreator = modify.getCreator().getUploadCreator();
@@ -256,7 +246,6 @@ const downloadInlineImgFromExternalAndUploadToRocketChatAsync = async (
     let fileMIMEType = '';
     if (response.headers) {
         fileMIMEType = response.headers['content-type'];
-        console.log(response.headers['content-type']);
     }
     const imgStr = response.content as string;
     const buff = Buffer.from(imgStr, 'binary');

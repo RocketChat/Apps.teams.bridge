@@ -9,7 +9,6 @@ export const createAppUserAsync = async (teamsUserName: string, email: string, r
 
     const user = await read.getUserReader().getByUsername(rocketChatUserName);
     if (user) {
-        console.log(`User ${teamsUserName} exists in Rocket Chat.`);
         return user.id;
     }
     
@@ -42,8 +41,6 @@ export const createAppUserAsync = async (teamsUserName: string, email: string, r
 };
 
 export const findAllDummyUsersInRocketChatUserListAsync = async (read: IRead, users: IUser[]) : Promise<UserModel[]> => {
-    console.log("findAllDummyUsersAsync");
-
     const result : UserModel[] = [];
     for (const user of users) {
         const userModel = await retrieveDummyUserByRocketChatUserIdAsync(read, user.id);
@@ -51,8 +48,6 @@ export const findAllDummyUsersInRocketChatUserListAsync = async (read: IRead, us
             result.push(userModel);
         }
     }
-    
-    console.log(`Find ${result.length} dummy users`);
 
     return result;
 };

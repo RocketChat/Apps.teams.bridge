@@ -98,11 +98,6 @@ export const persistUserAccessTokenAsync = async (
     };
 
     await persis.updateByAssociations(associations, data, true);
-
-    
-    console.log("persistUserAccessTokenAsync:");
-    console.log(data);
-
 };
 
 export const persistDummyUserAsync = async (
@@ -206,7 +201,6 @@ export const persistRoomAsync = async (
     };
 
     await persis.updateByAssociations(associationsByRocketChatRoomId, data, true);
-    console.log('room persisted!');
 
     if (teamsThreadId) {
         const associationsByTeamsThreadId: Array<RocketChatAssociationRecord> = [
@@ -240,7 +234,6 @@ export const persistTeamsUserProfileAsync = async (
     };
 
     await persis.updateByAssociations(associations, data, true);
-    console.log(`teams user profile persisted for ${displayName}!`);
 };
 
 export const persistOneDriveFileAsync = async (

@@ -163,7 +163,7 @@ export const listTeamsUserProfilesAsync = async (
                 result.push(record);
             } catch (error) {
                 // If there's an error, print a warning but not block the whole process
-                console.log(`Error when handling user list. Details: ${error}`);
+                console.error(`Error when handling user list. Details: ${error}`);
             }
         }
 
@@ -405,9 +405,6 @@ export const createChatThreadAsync = async (
             threadId: jsonBody.id,
         };
 
-        console.log('teams group thread created!');
-        console.log(result);
-
         return result;
     } else {
         throw new Error(`Create group chat thread failed with http status code ${response.statusCode}.`);
@@ -438,9 +435,7 @@ export const addMemberToChatThreadAsync = async (
 
     const response = await http.post(url, httpRequest);
 
-    if (response.statusCode === HttpStatusCode.CREATED) {
-        console.log('member added to teams group thread!');
-    } else {
+    if (response.statusCode !== HttpStatusCode.CREATED) {
         throw new Error(`Add member to group chat thread failed with http status code ${response.statusCode}.`);
     }
 };
@@ -569,8 +564,6 @@ export const sendFileMessageToChatThreadAsync = async (
 
     const response = await http.post(url, httpRequest);
 
-    console.log(response);
-
     if (response.statusCode === HttpStatusCode.CREATED) {
         const responseBody = response.content;
         if (responseBody === undefined) {
@@ -663,7 +656,6 @@ export const getMessageWithResourceStringAsync = async (
         }
 
         const jsonBody = JSON.parse(responseBody);
-        console.log(jsonBody);
 
         let attachments : Attachment[] | undefined = undefined;
 
@@ -772,9 +764,6 @@ export const renewSubscriptionAsync = async (
             expirationTime: new Date(jsonBody.expirationDateTime),
         };
     
-        console.log("SubscriptionResponse:");
-        console.log(result);
-    
         return result;
     } else {
         throw new Error(`Renew subscription failed with http status code ${response.statusCode}.`);
@@ -847,9 +836,6 @@ export const subscribeToAllMessagesForOneUserAsync = async (
             subscriptionId: jsonBody.id,
             expirationTime: new Date(jsonBody.expirationDateTime),
         };
-    
-        console.log("CreateSubscriptionResponse:");
-        console.log(result);
     
         return result;
     } else {
@@ -958,9 +944,6 @@ export const shareOneDriveFileAsync = async (
             shareLink: jsonBody.link.webUrl,
         };
     
-        console.log("ShareOneDriveFileResponse:");
-        console.log(result);
-
         return result;
     } else {
         throw new Error(`Create share link for onedrive item failed with http status code ${response.statusCode}.`);
@@ -989,7 +972,6 @@ export const getOneDriveFileLinkAsync = async (
         }
 
         const jsonBody = JSON.parse(responseBody);
-        console.log(jsonBody);
 
         const result : string = jsonBody.webUrl as string;
 

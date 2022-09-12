@@ -95,16 +95,12 @@ export const handlePreMessageSentPreventAsync = async (
         const members = await read.getRoomReader().getMembers(message.room.id);
 
         const dummyUsers = await findAllDummyUsersInRocketChatUserListAsync(read, members);
-        console.log(dummyUsers);
 
         if (dummyUsers && dummyUsers.length > 0) {
             // If there are dummy users in the room, check whether there's at least one teams-logged in user in this room
 
             // Find whether there's an existing room record
             let roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, message.room.id);
-
-            console.log("RoomRecord:");
-            console.log(roomRecord);
 
             if (roomRecord) {
                 // If there's an existing room record, check whether it has a bridge user
@@ -275,7 +271,6 @@ export const handlePostMessageSentAsync = async (
 
             const shareRecord = await shareOneDriveFileAsync(http, oneDriveFile?.driveItemId, userAccessToken);
 
-            console.log("Sending file message!");
             // Send the message to the chat thread
             const response = await sendFileMessageToChatThreadAsync(
                 http,
@@ -437,11 +432,8 @@ export const handlePreFileUploadAsync = async (
             userAccessToken = senderUserAccessToken;
         }
 
-        console.log("Start upload file");
-
         // Upload the file to One Drive
         const uploadFileResponse = await uploadFileToOneDriveAsync(http, fileName, fileMIMEType, fileSize, context.content, userAccessToken);
-        console.log(uploadFileResponse);
 
         // Persist file upload record
         if (uploadFileResponse) {
@@ -467,9 +459,6 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (
             dummyUsersToAdd.push(dummyUser);
         }
     }
-    
-    console.log("Dummy user to add:");
-    console.log(dummyUsersToAdd);
 
     const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, room.id);
     if (roomRecord && roomRecord.teamsThreadId) {
@@ -496,7 +485,7 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (
     for (const dummyUser of dummyUsersToAdd) {
         const userToAdd = await read.getUserReader().getById(dummyUser.rocketChatUserId);
         if (!userToAdd) {
-            console.log("Dummy user to add not found!");
+            console.error("Dummy user to add not found!");
             continue;
         }
 
@@ -524,32 +513,30 @@ export const handlePreRoomUserLeaveAsync = async (
     const dummyUser = await retrieveDummyUserByRocketChatUserIdAsync(read, leavingRocketChatUserId);
 
     if (!embeddedLoginUser && !dummyUser) {
-        console.log("Not logged in user or dummy user.");
+        console.error("Not logged in user or dummy user.");
         return;
     }
 
     if (!roomRecord.bridgeUserRocketChatUserId ) {
-        console.log("No bridge user.");
+        console.error("No bridge user.");
         throw new UserNotAllowedException();
     }
 
     // If there's a thread created in Teams side, need to update the participant there as well
     const accessToken = await retrieveUserAccessTokenAsync(read, roomRecord.bridgeUserRocketChatUserId);
     if (!accessToken) {
-        console.log("No bridge user.");
+        console.error("No bridge user.");
         await persistRoomAsync(persistence, roomRecord.rocketChatRoomId, roomRecord.teamsThreadId, undefined);
         throw new UserNotAllowedException();
     }
 
     const teamsUserId = embeddedLoginUser?.teamsUserId ?? dummyUser?.teamsUserId;
-    console.log(`Teams user to be removed: ${teamsUserId}`);
     if (!teamsUserId) {
         return;
     }
 
     const threadMemberTeamsUserIds = await listMembersInChatThreadAsync(http, roomRecord.teamsThreadId, accessToken);
     if (threadMemberTeamsUserIds.find(id => id === teamsUserId)) {
-        console.log("User exist, need to remove from thread.");
         await removeMemberFromChatThreadAsync(http, roomRecord.teamsThreadId, teamsUserId, accessToken);
     }
 
@@ -572,8 +559,6 @@ export const handleUserRegistrationAutoRenewAsync = async (
 
     const allRegistrations = await retrieveAllUserRegistrationsAsync(read);
     
-    console.log("AllRegistrations to renew:");
-    console.log(allRegistrations);
     if (allRegistrations) {
         for (const registration of allRegistrations) {
             try {
