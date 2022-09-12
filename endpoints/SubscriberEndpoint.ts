@@ -11,7 +11,7 @@ import {
     IApiResponse
 } from "@rocket.chat/apps-engine/definition/api";
 import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
-import { SubscriberEndpointPath, SupportedNotificationChangeTypes } from "../lib/Const";
+import { SubscriberEndpointPath } from "../lib/Const";
 import {
     handleInboundNotificationAsync,
     InBoundNotification,
@@ -23,7 +23,7 @@ export class SubscriberEndpoint extends ApiEndpoint {
     private supportedChangeTypeMapping = {
         'created': NotificationChangeType.Created,
         'updated': NotificationChangeType.Updated,
-        // 'deleted': NotificationChangeType.Deleted,
+        'deleted': NotificationChangeType.Deleted,
     };
 
     private supportedResourceTypeMapping = {
@@ -45,7 +45,6 @@ export class SubscriberEndpoint extends ApiEndpoint {
         modify: IModify,
         http: IHttp,
         persis: IPersistence): Promise<IApiResponse> {
-        console.log(request);
         if (request && request.query && request.query.validationToken) {
             return this.success(request.query.validationToken);
         }
@@ -56,10 +55,6 @@ export class SubscriberEndpoint extends ApiEndpoint {
         for (let index = 0; index < notifications.length; index++) {
             try {
                 const rawNotification = notifications[index];
-
-                console.log("VVV==rawNotification==VVV");
-                console.log(rawNotification);
-                console.log("^^^==rawNotification==^^^");
 
                 const changeType = this.parseChangeType(rawNotification.changeType);
                 if (!changeType) {
@@ -88,7 +83,7 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     persis);
             } catch (error) {
                 // If there's an error, print a warning but not block the whole process
-                console.log(`Error when handling inbound notification. Details: ${error}`);
+                console.error(`Error when handling inbound notification. Details: ${error}`);
             }
         }
 

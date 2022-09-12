@@ -15,7 +15,7 @@ import { IApiResponseJSON } from "@rocket.chat/apps-engine/definition/api/IRespo
 import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
 import { AppSetting } from "../config/Settings";
 import { AuthenticationEndpointPath, SubscriberEndpointPath } from "../lib/Const";
-import { getUserAccessTokenAsync, getUserProfileAsync, subscribeToAllMessagesForOneUserAsync } from "../lib/MicrosoftGraphApi";
+import { getUserAccessTokenAsync, getUserProfileAsync, listSubscriptionsAsync, subscribeToAllMessagesForOneUserAsync } from "../lib/MicrosoftGraphApi";
 import { persistUserAccessTokenAsync, persistUserAsync } from "../lib/PersistHelper";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 
@@ -72,22 +72,19 @@ export class AuthenticationEndpoint extends ApiEndpoint {
 
             await persistUserAsync(persis, rocketChatUserId, teamsUserProfile.id);
 
-            // TODO: setup token refresh mechenism in future PR
+            // Only create subscription if there's no existing one to prevent error
+            const subscriptions = await listSubscriptionsAsync(http, userAccessToken);
+            if (!subscriptions || subscriptions.length == 0) {
+                const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.app.getAccessors(), SubscriberEndpointPath);
 
-            // TODO: if the subscription exist, we need to skip this step to prevent error
-            //*
-            const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.app.getAccessors(), SubscriberEndpointPath);
-
-            // Make this an async operation
-            const subscription = subscribeToAllMessagesForOneUserAsync(
-                http,
-                rocketChatUserId,
-                teamsUserProfile.id,
-                subscriberEndpointUrl,
-                userAccessToken);
-
-            // TODO: setup incoming message subscription refresh mechenism in future PR
-            //*/
+                // Async operation to create subscription
+                subscribeToAllMessagesForOneUserAsync(
+                    http,
+                    rocketChatUserId,
+                    teamsUserProfile.id,
+                    subscriberEndpointUrl,
+                    userAccessToken);
+            }
 
             return this.success(this.embeddedLoginSuccessMessage);
         } catch (error) {

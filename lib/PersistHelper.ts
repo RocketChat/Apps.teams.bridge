@@ -1,22 +1,23 @@
 import { IPersistence, IPersistenceRead, IRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { RocketChatAssociationModel, RocketChatAssociationRecord } from "@rocket.chat/apps-engine/definition/metadata";
-import { TestEnvironment } from "./Const";
 
 const MiscKeys = {
     ApplicationAccessToken: 'ApplicationAccessToken',
-    UserAccessToken: 'UserAccessToken',
+    UserRegistration: 'UserAccessToken',
     User: 'User',
     DummyUser: 'DummyUser',
     Subscription: 'Subscription',
     MessageIdMapping: 'MessageIdMapping',
     Room: 'Room',
+    TeamsUserProfile: 'TeamsUserProfile',
+    OneDriveFile: 'OneDriveFile',
 };
 
 interface ApplicationAccessTokenModel {
     accessToken: string,
 };
 
-interface UserAccessTokenModel {
+interface UserRegistrationModel {
     rocketChatUserId: string,
     accessToken: string,
     refreshToken: string,
@@ -47,6 +48,19 @@ export interface RoomModel {
     bridgeUserRocketChatUserId?: string,
 };
 
+export interface TeamsUserProfileModel {
+    displayName: string;
+    givenName: string;
+    surname: string;
+    mail: string;
+    teamsUserId: string;
+};
+
+export interface OneDriveFileModel {
+    fileName: string;
+    driveItemId: string;
+};
+
 export const persistApplicationAccessTokenAsync = async (
     persis: IPersistence,
     accessToken: string) : Promise<void> => {
@@ -68,14 +82,14 @@ export const persistUserAccessTokenAsync = async (
     expiresIn: number,
     extExpiresIn: number) : Promise<void> => {
     const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.UserAccessToken),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.UserRegistration),
         new RocketChatAssociationRecord(RocketChatAssociationModel.USER, rocketChatUserId),
     ];
 
     const now = new Date();
     const epochInSecond = Math.round(now.getTime() / 1000);
 
-    const data : UserAccessTokenModel = {
+    const data : UserRegistrationModel = {
         rocketChatUserId: rocketChatUserId,
         accessToken: accessToken,
         refreshToken: refreshToken,
@@ -86,9 +100,8 @@ export const persistUserAccessTokenAsync = async (
     await persis.updateByAssociations(associations, data, true);
 
     
-    console.log("VVV==persistUserAccessTokenAsync==VVV");
+    console.log("persistUserAccessTokenAsync:");
     console.log(data);
-    console.log("^^^==persistUserAccessTokenAsync==^^^");
 
 };
 
@@ -151,11 +164,6 @@ export const persistSubscriptionAsync = async (
     };
 
     await persis.updateByAssociations(associations, data, true);
-
-    console.log("VVV==persistSubscriptionAsync==VVV");
-    console.log(data);
-    console.log("^^^==persistSubscriptionAsync==^^^");
-
 };
 
 export const persistMessageIdMappingAsync = async (
@@ -210,6 +218,49 @@ export const persistRoomAsync = async (
     }
 };
 
+export const persistTeamsUserProfileAsync = async (
+    persis: IPersistence,
+    displayName: string,
+    givenName: string,
+    surname: string,
+    mail: string,
+    teamsUserId: string) : Promise<void> => {
+    
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.TeamsUserProfile),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.USER, teamsUserId),
+    ];
+
+    const data : TeamsUserProfileModel = {
+        displayName: displayName,
+        givenName: givenName,
+        surname: surname,
+        mail: mail,
+        teamsUserId: teamsUserId,
+    };
+
+    await persis.updateByAssociations(associations, data, true);
+    console.log(`teams user profile persisted for ${displayName}!`);
+};
+
+export const persistOneDriveFileAsync = async (
+    persis: IPersistence,
+    fileName: string,
+    driveItemId: string,
+) : Promise<void> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.OneDriveFile),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.FILE, fileName),
+    ];
+
+    const data : OneDriveFileModel = {
+        fileName: fileName,
+        driveItemId: driveItemId,
+    };
+
+    await persis.updateByAssociations(associations, data, true);
+};
+
 export const checkDummyUserByRocketChatUserIdAsync = async (read: IRead, rocketChatUserId: string) : Promise<boolean> => {
     const data = await retrieveDummyUserByRocketChatUserIdAsync(read, rocketChatUserId);
     
@@ -221,16 +272,6 @@ export const checkDummyUserByRocketChatUserIdAsync = async (read: IRead, rocketC
 };
 
 export const retrieveDummyUserByRocketChatUserIdAsync = async (read: IRead, rocketChatUserId: string) : Promise<UserModel | null> => {
-    // Mock dummy user before find out how to create user with Rocket.Chat Apps Engine
-    if (TestEnvironment.enable) {
-        const mockDummyUser = TestEnvironment.mockDummyUsers.filter(user => user.rocketChatUserId === rocketChatUserId);
-        if (mockDummyUser && mockDummyUser.length === 1) {
-            return mockDummyUser[0];
-        }
-
-        return null;
-    }
-
     const associations: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.DummyUser),
         new RocketChatAssociationRecord(RocketChatAssociationModel.USER, rocketChatUserId),
@@ -252,14 +293,6 @@ export const retrieveDummyUserByRocketChatUserIdAsync = async (read: IRead, rock
 };
 
 export const retrieveDummyUserByTeamsUserIdAsync = async (read: IRead, teamsUserId: string) : Promise<UserModel | null> => {
-    // Mock dummy user before find out how to create user with Rocket.Chat Apps Engine
-    if (TestEnvironment.enable) {
-        const mockDummyUser = TestEnvironment.mockDummyUsers.filter(user => user.teamsUserId === teamsUserId);
-        if (mockDummyUser && mockDummyUser.length === 1) {
-            return mockDummyUser[0];
-        }
-    }
-
     const associations: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.DummyUser),
         new RocketChatAssociationRecord(RocketChatAssociationModel.USER, teamsUserId),
@@ -324,7 +357,7 @@ export const retrieveUserByTeamsUserIdAsync = async (read: IRead, teamsUserId: s
 
 export const retrieveUserAccessTokenAsync = async (read: IRead, rocketChatUserId: string) : Promise<string | null> => {
     const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.UserAccessToken),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.UserRegistration),
         new RocketChatAssociationRecord(RocketChatAssociationModel.USER, rocketChatUserId),
     ];
 
@@ -339,7 +372,7 @@ export const retrieveUserAccessTokenAsync = async (read: IRead, rocketChatUserId
         throw new Error(`More than one UserAccessToken record for user ${rocketChatUserId}`);
     }
 
-    const data : UserAccessTokenModel = results[0] as UserAccessTokenModel;
+    const data : UserRegistrationModel = results[0] as UserRegistrationModel;
 
     const now = new Date();
     const epochInSecond = Math.round(now.getTime() / 1000);
@@ -349,6 +382,63 @@ export const retrieveUserAccessTokenAsync = async (read: IRead, rocketChatUserId
     }
 
     return data.accessToken;
+};
+
+export const retrieveUserRefreshTokenAsync = async (read: IRead, rocketChatUserId: string) : Promise<string | null> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.UserRegistration),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.USER, rocketChatUserId),
+    ];
+
+    const persistenceRead : IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociations(associations);
+
+    if (results === undefined || results === null || results.length == 0) {
+        return null;
+    }
+
+    if (results.length > 1) {
+        throw new Error(`More than one UserAccessToken record for user ${rocketChatUserId}`);
+    }
+
+    const data : UserRegistrationModel = results[0] as UserRegistrationModel;
+
+    const now = new Date();
+    const epochInSecond = Math.round(now.getTime() / 1000);
+
+    if (!data.extExpires || epochInSecond > data.extExpires) {
+        return null;
+    }
+
+    return data.refreshToken;
+};
+
+export const retrieveAllUserRegistrationsAsync = async (read: IRead) : Promise<UserRegistrationModel[] | null> => {
+    
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.UserRegistration),
+    ];
+    
+    const persistenceRead : IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociations(associations);
+
+    if (results === undefined || results === null || results.length == 0) {
+        return null;
+    }
+
+    const data : UserRegistrationModel[] = [];
+
+    const now = new Date();
+    const epochInSecond = Math.round(now.getTime() / 1000);
+    for (const result of results) {
+        const registration = result as UserRegistrationModel;
+        if (!registration.extExpires || epochInSecond > registration.extExpires) {
+            continue;
+        }
+        data.push(registration);
+    }
+
+    return data;
 };
 
 export const retrieveSubscriptionAsync = async (read: IRead, rocketChatUserId: string) : Promise<SubscriptionModel | null> => {
@@ -474,4 +564,55 @@ export const retrieveRoomByTeamsThreadIdAsync = async (
     const data : RoomModel = results[0] as RoomModel;
 
     return data;
+};
+
+export const retrieveAllTeamsUserProfilesAsync = async (read: IRead) : Promise<TeamsUserProfileModel[] | null> => {
+    const association = new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.TeamsUserProfile);
+
+    const persistenceRead : IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociation(association);
+
+    if (results === undefined || results === null || results.length == 0) {
+        return null;
+    }
+
+    const data : TeamsUserProfileModel[] = results as TeamsUserProfileModel[];
+
+    return data;
+};
+
+export const retrieveOneDriveFileAsync = async (
+    read: IRead,
+    fileName: string,
+) : Promise<OneDriveFileModel | null> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.OneDriveFile),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.FILE, fileName),
+    ];
+
+    const persistenceRead : IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociations(associations);
+
+    if (results === undefined || results === null || results.length == 0) {
+        return null;
+    }
+
+    if (results.length > 1) {
+        throw new Error(`More than one OneDrive file record for file ${fileName}`);
+    }
+
+    const data : OneDriveFileModel = results[0] as OneDriveFileModel;
+
+    return data;
+};
+
+export const deleteUserAccessTokenAsync = async (
+    persis: IPersistence,
+    rocketChatUserId: string) : Promise<void> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.UserRegistration),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.USER, rocketChatUserId),
+    ];
+
+    await persis.removeByAssociations(associations);
 };

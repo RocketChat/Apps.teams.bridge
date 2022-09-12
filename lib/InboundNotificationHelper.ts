@@ -19,7 +19,7 @@ import {
 export enum NotificationChangeType {
     Created = 'created',
     Updated = 'updated',
-    // Deleted = 'deleted',
+    Deleted = 'deleted',
 };
 
 export enum NotificationResourceType {
@@ -60,16 +60,15 @@ export const handleInboundNotificationAsync = async (
         case NotificationChangeType.Created:
             await handleInboundMessageCreatedAsync(userAccessToken, inBoundNotification, read, modify, http, persis);
             break;
-        // Update / delete message is not supported for Rocket.Chat App
         
         case NotificationChangeType.Updated:
             await handleInboundMessageUpdatedAsync(userAccessToken, inBoundNotification, read, modify, http, persis);
             break;
-            /*
+
         case NotificationChangeType.Deleted:
             await handleInboundMessageDeletedAsync(inBoundNotification, read, modify, http, persis);
             break;
-        */
+
         default:
             console.log(`Unsupported notification change type`);
             return;
@@ -89,15 +88,20 @@ const handleInboundMessageCreatedAsync = async (
     const resourceString = inBoundNotification.resourceString;
     const getMessageResponse = await getMessageWithResourceStringAsync(http, resourceString, userAccessToken);
 
+    console.log("getMessageResponse:");
+    console.log(getMessageResponse);
+
     const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
     if (!fromUserTeamsId) {
         // If there's not a sender, stop processing
+        console.log("No sender");
         return;
     }
 
     const roomRecord = await retrieveRoomByTeamsThreadIdAsync(read, getMessageResponse.threadId);
     if (!roomRecord) {
         // TODO: handle thread created in Teams scenario
+        console.log("No room record");
         return;
     }
 
@@ -114,19 +118,40 @@ const handleInboundMessageCreatedAsync = async (
             return;
         }
 
-        const sender: IUser = await read.getUserReader().getById(fromDummyUser.rocketChatUserId);
+        const fromUserRocketChatUser = await retrieveUserByTeamsUserIdAsync(read, fromUserTeamsId);
+        if (fromUserRocketChatUser) {
+            // If this message is sent from a Teams user that his/her corresponding real Rocket Chat user is in current room, stop processing
+            const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
+            if (roomMembers && roomMembers.find(user => user.id === fromUserRocketChatUser.rocketChatUserId)) {
+                console.log("Message not from dummy user!");
+                return;
+            }
+        }
 
-        const messageContent = mapTeamsMessageToRocketChatMessage(
-            getMessageResponse.messageContent,
-            getMessageResponse.messageContentType);
+        const sender: IUser = await read.getUserReader().getById(fromDummyUser.rocketChatUserId);
 
         const room = await read.getRoomReader().getById(roomRecord.rocketChatRoomId);
         if (!room) {
             return;
         }
+
+        const messageText = mapTeamsMessageToRocketChatMessage(
+            getMessageResponse,
+            userAccessToken,
+            room,
+            sender,
+            http,
+            modify);
+
+        if (messageText === '') {
+            // File message, no text content
+            return;
+        }
         
-        const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(messageContent, sender, room, modify);
+        const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(messageText, sender, room, modify);
         await persistMessageIdMappingAsync(persis, rocketChatMessageId, getMessageResponse.messageId, getMessageResponse.threadId);
+    } else {
+        console.log("Skip notification for non-bridge user");
     }
 };
 
@@ -171,14 +196,18 @@ const handleInboundMessageUpdatedAsync = async (
     }
 
     const sender: IUser = message.sender;
-    const messageContent = mapTeamsMessageToRocketChatMessage(
-        getMessageResponse.messageContent,
-        getMessageResponse.messageContentType);
-
+    const updatedMessageText = mapTeamsMessageToRocketChatMessage(
+        getMessageResponse,
+        userAccessToken,
+        message.room,
+        sender,
+        http,
+        modify);
+        
     const updator = modify.getUpdater();
     let messageBuilder = await updator.message(messageIdMapping.rocketChatMessageId, sender);
     messageBuilder = messageBuilder
-        .setText(messageContent)
+        .setText(updatedMessageText)
         .setEditor(sender);
     await updator.finish(messageBuilder);
 };
@@ -190,4 +219,30 @@ const handleInboundMessageDeletedAsync = async (
     http: IHttp,
     persis: IPersistence) : Promise<void> => {
     console.log('Processing message deleted!');
+    console.log(inBoundNotification);
+
+    const resourceString = inBoundNotification.resourceId;
+
+    const messageIdMapping = await retrieveMessageIdMappingByTeamsMessageIdAsync(read, resourceString);
+    if (!messageIdMapping) {
+        // If there's not an existing rocket chat message, stop processing
+        return;
+    }
+
+    const message = await read.getMessageReader().getById(messageIdMapping.rocketChatMessageId);
+    console.log("message to delete:");
+    console.log(message);
+    if (!message) {
+        // If there's not an existing rocket chat message, stop processing
+        return;
+    }
+
+    const sender: IUser = message.sender;
+
+    const updator = modify.getUpdater();
+    let messageBuilder = await updator.message(messageIdMapping.rocketChatMessageId, sender);
+    messageBuilder = messageBuilder
+        .setText('~This message has been deleted.~')
+        .setEditor(sender);
+    await updator.finish(messageBuilder);
 };

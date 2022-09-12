@@ -1,20 +1,24 @@
 import {
     IHttp,
     IModify,
-    INotifier,
     IPersistence,
     IRead
 } from "@rocket.chat/apps-engine/definition/accessors";
+import { UserNotAllowedException } from "@rocket.chat/apps-engine/definition/exceptions";
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
-import { IRoom, RoomType } from "@rocket.chat/apps-engine/definition/rooms";
+import { IRoom, IRoomUserLeaveContext, RoomType } from "@rocket.chat/apps-engine/definition/rooms";
+import { IFileUploadContext } from "@rocket.chat/apps-engine/definition/uploads";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AppSetting } from "../config/Settings";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
+import { findAllDummyUsersInRocketChatUserListAsync } from "./AppUserHelper";
 import {
+    AddUserLoginRequiredHintMessageText,
     AuthenticationEndpointPath,
     BridgeUserNotificationMessageText,
     LoggedInBridgeUserRequiredHintMessageText,
     LoginRequiredHintMessageText,
+    SubscriberEndpointPath,
     UnsupportedScenarioHintMessageText
 } from "./Const";
 import {
@@ -24,21 +28,37 @@ import {
     notifyRocketChatUserInRoomAsync
 } from "./MessageHelper";
 import {
+    addMemberToChatThreadAsync,
     createChatThreadAsync,
     createOneOnOneChatThreadAsync,
     deleteTextMessageInChatThreadAsync,
+    listMembersInChatThreadAsync,
+    listSubscriptionsAsync,
+    removeMemberFromChatThreadAsync,
+    renewSubscriptionAsync,
+    renewUserAccessTokenAsync,
+    sendFileMessageToChatThreadAsync,
     sendTextMessageToChatThreadAsync,
-    updateTextMessageInChatThreadAsync
+    shareOneDriveFileAsync,
+    subscribeToAllMessagesForOneUserAsync,
+    updateTextMessageInChatThreadAsync,
+    uploadFileToOneDriveAsync
 } from "./MicrosoftGraphApi";
 import {
     checkDummyUserByRocketChatUserIdAsync,
     persistMessageIdMappingAsync,
+    persistOneDriveFileAsync,
     persistRoomAsync,
+    persistUserAccessTokenAsync,
+    retrieveAllUserRegistrationsAsync,
     retrieveDummyUserByRocketChatUserIdAsync,
+    retrieveDummyUserByTeamsUserIdAsync,
     retrieveMessageIdMappingByRocketChatMessageIdAsync,
+    retrieveOneDriveFileAsync,
     retrieveRoomByRocketChatRoomIdAsync,
     retrieveUserAccessTokenAsync,
     retrieveUserByRocketChatUserIdAsync,
+    retrieveUserRefreshTokenAsync,
     UserModel
 } from "./PersistHelper";
 import { getLoginUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
@@ -74,7 +94,7 @@ export const handlePreMessageSentPreventAsync = async (
         // If room type is PRIVATE_GROUP or DIRECT_MESSAGE, check if there's any dummy user in the room
         const members = await read.getRoomReader().getMembers(message.room.id);
 
-        const dummyUsers = await findAllDummyUsersAsync(read, members);
+        const dummyUsers = await findAllDummyUsersInRocketChatUserListAsync(read, members);
         console.log(dummyUsers);
 
         if (dummyUsers && dummyUsers.length > 0) {
@@ -83,9 +103,8 @@ export const handlePreMessageSentPreventAsync = async (
             // Find whether there's an existing room record
             let roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, message.room.id);
 
-            console.log("VVV==roomRecord==VVV");
+            console.log("RoomRecord:");
             console.log(roomRecord);
-            console.log("^^^==roomRecord==^^^");
 
             if (roomRecord) {
                 // If there's an existing room record, check whether it has a bridge user
@@ -158,9 +177,6 @@ export const handlePostMessageSentAsync = async (
     http: IHttp,
     persistence: IPersistence) : Promise<void> => {
 
-    //console.log("VVV==message==VVV");
-    //console.log(message);
-    //console.log("^^^==message==^^^");
     const isSenderDummyUser = await checkDummyUserByRocketChatUserIdAsync(read, message.sender.id);
     if (isSenderDummyUser) {
         console.log('Message sender is a dummy user, stop processing.');
@@ -170,8 +186,7 @@ export const handlePostMessageSentAsync = async (
     const roomId = message.room.id;
     const members = await read.getRoomReader().getMembers(roomId);
 
-    const dummyUsers = await findAllDummyUsersAsync(read, members);
-    console.log(dummyUsers);
+    const dummyUsers = await findAllDummyUsersInRocketChatUserListAsync(read, members);
     if (dummyUsers && dummyUsers.length > 0) {
         // If there's any dummy user in the room, this is a Teams interop chat room
         // Sanity check has been done in PreMessageSentPrevent for Teams interop scenarios
@@ -244,18 +259,48 @@ export const handlePostMessageSentAsync = async (
             originalSenderName = undefined;
         }
 
-        // Mapping message content format
-        messageText = mapRocketChatMessageToTeamsMessage(messageText, originalSenderName);
+        let teamsMessageId = '';
+        let rocketChatMessageId = '';
+        if (message.file) {
+            // If message is a file, use send file operation
+            let textMessage = '';
+            if (message.attachments && message.attachments[0].description) {
+                textMessage = message.attachments[0].description;
+            }
 
-        // Send the message to the chat thread
-        const response = await sendTextMessageToChatThreadAsync(
-            http,
-            messageText,
-            roomRecord.teamsThreadId,
-            userAccessToken);
+            const oneDriveFile = await retrieveOneDriveFileAsync(read, message.file.name);
+            if (!oneDriveFile) {
+                return;
+            }
 
-        const teamsMessageId = response.messageId;
-        const rocketChatMessageId = message.id as string;
+            const shareRecord = await shareOneDriveFileAsync(http, oneDriveFile?.driveItemId, userAccessToken);
+
+            console.log("Sending file message!");
+            // Send the message to the chat thread
+            const response = await sendFileMessageToChatThreadAsync(
+                http,
+                textMessage,
+                oneDriveFile.fileName,
+                shareRecord.shareLink,
+                roomRecord.teamsThreadId,
+                userAccessToken);
+
+            teamsMessageId = response.messageId;
+            rocketChatMessageId = message.id as string;
+        } else {
+            // Mapping message content format
+            messageText = mapRocketChatMessageToTeamsMessage(messageText, originalSenderName);
+
+            // Send the message to the chat thread
+            const response = await sendTextMessageToChatThreadAsync(
+                http,
+                messageText,
+                roomRecord.teamsThreadId,
+                userAccessToken);
+
+            teamsMessageId = response.messageId;
+            rocketChatMessageId = message.id as string;
+        }
 
         await persistMessageIdMappingAsync(persistence, rocketChatMessageId, teamsMessageId, roomRecord.teamsThreadId);
     }
@@ -270,8 +315,12 @@ export const handlePreMessageOperationPreventAsync = async (message: IMessage, r
     // If the user that operate the Teams message has not logged in to Teams
     // Send a notification to let the sender know he need to logged in to Teams to apply the operation
     const senderId = message.sender.id;
-    const senderUserAccessToken = await retrieveUserAccessTokenAsync(read, senderId);
+    const dummyUser = await retrieveDummyUserByRocketChatUserIdAsync(read, senderId);
+    if (dummyUser) {
+        return false;
+    }
 
+    const senderUserAccessToken = await retrieveUserAccessTokenAsync(read, senderId);
     if (!senderUserAccessToken) {
         return true;
     }
@@ -332,6 +381,250 @@ export const handlePostMessageDeletedAsync = async (message: IMessage, read: IRe
         senderUserAccessToken);
 };
 
+export const handlePreFileUploadAsync = async (
+    context: IFileUploadContext,
+    read: IRead,
+    http: IHttp,
+    persis: IPersistence,
+    modify: IModify) : Promise<void> => {
+    const senderRocketChatUserId = context.file.userId;
+    const roomId = context.file.rid;
+    const fileName = context.file.name;
+    const fileMIMEType = context.file.type;
+    const fileSize = context.file.size;
+
+    if (fileName.startsWith('thumb-')) {
+        // TODO: find a better way to not upload the thumb file for image
+        return;
+    }
+
+    const isSenderDummerUser = await checkDummyUserByRocketChatUserIdAsync(read, senderRocketChatUserId);
+    if (isSenderDummerUser) {
+        return;
+    }
+
+    const members = await read.getRoomReader().getMembers(roomId);
+
+    const dummyUsers = await findAllDummyUsersInRocketChatUserListAsync(read, members);
+    if (dummyUsers && dummyUsers.length > 0) {
+        // If there's any dummy user in the room, this is a Teams interop chat room
+        // Sanity check has been done in PreMessageSentPrevent for Teams interop scenarios
+
+        // There should be a room record in persist with a bridge user assigned
+        const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, roomId);
+        if (!roomRecord) {
+            throw new Error('No room record find for Teams interop room!');
+        }
+
+        if (!roomRecord.bridgeUserRocketChatUserId) {
+            throw new Error('No bridge user assigned to Teams interop room!');
+        }
+
+        const bridgeUser = await retrieveUserByRocketChatUserIdAsync(read, roomRecord.bridgeUserRocketChatUserId);
+        let userAccessToken = await retrieveUserAccessTokenAsync(read, roomRecord.bridgeUserRocketChatUserId);
+        if (!userAccessToken || !bridgeUser) {
+            await persistRoomAsync(
+                persis,
+                roomRecord.rocketChatRoomId,
+                roomRecord.teamsThreadId,
+                undefined);
+            throw new Error('Invalid bridge user!');
+        }
+
+        const senderUserAccessToken = await retrieveUserAccessTokenAsync(read, senderRocketChatUserId);
+        if (senderUserAccessToken) {
+            // If file uploader already logged in, make the file uploaded by themselves instead of via the bridge user
+            userAccessToken = senderUserAccessToken;
+        }
+
+        console.log("Start upload file");
+
+        // Upload the file to One Drive
+        const uploadFileResponse = await uploadFileToOneDriveAsync(http, fileName, fileMIMEType, fileSize, context.content, userAccessToken);
+        console.log(uploadFileResponse);
+
+        // Persist file upload record
+        if (uploadFileResponse) {
+            await persistOneDriveFileAsync(persis, uploadFileResponse.fileName, uploadFileResponse.driveItemId);
+        }
+    }
+};
+
+export const handleAddTeamsUserContextualBarSubmitAsync = async (
+    operator: IUser,
+    room: IRoom,
+    teamsUserIdsToSave: string[],
+    read: IRead,
+    modify: IModify,
+    persis: IPersistence,
+    http: IHttp,
+    app: TeamsBridgeApp) : Promise<void> => {
+    
+    const dummyUsersToAdd : UserModel[] = [];
+    for (const teamsUserId of teamsUserIdsToSave) {
+        const dummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, teamsUserId);
+        if (dummyUser) {
+            dummyUsersToAdd.push(dummyUser);
+        }
+    }
+    
+    console.log("Dummy user to add:");
+    console.log(dummyUsersToAdd);
+
+    const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, room.id);
+    if (roomRecord && roomRecord.teamsThreadId) {
+        if (!roomRecord.bridgeUserRocketChatUserId ) {
+            await notifyNotLoggedInUserAsync(read, operator, room, app, AddUserLoginRequiredHintMessageText);
+            return;
+        }
+
+        // If there's a thread created in Teams side, need to update the participant there as well
+        const accessToken = await retrieveUserAccessTokenAsync(read, roomRecord.bridgeUserRocketChatUserId);
+        if (!accessToken) {
+            await notifyNotLoggedInUserAsync(read, operator, room, app, AddUserLoginRequiredHintMessageText);
+            return;
+        }
+
+        for (const dummyUser of dummyUsersToAdd) {
+            await addMemberToChatThreadAsync(http, roomRecord.teamsThreadId, dummyUser.teamsUserId, accessToken);
+        }
+    }
+
+    const updater = modify.getUpdater();
+    const roomBuilder = await updater.room(room.id, operator);
+
+    for (const dummyUser of dummyUsersToAdd) {
+        const userToAdd = await read.getUserReader().getById(dummyUser.rocketChatUserId);
+        if (!userToAdd) {
+            console.log("Dummy user to add not found!");
+            continue;
+        }
+
+        roomBuilder.addMemberToBeAddedByUsername(userToAdd.username);
+    }
+
+    await updater.finish(roomBuilder);
+};
+
+export const handlePreRoomUserLeaveAsync = async (
+    context: IRoomUserLeaveContext,
+    read: IRead,
+    http: IHttp,
+    persistence: IPersistence,
+    app: TeamsBridgeApp): Promise<void> => {
+    const roomId = context.room.id;
+
+    const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, roomId);
+    if (!roomRecord || !roomRecord.teamsThreadId) {
+        return;
+    }
+
+    const leavingRocketChatUserId = context.leavingUser.id;
+    const embeddedLoginUser = await retrieveUserByRocketChatUserIdAsync(read, leavingRocketChatUserId);
+    const dummyUser = await retrieveDummyUserByRocketChatUserIdAsync(read, leavingRocketChatUserId);
+
+    if (!embeddedLoginUser && !dummyUser) {
+        console.log("Not logged in user or dummy user.");
+        return;
+    }
+
+    if (!roomRecord.bridgeUserRocketChatUserId ) {
+        console.log("No bridge user.");
+        throw new UserNotAllowedException();
+    }
+
+    // If there's a thread created in Teams side, need to update the participant there as well
+    const accessToken = await retrieveUserAccessTokenAsync(read, roomRecord.bridgeUserRocketChatUserId);
+    if (!accessToken) {
+        console.log("No bridge user.");
+        await persistRoomAsync(persistence, roomRecord.rocketChatRoomId, roomRecord.teamsThreadId, undefined);
+        throw new UserNotAllowedException();
+    }
+
+    const teamsUserId = embeddedLoginUser?.teamsUserId ?? dummyUser?.teamsUserId;
+    console.log(`Teams user to be removed: ${teamsUserId}`);
+    if (!teamsUserId) {
+        return;
+    }
+
+    const threadMemberTeamsUserIds = await listMembersInChatThreadAsync(http, roomRecord.teamsThreadId, accessToken);
+    if (threadMemberTeamsUserIds.find(id => id === teamsUserId)) {
+        console.log("User exist, need to remove from thread.");
+        await removeMemberFromChatThreadAsync(http, roomRecord.teamsThreadId, teamsUserId, accessToken);
+    }
+
+    if (embeddedLoginUser && embeddedLoginUser.teamsUserId === roomRecord.bridgeUserRocketChatUserId) {
+        // Clear bridge user if it's been removed
+        await persistRoomAsync(persistence, roomRecord.rocketChatRoomId, roomRecord.teamsThreadId, undefined);
+    }
+};
+
+export const handleUserRegistrationAutoRenewAsync = async (
+    subscriberEndpointUrl: string,
+    read: IRead,
+    modify: IModify,
+    http: IHttp,
+    persis: IPersistence
+) : Promise<void> => {
+    const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
+    const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
+    const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
+
+    const allRegistrations = await retrieveAllUserRegistrationsAsync(read);
+    
+    console.log("AllRegistrations to renew:");
+    console.log(allRegistrations);
+    if (allRegistrations) {
+        for (const registration of allRegistrations) {
+            try {
+                const refreshToken = await retrieveUserRefreshTokenAsync(read, registration.rocketChatUserId);
+
+                if (!refreshToken) {
+                    throw new Error(`Refresh token for user ${registration.rocketChatUserId} not found!`);
+                }
+
+                const response = await renewUserAccessTokenAsync(
+                    http,
+                    refreshToken,
+                    aadTenantId,
+                    aadClientId,
+                    aadClientSecret);
+
+                const userAccessToken = response.accessToken;
+
+                await persistUserAccessTokenAsync(
+                    persis,
+                    registration.rocketChatUserId,
+                    userAccessToken,
+                    response.refreshToken as string,
+                    response.expiresIn,
+                    response.extExpiresIn);
+
+                const subscriptionIds = await listSubscriptionsAsync(http, userAccessToken);
+                if (subscriptionIds) {
+                    for (const subscriptionId of subscriptionIds) {
+                        await renewSubscriptionAsync(http, subscriptionId, userAccessToken);
+                    }
+                } else {
+                    const user = await retrieveUserByRocketChatUserIdAsync(read, registration.rocketChatUserId);
+                    if (!user) {
+                        throw new Error(`User record for user ${registration.rocketChatUserId} not found!`);
+                    }
+
+                    await subscribeToAllMessagesForOneUserAsync(
+                        http,
+                        user.rocketChatUserId,
+                        user.teamsUserId,
+                        subscriberEndpointUrl,
+                        userAccessToken);
+                }
+            } catch (error) {
+                console.error(`Error during renew registration for user ${registration.rocketChatUserId}. Ignore this error and continue. Error: ${error}`);
+            }
+        }
+    }
+};
+
 const isTeamsMessageAsync = async (messageId: string | undefined, read: IRead) : Promise<boolean> => {
     if (!messageId) {
         return false;
@@ -345,25 +638,7 @@ const isTeamsMessageAsync = async (messageId: string | undefined, read: IRead) :
     return false;
 };
 
-const findAllDummyUsersAsync = async (read: IRead, users: IUser[]) : Promise<UserModel[]> => {
-    console.log("findAllDummyUsersAsync");
-
-    const result : UserModel[] = [];
-    for (const user of users) {
-        const userModel = await retrieveDummyUserByRocketChatUserIdAsync(read, user.id);
-        if (userModel) {
-            result.push(userModel);
-        }
-    }
-    
-    console.log(`Find ${result.length} dummy users`);
-
-    return result;
-};
-
 const findOneTeamsLoggedInUsersAsync = async (read: IRead, users: IUser[]) : Promise<UserModel | null> => {
-    console.log("findAllTeamsLoggedInUsersAsync");
-
     for (const user of users) {
         const accessToken = await retrieveUserAccessTokenAsync(read, user.id);
         if (accessToken) {
@@ -371,8 +646,6 @@ const findOneTeamsLoggedInUsersAsync = async (read: IRead, users: IUser[]) : Pro
             return userModel;
         }
     }
-    
-    console.log('Not find any Teams logged in users!');
 
     return null;
 };

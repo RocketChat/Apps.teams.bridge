@@ -6,16 +6,17 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { getApplicationAccessTokenAsync } from "../lib/MicrosoftGraphApi";
+import { getApplicationAccessTokenAsync, listTeamsUserProfilesAsync } from "../lib/MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
 import { AppSetting } from "../config/Settings";
-import { persistApplicationAccessTokenAsync } from "../lib/PersistHelper";
-import { AppSetupVerificationFailMessageText, AppSetupVerificationPassMessageText } from "../lib/Const";
+import { persistDummyUserAsync, persistTeamsUserProfileAsync } from "../lib/PersistHelper";
+import { ProvisionTeamsBotUserFailedMessageText, ProvisionTeamsBotUserSucceedMessageText } from "../lib/Const";
+import { createAppUserAsync } from "../lib/AppUserHelper";
 
-export class SetupVerificationSlashCommand implements ISlashCommand {
-    public command: string = 'teamsbridge-setup-verification';
+export class ProvisionTeamsBotUserSlashCommand implements ISlashCommand {
+    public command: string = 'teamsbridge-provision-teams-bot-user';
     public i18nParamsExample: string;
-    public i18nDescription: string = 'setup_verification_slash_command_description';
+    public i18nDescription: string = 'provision_teams_bot_user_slash_command_description';
 
     // This slash command should only be seen/used by admin user
     public permission?: string | undefined = 'manage-apps';
@@ -37,11 +38,20 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
             const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
     
             const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
-            await persistApplicationAccessTokenAsync(persis, response.accessToken);
+            const appAccessToken = response.accessToken;
 
-            await notifyRocketChatUserInRoomAsync(AppSetupVerificationPassMessageText, appUser, messageReceiver, room, modify.getNotifier());
+            const teamsUserProfiles = await listTeamsUserProfilesAsync(http, appAccessToken);
+
+            for (const profile of teamsUserProfiles) {
+                await persistTeamsUserProfileAsync(persis, profile.displayName, profile.givenName, profile.surname, profile.mail, profile.id);
+                
+                const rocketChatUserId = await createAppUserAsync(profile.displayName, profile.mail, read, modify);
+                await persistDummyUserAsync(persis, rocketChatUserId, profile.id);
+            }
+
+            await notifyRocketChatUserInRoomAsync(ProvisionTeamsBotUserSucceedMessageText, appUser, messageReceiver, room, modify.getNotifier());
         } catch (error) {
-            await notifyRocketChatUserInRoomAsync(AppSetupVerificationFailMessageText, appUser, messageReceiver, room, modify.getNotifier());
+            await notifyRocketChatUserInRoomAsync(ProvisionTeamsBotUserFailedMessageText, appUser, messageReceiver, room, modify.getNotifier());
         }
     }
 }
