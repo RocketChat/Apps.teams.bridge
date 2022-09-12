@@ -210,5 +210,5 @@ export const getGraphApiResourceUrl = (resourceString: string) => {
 
 export const TestEnvironment = {
     // Put url here when running locally & using tunnel service such as Ngrok to expose the localhost port to the internet
-    tunnelServiceUrl: 'https://f08a-50-35-80-12.ngrok.io',
+    tunnelServiceUrl: '',
 };
