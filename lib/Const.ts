@@ -43,6 +43,8 @@ export const LoginRequiredHintMessageText: string =
     'The Rocket.Chat user you are messaging represents a colleague in your organization using Microsoft Teams. '
     + 'The message can NOT be delivered to the user on Microsoft Teams before you start cross platform collaboration for your account. '
     + 'Please click this button to login Teams:';
+export const LoginNoNeedHintMessageText: string = 'You have already login Microsoft Teams to start cross platform collaboration for your account. '
+    + 'No need to login again.';
 export const LoggedInBridgeUserRequiredHintMessageText: string = 
     'The Rocket.Chat room you are messaging includes at least one Teams Bot user that represents a colleague in your organization using Microsoft Teams. '
     + 'The message can NOT be delivered to Microsoft Teams before there is at least one user in this room start cross platform collaboration. '

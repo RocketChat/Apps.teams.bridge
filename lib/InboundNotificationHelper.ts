@@ -50,7 +50,7 @@ export const handleInboundNotificationAsync = async (
     const userAccessToken = await retrieveUserAccessTokenAsync(read, receiverRocketChatUserId);
     if (!userAccessToken) {
         // If receiver's access token does not exist in persist or expired, stop processing
-        // TODO: handle this issue when token auto refresh is enabled.
+        console.error(`Receiver user ${receiverRocketChatUserId} access token does not exist in persist or expired`);
         return;
     }
 

@@ -2,10 +2,11 @@ import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/de
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AppSetting } from "../config/Settings";
-import { generateHintMessageWithTeamsLoginButton, notifyRocketChatUserAsync } from "../lib/MessageHelper";
-import { AuthenticationEndpointPath, LoginMessageText } from "../lib/Const";
+import { generateHintMessageWithTeamsLoginButton, notifyRocketChatUserAsync, notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
+import { AuthenticationEndpointPath, LoginMessageText, LoginNoNeedHintMessageText } from "../lib/Const";
 import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
+import { retrieveUserAccessTokenAsync } from "../lib/PersistHelper";
 
 export class LoginTeamsSlashCommand implements ISlashCommand {
     public command: string = 'teamsbridge-login-teams';
@@ -34,8 +35,12 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
         const loginUrl = getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id);
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
 
-        // TODO: check whether current user has already logged in
         // If the user has already logged, print some other information instead of the login url
+        const userAccessToken = await retrieveUserAccessTokenAsync(read, commandSender.id);
+        if (userAccessToken) {
+            await notifyRocketChatUserInRoomAsync(LoginNoNeedHintMessageText, appUser, commandSender, room, modify.getNotifier());
+            return;
+        }
 
         const message = generateHintMessageWithTeamsLoginButton(loginUrl, appUser, room, LoginMessageText);
 
