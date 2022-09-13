@@ -609,3 +609,34 @@ export const deleteUserAccessTokenAsync = async (
 
     await persis.removeByAssociations(associations);
 };
+
+export const deleteUserAsync = async (
+    read: IRead,
+    persis: IPersistence,
+    rocketChatUserId: string) : Promise<void> => {
+
+    const user = await retrieveUserByRocketChatUserIdAsync(read, rocketChatUserId);
+    if (!user) {
+        return;
+    }
+
+    const associationsByRocketChatUserId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.User),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.USER, user.rocketChatUserId),
+    ];
+    const associationsByTeamsUserId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.User),
+        new RocketChatAssociationRecord(RocketChatAssociationModel.USER, user.teamsUserId),
+    ];
+
+    await persis.removeByAssociations(associationsByRocketChatUserId);
+    await persis.removeByAssociations(associationsByTeamsUserId);
+};
+
+export const debugCleanAllRoomAsync = async (persis: IPersistence) => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, MiscKeys.Room),
+    ];
+
+    await persis.removeByAssociations(associations);
+};

@@ -4,11 +4,15 @@ import {
     IPersistence,
     IRead
 } from "@rocket.chat/apps-engine/definition/accessors";
+import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
+import { syncAllTeamsBotUsersAsync } from "./AppUserHelper";
+import { DefaultTeamName, DefaultThreadName } from "./Const";
 import { mapTeamsMessageToRocketChatMessage, sendRocketChatMessageInRoomAsync, sendRocketChatOneOnOneMessageAsync } from "./MessageHelper";
-import { getMessageWithResourceStringAsync, MessageContentType } from "./MicrosoftGraphApi";
+import { getChatThreadWithMembersAsync, getMessageWithResourceStringAsync, MessageContentType, MessageType, ThreadType } from "./MicrosoftGraphApi";
 import {
     persistMessageIdMappingAsync,
+    persistRoomAsync,
     retrieveDummyUserByTeamsUserIdAsync,
     retrieveMessageIdMappingByTeamsMessageIdAsync,
     retrieveRoomByTeamsThreadIdAsync,
@@ -84,67 +88,190 @@ const handleInboundMessageCreatedAsync = async (
     const resourceString = inBoundNotification.resourceString;
     const getMessageResponse = await getMessageWithResourceStringAsync(http, resourceString, userAccessToken);
 
-    const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
-    if (!fromUserTeamsId) {
-        // If there's not a sender, stop processing
-        console.error("No sender");
-        return;
-    }
-
-    const roomRecord = await retrieveRoomByTeamsThreadIdAsync(read, getMessageResponse.threadId);
-    if (!roomRecord) {
-        // TODO: handle thread created in Teams scenario
-        console.error("No room record");
-        return;
-    }
-
-    if (roomRecord.bridgeUserRocketChatUserId && roomRecord.bridgeUserRocketChatUserId === receiverRocketChatUserId) {
-        // Only handle notification received by the bridge user to avoid duplication
-
-        const fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
-        if (!fromDummyUser) {
-            // If the message if not from a dummy user, stop processing
-            console.log("Message not from dummy user!");
-            // TODO: create dummy user on demand.
-            // There could be dummy user out of sync issue.
-            // If the dummy user has not been created for a recently added Teams user, we need to detect this and create dummy user.
-            return;
-        }
-
-        const fromUserRocketChatUser = await retrieveUserByTeamsUserIdAsync(read, fromUserTeamsId);
-        if (fromUserRocketChatUser) {
-            // If this message is sent from a Teams user that his/her corresponding real Rocket Chat user is in current room, stop processing
-            const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
-            if (roomMembers && roomMembers.find(user => user.id === fromUserRocketChatUser.rocketChatUserId)) {
-                console.log("Message not from dummy user!");
+    if (getMessageResponse.messageType) {
+                
+        let roomRecord = await retrieveRoomByTeamsThreadIdAsync(read, getMessageResponse.threadId);
+        if (!roomRecord) {
+            if (getMessageResponse.messageType !== MessageType.Message) {
+                // Only create room for real message
                 return;
             }
-        }
 
-        const sender: IUser = await read.getUserReader().getById(fromDummyUser.rocketChatUserId);
+            console.log("Create new room for incoming message!");
+            // Handle thread created in Teams scenario
+            // Get thread and members info
+            const threadInfo = await getChatThreadWithMembersAsync(http, getMessageResponse.threadId, userAccessToken);
+
+            // Build a room with thread info
+            const userReader = read.getUserReader();
+            const notificationReceiverUser = await userReader.getById(receiverRocketChatUserId);
+
+            let topic = DefaultTeamName;
+
+            const creator = modify.getCreator();
+            const roomBuilder = creator.startRoom();
+            roomBuilder.setCreator(notificationReceiverUser);
+            if (threadInfo.type) {
+                if (threadInfo.type === ThreadType.OneOnOne) {
+                    roomBuilder
+                        .setType(RoomType.DIRECT_MESSAGE)
+                        .setSlugifiedName(`dm_${notificationReceiverUser.id}`);
+                } else if (threadInfo.type === ThreadType.Group) {
+                    roomBuilder
+                        .setType(RoomType.PRIVATE_GROUP)
+                        .setDisplayName(topic)
+                        .setSlugifiedName(topic);
+                } else {
+                    throw new Error(`Unsupported thread type ${threadInfo.type} found for Teams thread ${threadInfo.threadId}`);
+                }
+
+                const teamsMemberIds = threadInfo.memberIds;
+                if (!teamsMemberIds || teamsMemberIds.length == 0) {
+                    throw new Error(`No members found for Teams thread ${threadInfo.threadId}`);
+                }
+
+                // Add thread members to the room
+                for (const teamsMemberId of teamsMemberIds) {
+                    const rocketChatUser = await retrieveUserByTeamsUserIdAsync(read, teamsMemberId);
+                    if (rocketChatUser) {
+                        const user = await userReader.getById(rocketChatUser.rocketChatUserId);
+                        roomBuilder.addMemberToBeAddedByUsername(user.username);
+                    } else {
+                        const dummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, teamsMemberId);
+                        if (!dummyUser) {
+                            console.error(`No dummy user found for Teams user ${teamsMemberId}, skip.`)
+                            continue;
+                        }
+
+                        const user = await userReader.getById(dummyUser.rocketChatUserId);
+                        roomBuilder.addMemberToBeAddedByUsername(user.username);
+                    }
+                }
+            } else {
+                throw new Error(`No thread type found for Teams thread ${threadInfo.threadId}`);
+            }
+
+            const roomId = await creator.finish(roomBuilder);
+            console.log(`Room ${roomId} created for incoming message!`);
+
+            // Set notification receiver as bridge user and persist room record
+            await persistRoomAsync(persis, roomId, threadInfo.threadId, receiverRocketChatUserId);
+
+            roomRecord = await retrieveRoomByTeamsThreadIdAsync(read, getMessageResponse.threadId);
+            if (!roomRecord) {
+                throw new Error(`Create room failed for Teams thread ${getMessageResponse.threadId}`);
+            }
+        }
 
         const room = await read.getRoomReader().getById(roomRecord.rocketChatRoomId);
         if (!room) {
             return;
         }
 
-        const messageText = mapTeamsMessageToRocketChatMessage(
-            getMessageResponse,
-            userAccessToken,
-            room,
-            sender,
-            http,
-            modify);
-
-        if (messageText === '') {
-            // File message, no text content
+        // Only handle notification received by the bridge user to avoid duplication
+        if (!roomRecord.bridgeUserRocketChatUserId || roomRecord.bridgeUserRocketChatUserId !== receiverRocketChatUserId) {
+            console.log("Skip notification for non-bridge user");
             return;
         }
+
+        if (getMessageResponse.messageType === MessageType.Message) {
+            const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
+            if (!fromUserTeamsId) {
+                // If there's not a sender, stop processing
+                console.error("No sender for message");
+                return;
+            }
+    
+            const fromUserRocketChatUser = await retrieveUserByTeamsUserIdAsync(read, fromUserTeamsId);
+            if (fromUserRocketChatUser) {
+                // If this message is sent from a Teams user that his/her corresponding real Rocket Chat user is in current room, stop processing
+                const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
+                if (roomMembers && roomMembers.find(user => user.id === fromUserRocketChatUser.rocketChatUserId)) {
+                    console.log("Message not from dummy user!");
+                    return;
+                }
+            }
+
+            let fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
+            if (!fromDummyUser) {
+                // There could be dummy user out of sync issue.
+                // If the dummy user has not been created for a recently added Teams user, we need to create dummy user on demand.
+                // Sync all Teams bot user
+                await syncAllTeamsBotUsersAsync(http, read, modify, persis);
+                fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
+                if (!fromDummyUser) {
+                    throw new Error(`Dummy user with Teams ID ${fromUserTeamsId} not found after try sync all Teams bot users!`);
+                }
+            }
+    
+            const sender: IUser = await read.getUserReader().getById(fromDummyUser.rocketChatUserId);
+    
+            const messageText = mapTeamsMessageToRocketChatMessage(
+                getMessageResponse,
+                userAccessToken,
+                room,
+                sender,
+                http,
+                modify);
+    
+            if (messageText === '') {
+                // File message, no text content
+                return;
+            }
+            
+            const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(messageText, sender, room, modify);
+            await persistMessageIdMappingAsync(persis, rocketChatMessageId, getMessageResponse.messageId, getMessageResponse.threadId);
+
+        } else if (getMessageResponse.messageType === MessageType.SystemAddMembers) {
+            const memberToAddTeamsIds = getMessageResponse.memberIds;
+            if (!memberToAddTeamsIds || memberToAddTeamsIds.length === 0) {
+                console.error("Empty members Id list for add members.");
+                return;
+            }
+
+            for (const memberToAddTeamsId of memberToAddTeamsIds) {
+                let userToAdd : IUser | undefined = undefined;
+
+                // First, try find whether there's a real Rocket.Chat user for this Teams user to add
+                const rocketChatUser = await retrieveUserByTeamsUserIdAsync(read, memberToAddTeamsId);
+                if (rocketChatUser) {
+                    userToAdd = await read.getUserReader().getById(rocketChatUser.rocketChatUserId);
+                } else {
+                    // If there's not, try find the Teams bot user and add to the Rocket.Chat room
+                    let dummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, memberToAddTeamsId);
+                    if (!dummyUser) {
+                        // There could be dummy user out of sync issue.
+                        // If the dummy user has not been created for a recently added Teams user, we need to create dummy user on demand.
+                        // Sync all Teams bot user
+                        await syncAllTeamsBotUsersAsync(http, read, modify, persis);
+                        dummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, memberToAddTeamsId);
+                        if (!dummyUser) {
+                            console.error('Could not add Teams bot user to room!');
+                            console.error(`Dummy user with Teams ID ${memberToAddTeamsId} not found after try sync all Teams bot users!`);
+                            continue;
+                        }
+                    }
+
+                    userToAdd = await read.getUserReader().getById(dummyUser.rocketChatUserId);
+                }
+
+                const updater = modify.getUpdater();
+                const roomBuilder = await updater.room(room.id, room.creator);
         
-        const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(messageText, sender, room, modify);
-        await persistMessageIdMappingAsync(persis, rocketChatMessageId, getMessageResponse.messageId, getMessageResponse.threadId);
+                if (!userToAdd) {
+                    console.error('Could not add Teams bot user to room!');
+                    console.error(`Dummy user with Teams ID ${memberToAddTeamsId} not found after try sync all Teams bot users!`);
+                    continue;
+                }
+        
+                roomBuilder.addMemberToBeAddedByUsername(userToAdd.username);
+                await updater.finish(roomBuilder);
+            }
+        } else {
+            console.log('Unsupported message type.');
+        }
     } else {
-        console.log("Skip notification for non-bridge user");
+        console.log('Unsupported message type.');
     }
 };
 

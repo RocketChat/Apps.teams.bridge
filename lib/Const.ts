@@ -16,6 +16,7 @@ const GraphApiEndpoint = {
     RevokeRefreshToken: 'me/revokeSignInSessions',
     User: 'users',
     Chat: 'chats',
+    ChatThread: (threadId: string) => `chats/${threadId}`,
     ChatMember: (threadId: string) => `chats/${threadId}/members`,
     RemoveChatMember: (threadId: string, userId: string) => `chats/${threadId}/members/${userId}`,
     Message: (threadId: string) => `chats/${threadId}/messages`,
@@ -101,6 +102,10 @@ export const RegistrationAutoRenewSchedulerId = 'registration.auto.renew.schedul
 
 export const RegistrationAutoRenewInterval = '1800 seconds';
 
+export const DefaultThreadName = 'Rocket.Chat interop group';
+
+export const DefaultTeamName = 'TeamsInteropGroupChat';
+
 export const UIActionId = {
     AddTeamsUserButtonClicked: 'TeamsBridge.AddTeamsUserButtonClicked',
     TeamsUserNameSearch: 'TeamsBridge.TeamsUserNameSearch',
@@ -140,6 +145,10 @@ export const getGraphApiUserUrl = () => {
 
 export const getGraphApiChatUrl = () => {
     return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.Chat}`;
+};
+
+export const getGraphApiChatThreadWithMemberUrl = (threadId: string) => {
+    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.ChatThread(threadId)}?$expand=members`;
 };
 
 export const getGraphApiChatMemberUrl = (threadId: string) => {

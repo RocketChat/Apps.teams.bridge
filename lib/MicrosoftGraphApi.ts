@@ -23,6 +23,7 @@ import {
     getGraphApiOneDriveFileLinkUrl,
     getGraphApiRevokeRefreshTokenUrl,
     getGraphApiSubscriptionOperationUrl,
+    getGraphApiChatThreadWithMemberUrl,
 } from "./Const";
 
 export interface TokenResponse {
@@ -45,6 +46,18 @@ export interface CreateThreadResponse {
     threadId: string;
 };
 
+export enum ThreadType {
+    Group = 'group',
+    OneOnOne = 'oneOnOne',
+};
+
+export interface GetThreadResponse {
+    threadId: string;
+    topic?: string;
+    type?: ThreadType;
+    memberIds?: string[];
+};
+
 export interface SendMessageResponse {
     messageId: string;
 };
@@ -55,7 +68,8 @@ export interface SubscriptionResponse {
 };
 
 export enum MessageType {
-    Message = 'message'
+    Message = 'message',
+    SystemAddMembers = 'addMembers'
 };
 
 export enum MessageContentType {
@@ -77,6 +91,7 @@ export interface GetMessageResponse {
     messageContentType: MessageContentType | undefined;
     messageContent: string;
     attachments?: Attachment[];
+    memberIds?: string[];
 };
 
 export interface UploadFileResponse {
@@ -364,7 +379,7 @@ export const createOneOnOneChatThreadAsync = async (
 export const createChatThreadAsync = async (
     http: IHttp,
     membersTeamsIds: string[],
-    bridgeUserName: string,
+    roomName: string,
     userAccessToken: string) : Promise<CreateThreadResponse> => {
     const url = getGraphApiChatUrl();
 
@@ -381,7 +396,7 @@ export const createChatThreadAsync = async (
     const body = {
         'chatType': 'group',
         'members': members,
-        'topic': `Rocket.Chat interop bridged by ${bridgeUserName}`,
+        'topic': roomName,
     }
 
     const httpRequest: IHttpRequest = {
@@ -408,6 +423,52 @@ export const createChatThreadAsync = async (
         return result;
     } else {
         throw new Error(`Create group chat thread failed with http status code ${response.statusCode}.`);
+    }
+};
+
+export const getChatThreadWithMembersAsync = async (
+    http: IHttp,
+    threadId: string,
+    userAccessToken: string) : Promise<GetThreadResponse> => {
+    const url = getGraphApiChatThreadWithMemberUrl(threadId);
+    
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+    };
+
+    const response = await http.get(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.OK) {
+        const responseBody = response.content;
+        if (responseBody === undefined) {
+            throw new Error('Get chat thread failed!');
+        }
+
+        const jsonBody = JSON.parse(responseBody);
+
+        let memberIds : string[] | undefined = undefined;
+
+        const jsonMembers = jsonBody.members as any[];
+        if (jsonMembers) {
+            memberIds = [];
+            for (const jsonMember of jsonMembers) {
+                memberIds.push(jsonMember.userId);
+            }
+        }
+
+        const result : GetThreadResponse = {
+            threadId: jsonBody.id,
+            topic: jsonBody.topic,
+            type: parseThreadType(jsonBody.chatType),
+            memberIds: memberIds,
+        };
+
+        return result;
+    } else {
+        throw new Error(`Get chat thread failed with http status code ${response.statusCode}.`);
     }
 };
 
@@ -673,14 +734,26 @@ export const getMessageWithResourceStringAsync = async (
             }
         }
 
+        const messageType = parseMessageType(jsonBody.messageType, jsonBody.eventDetail);
+
+        let memberIds : string[] | undefined = undefined;
+        if (messageType === MessageType.SystemAddMembers) {
+            memberIds = [];
+            const jsonMembers = jsonBody.eventDetail.members as any[];
+            for (const jsonMember of jsonMembers) {
+                memberIds.push(jsonMember.id);
+            }
+        }
+
         const result : GetMessageResponse = {
             threadId: jsonBody.chatId,
             messageId: jsonBody.id,
-            messageType: parseMessageType(jsonBody.messageType),
+            messageType: messageType,
             fromUserTeamsId: jsonBody.from?.user?.id,
             messageContentType: parseMessageContentType(jsonBody.body?.contentType),
             messageContent: jsonBody.body?.content,
             attachments: attachments,
+            memberIds: memberIds,
         };
 
         return result;
@@ -981,13 +1054,19 @@ export const getOneDriveFileLinkAsync = async (
     }
 };
 
-const parseMessageType = (messageType: string) : MessageType | undefined => {
+const parseMessageType = (messageType: string, eventDetail?: any) : MessageType | undefined => {
     if (!messageType) {
         return undefined;
     }
 
     if (messageType === 'message') {
         return MessageType.Message;
+    } else {
+        if (eventDetail) {
+            if (eventDetail['@odata.type'] === '#microsoft.graph.membersAddedEventMessageDetail') {
+                return MessageType.SystemAddMembers;
+            }
+        }
     }
 
     return undefined;
@@ -1000,6 +1079,22 @@ const parseMessageContentType = (messageContentType: string) : MessageContentTyp
 
     if (messageContentType === 'html') {
         return MessageContentType.Html;
+    }
+
+    return undefined;
+};
+
+const parseThreadType = (threadType: string) : ThreadType | undefined => {
+    if (!threadType) {
+        return undefined;
+    }
+
+    if (threadType === 'group') {
+        return ThreadType.Group;
+    }
+
+    if (threadType === 'oneOnOne') {
+        return ThreadType.OneOnOne;
     }
 
     return undefined;

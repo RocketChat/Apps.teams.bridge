@@ -3,7 +3,7 @@ import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/def
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
 import { LogoutNoNeedHintMessageText, LogoutSuccessHintMessageText } from "../lib/Const";
-import { deleteUserAccessTokenAsync, retrieveUserAccessTokenAsync } from "../lib/PersistHelper";
+import { deleteUserAccessTokenAsync, deleteUserAsync, retrieveUserAccessTokenAsync } from "../lib/PersistHelper";
 import { deleteSubscriptionAsync, listSubscriptionsAsync, revokeUserRefreshTokenAsync } from "../lib/MicrosoftGraphApi";
 
 export class LogoutTeamsSlashCommand implements ISlashCommand {
@@ -57,6 +57,9 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         
         // Delete access token record
         await deleteUserAccessTokenAsync(persis, rocketChatUserId);
+
+        // Delete user record
+        await deleteUserAsync(read, persis, rocketChatUserId);
 
         // Notify the user
         await notifyRocketChatUserInRoomAsync(LogoutSuccessHintMessageText, appUser, sender, currentRoom, notifier);

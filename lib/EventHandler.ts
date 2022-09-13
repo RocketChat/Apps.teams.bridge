@@ -16,6 +16,7 @@ import {
     AddUserLoginRequiredHintMessageText,
     AuthenticationEndpointPath,
     BridgeUserNotificationMessageText,
+    DefaultThreadName,
     LoggedInBridgeUserRequiredHintMessageText,
     LoginRequiredHintMessageText,
     SubscriberEndpointPath,
@@ -136,8 +137,6 @@ export const handlePreMessageSentPreventAsync = async (
                         const bridgeUser = await read.getUserReader().getById(loggedInUser.rocketChatUserId);
                         await notifyRocketChatUserInRoomAsync(BridgeUserNotificationMessageText, appUser, bridgeUser, message.room, notifier);
 
-                        // TODO: if there's an existing Teams thread, update thread topic
-
                         // TODO: send a message to Microsoft Teams to let the user there know the bridge user represents some other users
                     }
                 } else {
@@ -228,8 +227,8 @@ export const handlePostMessageSentAsync = async (
                     teamsIds.push(dummyUser.teamsUserId);
                 }
 
-                const bridgeUserName = (await read.getUserReader().getById(bridgeUser.rocketChatUserId)).name;
-                const response = await createChatThreadAsync(http, teamsIds, bridgeUserName, userAccessToken);
+                const roomName = message.room.displayName ?? DefaultThreadName;
+                const response = await createChatThreadAsync(http, teamsIds, roomName, userAccessToken);
                 roomRecord.teamsThreadId = response.threadId;
             }
             
