@@ -14,8 +14,8 @@ import {
 import { IApiResponseJSON } from "@rocket.chat/apps-engine/definition/api/IResponse";
 import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
 import { AppSetting } from "../config/Settings";
-import { AuthenticationEndpointPath } from "../lib/Const";
-import { getUserAccessTokenAsync, getUserProfileAsync } from "../lib/MicrosoftGraphApi";
+import { AuthenticationEndpointPath, SubscriberEndpointPath } from "../lib/Const";
+import { getUserAccessTokenAsync, getUserProfileAsync, listSubscriptionsAsync, subscribeToAllMessagesForOneUserAsync } from "../lib/MicrosoftGraphApi";
 import { persistUserAccessTokenAsync, persistUserAsync } from "../lib/PersistHelper";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 
@@ -72,8 +72,20 @@ export class AuthenticationEndpoint extends ApiEndpoint {
 
             await persistUserAsync(persis, rocketChatUserId, teamsUserProfile.id);
 
-            // TODO: setup token refresh mechenism in future PR
-            // TODO: setup incoming message webhook in future PR
+            // Only create subscription if there's no existing one to prevent error
+            const subscriptions = await listSubscriptionsAsync(http, userAccessToken);
+            if (!subscriptions || subscriptions.length == 0) {
+                const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.app.getAccessors(), SubscriberEndpointPath);
+
+                // Async operation to create subscription
+                subscribeToAllMessagesForOneUserAsync(
+                    http,
+                    rocketChatUserId,
+                    teamsUserProfile.id,
+                    subscriberEndpointUrl,
+                    userAccessToken);
+            }
+
             return this.success(this.embeddedLoginSuccessMessage);
         } catch (error) {
             return this.errorResponse();

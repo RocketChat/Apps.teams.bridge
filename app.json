@@ -17,6 +17,72 @@
         "Omnichannel"
     ],
     "implements": [
-        "IPostMessageSent"
+        "IPreMessageSentPrevent",
+        "IPostMessageSent",
+        "IPostMessageUpdated",
+        "IPreMessageUpdatedPrevent",
+        "IPostMessageDeleted",
+        "IPreMessageDeletePrevent",
+        "IPreFileUpload",
+        "IPreRoomUserLeave"
+    ],
+    "permissions": [
+        {
+            "name": "ui.registerButtons"
+        },
+        {
+            "name": "api"
+        },
+        {
+            "name": "user.read"
+        },
+        {
+            "name": "user.write"
+        },
+        {
+            "name": "upload.read"
+        },
+        {
+            "name": "upload.write"
+        },
+        {
+            "name": "server-setting.read"
+        },
+        {
+            "name": "server-setting.write"
+        },
+        {
+            "name": "room.read"
+        },
+        {
+            "name": "room.write"
+        },
+        {
+            "name": "message.read"
+        },
+        {
+            "name": "message.write"
+        },
+        {
+            "name": "slashcommand"
+        },
+        {
+            "name": "env.read"
+        },
+        {
+            "name": "networking"
+        },
+        {
+            "name": "persistence"
+        },
+        {
+            "name": "scheduler"
+        },
+        {
+            "name": "ui.interact"
+        },
+        {
+            "name": "ui.registerButtons"
+        }
     ]
 }

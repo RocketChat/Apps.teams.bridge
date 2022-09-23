@@ -2,12 +2,11 @@ import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/de
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AppSetting } from "../config/Settings";
-import { nofityRocketChatUserAsync } from "../lib/Messages";
-import { AuthenticationEndpointPath, AuthenticationScopes, getMicrosoftAuthorizeUrl, LoginButtonText, LoginMessageText } from "../lib/Const";
-import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
+import { generateHintMessageWithTeamsLoginButton, notifyRocketChatUserAsync, notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
+import { AuthenticationEndpointPath, LoginMessageText, LoginNoNeedHintMessageText } from "../lib/Const";
+import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
-import { IMessage, IMessageAction, IMessageAttachment, MessageActionType } from "@rocket.chat/apps-engine/definition/messages";
-import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
+import { retrieveUserAccessTokenAsync } from "../lib/PersistHelper";
 
 export class LoginTeamsSlashCommand implements ISlashCommand {
     public command: string = 'teamsbridge-login-teams';
@@ -18,8 +17,6 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
     public providesPreview: boolean = false;
 
     public constructor(private readonly app: TeamsBridgeApp) {
-        this.getLoginUrl = this.getLoginUrl.bind(this);
-        this.getLoginMessageWithButton = this.getLoginMessageWithButton.bind(this);
     }
 
     public async executor(
@@ -35,54 +32,18 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
 
         const room = context.getRoom();
         const commandSender = context.getSender();
-        const loginUrl = this.getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id);
+        const loginUrl = getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id);
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
 
-        // TODO: check whether current user has already logged in
         // If the user has already logged, print some other information instead of the login url
-        const message = this.getLoginMessageWithButton(loginUrl, appUser, room);
+        const userAccessToken = await retrieveUserAccessTokenAsync(read, commandSender.id);
+        if (userAccessToken) {
+            await notifyRocketChatUserInRoomAsync(LoginNoNeedHintMessageText, appUser, commandSender, room, modify.getNotifier());
+            return;
+        }
 
-        await nofityRocketChatUserAsync(message, commandSender, modify);
-    }
+        const message = generateHintMessageWithTeamsLoginButton(loginUrl, appUser, room, LoginMessageText);
 
-    private getLoginMessageWithButton(loginUrl: string, appUser: IUser, room: IRoom) : IMessage {
-        const buttonAction: IMessageAction = {
-            type: MessageActionType.BUTTON,
-            text: LoginButtonText,
-            url: loginUrl,
-        };
-
-        const buttonAttachment: IMessageAttachment = {
-            actions: [
-                buttonAction
-            ]
-        };
-
-        const message: IMessage = {
-            text: LoginMessageText,
-            sender: appUser,
-            room,
-            attachments: [
-                buttonAttachment
-            ]
-        };
-
-        return message;
-    }
-
-    private getLoginUrl(
-        aadTenantId: string,
-        aadClientId: string,
-        authEndpointUrl: string,
-        userId: string): string {
-        let url = getMicrosoftAuthorizeUrl(aadTenantId);
-        url += `?client_id=${aadClientId}`;
-        url += '&response_type=code';
-        url += `&redirect_uri=${authEndpointUrl}`;
-        url += '&response_mode=query';
-        url += `&scope=${AuthenticationScopes.join('%20')}`;
-        url += `&state=${userId}`;
-
-        return url;
+        await notifyRocketChatUserAsync(message, commandSender, modify.getNotifier());
     }
 }

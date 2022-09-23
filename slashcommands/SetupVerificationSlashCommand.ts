@@ -7,15 +7,12 @@ import {
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { getApplicationAccessTokenAsync } from "../lib/MicrosoftGraphApi";
-import { nofityRocketChatUserInRoomAsync } from "../lib/Messages";
+import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
 import { AppSetting } from "../config/Settings";
 import { persistApplicationAccessTokenAsync } from "../lib/PersistHelper";
+import { AppSetupVerificationFailMessageText, AppSetupVerificationPassMessageText } from "../lib/Const";
 
 export class SetupVerificationSlashCommand implements ISlashCommand {
-    private verificationPassMessage: string = 'TeamsBridge app setup verification PASSED!';
-    private verificationFailMessage: string =
-        'TeamsBridge app setup verification FAILED! Please check trouble shooting guide for further actions.';
-
     public command: string = 'teamsbridge-setup-verification';
     public i18nParamsExample: string;
     public i18nDescription: string = 'setup_verification_slash_command_description';
@@ -41,9 +38,10 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
     
             const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
             await persistApplicationAccessTokenAsync(persis, response.accessToken);
-            await nofityRocketChatUserInRoomAsync(this.verificationPassMessage, appUser, messageReceiver, room, modify);
+
+            await notifyRocketChatUserInRoomAsync(AppSetupVerificationPassMessageText, appUser, messageReceiver, room, modify.getNotifier());
         } catch (error) {
-            await nofityRocketChatUserInRoomAsync(this.verificationFailMessage, appUser, messageReceiver, room, modify);
+            await notifyRocketChatUserInRoomAsync(AppSetupVerificationFailMessageText, appUser, messageReceiver, room, modify.getNotifier());
         }
     }
 }

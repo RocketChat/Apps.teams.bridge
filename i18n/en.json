@@ -3,5 +3,8 @@
     "teamsbridge_aad_client_id": "Azure Active Directory Application (client) ID",
     "teamsbridge_aad_client_secret": "Azure Active Directory Client Secret",
     "setup_verification_slash_command_description": "Verify TeamsBridge app setup correcly for your organization",
-    "login_teams_slash_command_description": "Login Teams to enable cross platform collaboration"
+    "login_teams_slash_command_description": "Login Teams to enable cross platform collaboration",
+    "add_user_slash_command_description": "Add a Teams Bot user to current group chat",
+    "provision_teams_bot_user_slash_command_description": "Create a Teams Bot user in Rocket.Chat for each Teams user in your organization",
+    "action_button_label_add_teams_user": "Add Teams user"
 }

@@ -1,6 +1,6 @@
 import { IAppAccessors } from "@rocket.chat/apps-engine/definition/accessors";
 import { IApiEndpointMetadata } from "@rocket.chat/apps-engine/definition/api";
-import { TestEnvironment } from "./Const";
+import { AuthenticationScopes, getMicrosoftAuthorizeUrl, TestEnvironment } from "./Const";
 
 export const getRocketChatAppEndpointUrl = async (appAccessors: IAppAccessors, appEndpointPath: string) : Promise<string> => {
 
@@ -14,4 +14,20 @@ export const getRocketChatAppEndpointUrl = async (appAccessors: IAppAccessors, a
     }
 
     return siteUrl + webhookEndpoint.computedPath;
+};
+
+export const getLoginUrl = (
+    aadTenantId: string,
+    aadClientId: string,
+    authEndpointUrl: string,
+    userId: string): string => {
+    let url = getMicrosoftAuthorizeUrl(aadTenantId);
+    url += `?client_id=${aadClientId}`;
+    url += '&response_type=code';
+    url += `&redirect_uri=${authEndpointUrl}`;
+    url += '&response_mode=query';
+    url += `&scope=${AuthenticationScopes.join('%20')}`;
+    url += `&state=${userId}`;
+
+    return url;
 };
