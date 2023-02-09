@@ -10,7 +10,7 @@ import {
 } from '@rocket.chat/apps-engine/definition/accessors';
 import { ApiSecurity, ApiVisibility } from '@rocket.chat/apps-engine/definition/api';
 import { App } from '@rocket.chat/apps-engine/definition/App';
-import { 
+import {
     IMessage,
     IMessageDeleteContext,
     IPostMessageDeleted,
@@ -61,23 +61,23 @@ import { TestSlashCommand } from './slashcommands/TestSlashCommand';
 export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPostMessageSent, IPostMessageUpdated, IPreMessageUpdatedPrevent, IPostMessageDeleted, IPreMessageDeletePrevent, IPreFileUpload, IPreRoomUserLeave {
     private selectedTeamsUserIds: string[];
     private changeTeamsUserMemberRoom: IRoom | undefined;
-    
+
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
         super(info, logger, accessors);
     }
-    
+
     protected async extendConfiguration(configuration: IConfigurationExtend): Promise<void> {
         // Register app settings
         await Promise.all(settings.map((setting) => configuration.settings.provideSetting(setting)));
-        
+
         // Register slash commands
         await configuration.slashCommands.provideSlashCommand(new SetupVerificationSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new ProvisionTeamsBotUserSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new ProvisionTeamsBotUserSlashCommand(this));
         await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
         await configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand());
         await configuration.slashCommands.provideSlashCommand(new AddUserSlashCommand());
         await configuration.slashCommands.provideSlashCommand(new TestSlashCommand(this));
-        
+
         // Register API endpoints
         await configuration.api.provideApi({
             visibility: ApiVisibility.PUBLIC,
@@ -95,8 +95,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
             context: UIActionButtonContext.ROOM_ACTION,
             when: {
                 roomTypes: [
-                    RoomTypeFilter.PRIVATE_DISCUSSION, 
-                    RoomTypeFilter.PRIVATE_CHANNEL, 
+                    RoomTypeFilter.PRIVATE_DISCUSSION,
+                    RoomTypeFilter.PRIVATE_CHANNEL,
                     RoomTypeFilter.PRIVATE_TEAM,
                 ]
             }
@@ -124,7 +124,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
             }
         ]);
     }
-    
+
     public async onSettingUpdated(
         setting: ISetting,
         configurationModify: IConfigurationModify,
@@ -149,7 +149,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         modify: IModify): Promise<void> {
         await handlePostMessageSentAsync(message, read, http, persistence);
     }
-    
+
     public async executePreMessageUpdatedPrevent(
         message: IMessage,
         read: IRead,
@@ -211,7 +211,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
     ): Promise<IUIKitResponse> {
         const data = context.getInteractionData();
 
-        if (data.actionId === UIActionId.AddTeamsUserButtonClicked) {        
+        if (data.actionId === UIActionId.AddTeamsUserButtonClicked) {
             const appUser = (await read.getUserReader().getAppUser()) as IUser;
             await openAddTeamsUserContextualBarBlocksAsync(
                 data.triggerId,
