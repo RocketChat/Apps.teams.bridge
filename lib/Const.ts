@@ -96,7 +96,7 @@ export const SharePointUrl = 'sharepoint.com';
 
 export const FileAttachmentContentType = 'reference';
 
-export const TeamsAppUserNameSurfix = 'teams.bot';
+export const TeamsAppUserNameSurfix = 'msteams.alias';
 
 export const RegistrationAutoRenewSchedulerId = 'registration.auto.renew.scheduler';
 
@@ -120,7 +120,7 @@ export const UIElementText = {
     ContextualBarTitle: 'Add Teams users',
     TeamsUserNameSearchTitle: 'Choose Teams users',
     TeamsUserNameSearchPlaceHolder: 'Choose Teams users',
-    TeamsUsersSaveChangeButton: 'Save changes',
+    TeamsUsersSaveChangeButton: 'Add users',
 };
 
 export const getMicrosoftTokenUrl = (aadTenantId: string) => {
