@@ -111,9 +111,9 @@ const createAppUserAsync = async ({
         type: UserType.BOT, // should be UserType.BOT
         isEnabled: true,
         name: teamsUserName,
-        roles: ["bot", "Teams Bot"],
+        roles: ["bot", "MS Teams"],
         status: "online",
-        appId: appId,
+        appId,
     };
 
     const userBuilder = modifyCreator.startBotUser(data);
