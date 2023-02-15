@@ -2,13 +2,13 @@ import {
     IHttp,
     IModify,
     IPersistence,
-    IRead
+    IRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
 import {
     ApiEndpoint,
     IApiEndpointInfo,
     IApiRequest,
-    IApiResponse
+    IApiResponse,
 } from "@rocket.chat/apps-engine/definition/api";
 import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
 import { SubscriberEndpointPath } from "../lib/Const";
@@ -16,18 +16,18 @@ import {
     handleInboundNotificationAsync,
     InBoundNotification,
     NotificationChangeType,
-    NotificationResourceType
+    NotificationResourceType,
 } from "../lib/InboundNotificationHelper";
 
 export class SubscriberEndpoint extends ApiEndpoint {
     private supportedChangeTypeMapping = {
-        'created': NotificationChangeType.Created,
-        'updated': NotificationChangeType.Updated,
-        'deleted': NotificationChangeType.Deleted,
+        created: NotificationChangeType.Created,
+        updated: NotificationChangeType.Updated,
+        deleted: NotificationChangeType.Deleted,
     };
 
     private supportedResourceTypeMapping = {
-        '#Microsoft.Graph.chatMessage': NotificationResourceType.ChatMessage,
+        "#Microsoft.Graph.chatMessage": NotificationResourceType.ChatMessage,
     };
 
     public path = SubscriberEndpointPath;
@@ -44,7 +44,8 @@ export class SubscriberEndpoint extends ApiEndpoint {
         read: IRead,
         modify: IModify,
         http: IHttp,
-        persis: IPersistence): Promise<IApiResponse> {
+        persis: IPersistence
+    ): Promise<IApiResponse> {
         if (request && request.query && request.query.validationToken) {
             return this.success(request.query.validationToken);
         }
@@ -56,23 +57,27 @@ export class SubscriberEndpoint extends ApiEndpoint {
             try {
                 const rawNotification = notifications[index];
 
-                const changeType = this.parseChangeType(rawNotification.changeType);
+                const changeType = this.parseChangeType(
+                    rawNotification.changeType
+                );
                 if (!changeType) {
                     continue;
                 }
 
-                const resourceType = this.parseResourceType(rawNotification.resourceData['@odata.type']);
+                const resourceType = this.parseResourceType(
+                    rawNotification.resourceData["@odata.type"]
+                );
                 if (!resourceType) {
                     continue;
                 }
 
-                const inBoundNotification : InBoundNotification = {
+                const inBoundNotification: InBoundNotification = {
                     receiverRocketChatUserId: receiverRocketChatUserId,
                     subscriptionId: rawNotification.subscriptionId,
                     changeType: changeType,
                     resourceId: rawNotification.resourceData.id,
                     resourceString: rawNotification.resource,
-                    resourceType: resourceType
+                    resourceType: resourceType,
                 };
 
                 await handleInboundNotificationAsync(
@@ -80,21 +85,29 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     read,
                     modify,
                     http,
-                    persis);
+                    persis,
+                    this.app.getID()
+                );
             } catch (error) {
                 // If there's an error, print a warning but not block the whole process
-                console.error(`Error when handling inbound notification. Details: ${error}`);
+                console.error(
+                    `Error when handling inbound notification. Details: ${error}`
+                );
             }
         }
 
         return this.success("OK");
     }
 
-    private parseChangeType(changeType: string) : NotificationChangeType | undefined {
+    private parseChangeType(
+        changeType: string
+    ): NotificationChangeType | undefined {
         return this.supportedChangeTypeMapping[changeType];
     }
 
-    private parseResourceType(resourceType: string) : NotificationResourceType | undefined {
+    private parseResourceType(
+        resourceType: string
+    ): NotificationResourceType | undefined {
         return this.supportedResourceTypeMapping[resourceType];
     }
 }
