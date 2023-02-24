@@ -14,14 +14,28 @@ import {
 import { IApiResponseJSON } from "@rocket.chat/apps-engine/definition/api/IResponse";
 import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
 import { AppSetting } from "../config/Settings";
-import { AuthenticationEndpointPath, SubscriberEndpointPath } from "../lib/Const";
-import { getUserAccessTokenAsync, getUserProfileAsync, listSubscriptionsAsync, subscribeToAllMessagesForOneUserAsync } from "../lib/MicrosoftGraphApi";
-import { persistUserAccessTokenAsync, persistUserAsync } from "../lib/PersistHelper";
+import {
+    AuthenticationEndpointPath,
+    SubscriberEndpointPath,
+} from "../lib/Const";
+import {
+    getUserAccessTokenAsync,
+    getUserProfileAsync,
+    listSubscriptionsAsync,
+    subscribeToAllMessagesForOneUserAsync,
+} from "../lib/MicrosoftGraphApi";
+import {
+    persistUserAccessTokenAsync,
+    persistUserAsync,
+    saveLoginMessageSentStatus,
+} from "../lib/PersistHelper";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 
 export class AuthenticationEndpoint extends ApiEndpoint {
-    private embeddedLoginSuccessMessage: string = 'Login to Teams succeed! You can close this window now.'
-    private embeddedLoginFailureMessage: string = 'Login to Teams failed! Please check document or contact your organization admin.'
+    private embeddedLoginSuccessMessage: string =
+        "Login to Teams succeed! You can close this window now.";
+    private embeddedLoginFailureMessage: string =
+        "Login to Teams failed! Please check document or contact your organization admin.";
 
     public path = AuthenticationEndpointPath;
 
@@ -36,19 +50,38 @@ export class AuthenticationEndpoint extends ApiEndpoint {
         read: IRead,
         modify: IModify,
         http: IHttp,
-        persis: IPersistence): Promise<IApiResponse> {
+        persis: IPersistence
+    ): Promise<IApiResponse> {
         if (request.query.error && !request.query.code) {
             return this.errorResponse();
         }
 
         try {
-            const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
-            const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
-            const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
-            
+            const aadTenantId = (
+                await read
+                    .getEnvironmentReader()
+                    .getSettings()
+                    .getById(AppSetting.AadTenantId)
+            ).value;
+            const aadClientId = (
+                await read
+                    .getEnvironmentReader()
+                    .getSettings()
+                    .getById(AppSetting.AadClientId)
+            ).value;
+            const aadClientSecret = (
+                await read
+                    .getEnvironmentReader()
+                    .getSettings()
+                    .getById(AppSetting.AadClientSecret)
+            ).value;
+
             const rocketChatUserId: string = request.query.state;
             const accessCode: string = request.query.code;
-            const authEndpointUrl = await getRocketChatAppEndpointUrl(this.app.getAccessors(), AuthenticationEndpointPath);
+            const authEndpointUrl = await getRocketChatAppEndpointUrl(
+                this.app.getAccessors(),
+                AuthenticationEndpointPath
+            );
 
             const response = await getUserAccessTokenAsync(
                 http,
@@ -56,26 +89,43 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 authEndpointUrl,
                 aadTenantId,
                 aadClientId,
-                aadClientSecret);
+                aadClientSecret
+            );
 
             const userAccessToken = response.accessToken;
 
-            const teamsUserProfile = await getUserProfileAsync(http, userAccessToken);
+            const teamsUserProfile = await getUserProfileAsync(
+                http,
+                userAccessToken
+            );
 
-            await persistUserAccessTokenAsync(
-                persis,
-                rocketChatUserId,
-                userAccessToken,
-                response.refreshToken as string,
-                response.expiresIn,
-                response.extExpiresIn);
-
-            await persistUserAsync(persis, rocketChatUserId, teamsUserProfile.id);
+            await Promise.all([
+                persistUserAccessTokenAsync(
+                    persis,
+                    rocketChatUserId,
+                    userAccessToken,
+                    response.refreshToken as string,
+                    response.expiresIn,
+                    response.extExpiresIn
+                ),
+                persistUserAsync(persis, rocketChatUserId, teamsUserProfile.id),
+                saveLoginMessageSentStatus({
+                    persistence: persis,
+                    rocketChatUserId,
+                    wasSent: false,
+                }),
+            ]);
 
             // Only create subscription if there's no existing one to prevent error
-            const subscriptions = await listSubscriptionsAsync(http, userAccessToken);
+            const subscriptions = await listSubscriptionsAsync(
+                http,
+                userAccessToken
+            );
             if (!subscriptions || subscriptions.length == 0) {
-                const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.app.getAccessors(), SubscriberEndpointPath);
+                const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(
+                    this.app.getAccessors(),
+                    SubscriberEndpointPath
+                );
 
                 // Async operation to create subscription
                 subscribeToAllMessagesForOneUserAsync(
@@ -83,7 +133,8 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                     rocketChatUserId,
                     teamsUserProfile.id,
                     subscriberEndpointUrl,
-                    userAccessToken);
+                    userAccessToken
+                );
             }
 
             return this.success(this.embeddedLoginSuccessMessage);
@@ -96,7 +147,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
         const response: IApiResponseJSON = {
             status: HttpStatusCode.BAD_REQUEST,
             content: {
-                message: this.embeddedLoginFailureMessage
+                message: this.embeddedLoginFailureMessage,
             },
         };
 

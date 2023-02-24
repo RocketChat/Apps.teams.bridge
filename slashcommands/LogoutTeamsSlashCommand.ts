@@ -1,10 +1,30 @@
-import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/definition/accessors";
-import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
-import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
-import { LogoutNoNeedHintMessageText, LogoutSuccessHintMessageText } from "../lib/Const";
-import { deleteUserAccessTokenAsync, deleteUserAsync, retrieveUserAccessTokenAsync } from "../lib/PersistHelper";
-import { deleteSubscriptionAsync, listSubscriptionsAsync, revokeUserRefreshTokenAsync } from "../lib/MicrosoftGraphApi";
+import {
+    IHttp,
+    IModify,
+    IPersistence,
+    IRead,
+} from '@rocket.chat/apps-engine/definition/accessors';
+import {
+    ISlashCommand,
+    SlashCommandContext,
+} from '@rocket.chat/apps-engine/definition/slashcommands';
+import { IUser } from '@rocket.chat/apps-engine/definition/users';
+import {
+    LogoutNoNeedHintMessageText,
+    LogoutSuccessHintMessageText,
+} from '../lib/Const';
+import { notifyRocketChatUserInRoomAsync } from '../lib/MessageHelper';
+import {
+    deleteSubscriptionAsync,
+    listSubscriptionsAsync,
+    revokeUserRefreshTokenAsync,
+} from '../lib/MicrosoftGraphApi';
+import {
+    deleteUserAccessTokenAsync,
+    deleteUserAsync,
+    retrieveUserAccessTokenAsync,
+    saveLoginMessageSentStatus,
+} from '../lib/PersistHelper';
 
 export class LogoutTeamsSlashCommand implements ISlashCommand {
     public command: string = 'teamsbridge-logout-teams';
@@ -19,7 +39,8 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         read: IRead,
         modify: IModify,
         http: IHttp,
-        persis: IPersistence): Promise<void> {
+        persis: IPersistence
+    ): Promise<void> {
         const notifier = modify.getNotifier();
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
         const sender = context.getSender();
@@ -27,24 +48,38 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
 
         // Retrieve existing access token
         const rocketChatUserId = sender.id;
-        const userAccessToken = await retrieveUserAccessTokenAsync(read, rocketChatUserId);
+        const userAccessToken = await retrieveUserAccessTokenAsync(
+            read,
+            rocketChatUserId
+        );
 
         if (!userAccessToken) {
             // No need to log out
-            await notifyRocketChatUserInRoomAsync(LogoutNoNeedHintMessageText, appUser, sender, currentRoom, notifier);
+            await notifyRocketChatUserInRoomAsync(
+                LogoutNoNeedHintMessageText,
+                appUser,
+                sender,
+                currentRoom,
+                notifier
+            );
             return;
         }
-        
+
         // Revoke refresh token
         try {
             await revokeUserRefreshTokenAsync(http, userAccessToken);
         } catch (error) {
-            console.error(`Error during user log out revoking user refresh token. ${error}`);
-            console.error('This error will be ignored and continue log out.')
+            console.error(
+                `Error during user log out revoking user refresh token. ${error}`
+            );
+            console.error('This error will be ignored and continue log out.');
         }
 
         // Delete all subscriptions
-        const subscriptionIds = await listSubscriptionsAsync(http, userAccessToken);
+        const subscriptionIds = await listSubscriptionsAsync(
+            http,
+            userAccessToken
+        );
         if (subscriptionIds) {
             for (const subscriptionId of subscriptionIds) {
                 try {
@@ -54,14 +89,28 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
                 }
             }
         }
-        
-        // Delete access token record
-        await deleteUserAccessTokenAsync(persis, rocketChatUserId);
+
+        await Promise.all([
+            deleteUserAccessTokenAsync(persis, rocketChatUserId),
 
         // Delete user record
-        await deleteUserAsync(read, persis, rocketChatUserId);
+            deleteUserAsync(read, persis, rocketChatUserId),
 
         // Notify the user
-        await notifyRocketChatUserInRoomAsync(LogoutSuccessHintMessageText, appUser, sender, currentRoom, notifier);
+            notifyRocketChatUserInRoomAsync(
+                LogoutSuccessHintMessageText,
+                appUser,
+                sender,
+                currentRoom,
+                notifier
+            ),
+
+            // Set the login message status to false
+            saveLoginMessageSentStatus({
+                persistence: persis,
+                rocketChatUserId,
+                wasSent: false,
+            }),
+        ]);
     }
 }
