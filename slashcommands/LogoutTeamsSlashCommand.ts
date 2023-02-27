@@ -22,6 +22,7 @@ import {
 import {
     deleteUserAccessTokenAsync,
     deleteUserAsync,
+    retrieveLoginMessageSentStatus,
     retrieveUserAccessTokenAsync,
     saveLoginMessageSentStatus,
 } from '../lib/PersistHelper';
@@ -50,10 +51,19 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         const rocketChatUserId = sender.id;
         const userAccessToken = await retrieveUserAccessTokenAsync(
             read,
+            persis,
             rocketChatUserId
         );
 
+        const wasSent = await retrieveLoginMessageSentStatus({
+            read,
+            rocketChatUserId,
+        });
+
         if (!userAccessToken) {
+            if (wasSent) {
+                return;
+            }
             // No need to log out
             await notifyRocketChatUserInRoomAsync(
                 LogoutNoNeedHintMessageText,
@@ -62,6 +72,13 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
                 currentRoom,
                 notifier
             );
+
+            await saveLoginMessageSentStatus({
+                persistence: persis,
+                rocketChatUserId,
+                wasSent: false,
+            });
+
             return;
         }
 
@@ -83,9 +100,15 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         if (subscriptionIds) {
             for (const subscriptionId of subscriptionIds) {
                 try {
-                    await deleteSubscriptionAsync(http, subscriptionId, userAccessToken);
+                    await deleteSubscriptionAsync(
+                        http,
+                        subscriptionId,
+                        userAccessToken
+                    );
                 } catch (error) {
-                    console.error(`Error during delete subscription, will ignore and continue. ${error}`);
+                    console.error(
+                        `Error during delete subscription, will ignore and continue. ${error}`
+                    );
                 }
             }
         }
@@ -93,10 +116,10 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         await Promise.all([
             deleteUserAccessTokenAsync(persis, rocketChatUserId),
 
-        // Delete user record
+            // Delete user record
             deleteUserAsync(read, persis, rocketChatUserId),
 
-        // Notify the user
+            // Notify the user
             notifyRocketChatUserInRoomAsync(
                 LogoutSuccessHintMessageText,
                 appUser,

@@ -510,6 +510,7 @@ export const retrieveUserByTeamsUserIdAsync = async (
 
 export const retrieveUserAccessTokenAsync = async (
     read: IRead,
+    persistence: IPersistence,
     rocketChatUserId: string
 ): Promise<string | null> => {
     const associations: Array<RocketChatAssociationRecord> = [
@@ -542,6 +543,11 @@ export const retrieveUserAccessTokenAsync = async (
     const epochInSecond = Math.round(now.getTime() / 1000);
 
     if (!data.expires || epochInSecond > data.expires) {
+        await saveLoginMessageSentStatus({
+            persistence,
+            rocketChatUserId,
+            wasSent: false,
+        });
         return null;
     }
 
@@ -550,6 +556,7 @@ export const retrieveUserAccessTokenAsync = async (
 
 export const retrieveUserRefreshTokenAsync = async (
     read: IRead,
+    persistence: IPersistence,
     rocketChatUserId: string
 ): Promise<string | null> => {
     const associations: Array<RocketChatAssociationRecord> = [
@@ -582,6 +589,12 @@ export const retrieveUserRefreshTokenAsync = async (
     const epochInSecond = Math.round(now.getTime() / 1000);
 
     if (!data.extExpires || epochInSecond > data.extExpires) {
+        await saveLoginMessageSentStatus({
+            persistence,
+            rocketChatUserId,
+            wasSent: false,
+        });
+
         return null;
     }
 
@@ -925,6 +938,11 @@ export const debugCleanAllRoomAsync = async (persis: IPersistence) => {
     await persis.removeByAssociations(associations);
 };
 
+export type LoginMessageStatus = {
+    isLoginMessageSent: boolean;
+    rocketChatUserId: string;
+};
+
 export const saveLoginMessageSentStatus = async ({
     persistence,
     rocketChatUserId,
@@ -945,14 +963,12 @@ export const saveLoginMessageSentStatus = async ({
         ),
     ];
 
-    await persistence.updateByAssociations(
-        associations,
-        {
-            isLoginMessageSent: true,
-            rocketChatUserId,
-        },
-        wasSent
-    );
+    const data: LoginMessageStatus = {
+        isLoginMessageSent: wasSent,
+        rocketChatUserId,
+    };
+
+    await persistence.updateByAssociations(associations, data, true);
 };
 
 export const retrieveLoginMessageSentStatus = async ({
@@ -977,11 +993,11 @@ export const retrieveLoginMessageSentStatus = async ({
 
     const result = (await persistenceRead.readByAssociations(
         associations
-    )) as unknown as Array<boolean>;
+    )) as unknown as Array<LoginMessageStatus>;
 
     if (!result) {
         return false;
     }
 
-    return result[0];
+    return result[0].isLoginMessageSent;
 };
