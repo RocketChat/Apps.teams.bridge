@@ -18,7 +18,7 @@ import {
     IPostMessageUpdated,
     IPreMessageDeletePrevent,
     IPreMessageSentPrevent,
-    IPreMessageUpdatedPrevent
+    IPreMessageUpdatedPrevent,
 } from '@rocket.chat/apps-engine/definition/messages';
 import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
 import { IPreRoomUserLeave, IRoom, IRoomUserLeaveContext } from '@rocket.chat/apps-engine/definition/rooms';
@@ -30,7 +30,7 @@ import {
     UIKitActionButtonInteractionContext,
     UIKitBlockInteractionContext,
     UIKitViewCloseInteractionContext,
-    UIKitViewSubmitInteractionContext
+    UIKitViewSubmitInteractionContext,
 } from '@rocket.chat/apps-engine/definition/uikit';
 import { IFileUploadContext, IPreFileUpload } from '@rocket.chat/apps-engine/definition/uploads';
 import { IUser } from '@rocket.chat/apps-engine/definition/users';
@@ -47,7 +47,7 @@ import {
     handlePreMessageOperationPreventAsync,
     handlePreMessageSentPreventAsync,
     handlePreRoomUserLeaveAsync,
-    handleUserRegistrationAutoRenewAsync
+    handleUserRegistrationAutoRenewAsync,
 } from './lib/EventHandler';
 import { getRocketChatAppEndpointUrl } from './lib/UrlHelper';
 import { openAddTeamsUserContextualBarBlocksAsync } from './lib/UserInterfaceHelper';
@@ -64,65 +64,6 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
 
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
         super(info, logger, accessors);
-    }
-
-    protected async extendConfiguration(configuration: IConfigurationExtend): Promise<void> {
-        // Register app settings
-        await Promise.all(settings.map((setting) => configuration.settings.provideSetting(setting)));
-
-        // Register slash commands
-        await configuration.slashCommands.provideSlashCommand(new SetupVerificationSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new ProvisionTeamsBotUserSlashCommand(this));
-        await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
-        await configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new AddUserSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new TestSlashCommand(this));
-
-        // Register API endpoints
-        await configuration.api.provideApi({
-            visibility: ApiVisibility.PUBLIC,
-            security: ApiSecurity.UNSECURE,
-            endpoints: [
-                new AuthenticationEndpoint(this),
-                new SubscriberEndpoint(this)
-            ],
-        });
-
-        // Config context menu item
-        configuration.ui.registerButton({
-            actionId: UIActionId.AddTeamsUserButtonClicked,
-            labelI18n: 'action_button_label_add_teams_user',
-            context: UIActionButtonContext.ROOM_ACTION,
-            when: {
-                roomTypes: [
-                    RoomTypeFilter.PRIVATE_DISCUSSION,
-                    RoomTypeFilter.PRIVATE_CHANNEL,
-                    RoomTypeFilter.PRIVATE_TEAM,
-                ]
-            }
-        });
-
-        // Config a scheduler for UserAccessToken & Subscription auto renew and start it
-        configuration.scheduler.registerProcessors([
-            {
-                id: RegistrationAutoRenewSchedulerId,
-                processor: async (jobContext: IJobContext, read: IRead, modify: IModify, http: IHttp, persis: IPersistence) => {
-                    try {
-                        console.log("Start renew registrations!")
-                        const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.getAccessors(), SubscriberEndpointPath);
-
-                        await handleUserRegistrationAutoRenewAsync(subscriberEndpointUrl, read, modify, http, persis);
-                        console.log("Finish renew registrations!")
-                    } catch (error) {
-                        throw new Error(`Auto renew registration failed with error: ${error}`);
-                    }
-                },
-                startupSetting: {
-                    type: StartupType.RECURRING,
-                    interval: RegistrationAutoRenewInterval,
-                }
-            }
-        ]);
     }
 
     public async onSettingUpdated(
@@ -155,7 +96,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persistence: IPersistence): Promise<boolean> {
-        return await handlePreMessageOperationPreventAsync(message, read);
+        return await handlePreMessageOperationPreventAsync(message, read, persistence);
     }
 
     public async executePostMessageUpdated(
@@ -164,7 +105,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         http: IHttp,
         persistence: IPersistence,
         modify: IModify): Promise<void> {
-        await handlePostMessageUpdatedAsync(message, read, http);
+        await handlePostMessageUpdatedAsync(message, read, persistence, http);
     }
 
     public async executePreMessageDeletePrevent(
@@ -172,7 +113,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persistence: IPersistence): Promise<boolean> {
-        return await handlePreMessageOperationPreventAsync(message, read);
+        return await handlePreMessageOperationPreventAsync(message, read, persistence);
     }
 
     public async executePostMessageDeleted(
@@ -182,7 +123,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         persistence: IPersistence,
         modify: IModify,
         context: IMessageDeleteContext): Promise<void> {
-        await handlePostMessageDeletedAsync(message, read, http);
+        await handlePostMessageDeletedAsync(message, read, persistence, http);
     }
 
     public async executePreFileUpload(
@@ -280,5 +221,64 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         return {
             success: true,
         };
+    }
+
+    protected async extendConfiguration(configuration: IConfigurationExtend): Promise<void> {
+        // Register app settings
+        await Promise.all(settings.map((setting) => configuration.settings.provideSetting(setting)));
+
+        // Register slash commands
+        await configuration.slashCommands.provideSlashCommand(new SetupVerificationSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new ProvisionTeamsBotUserSlashCommand(this));
+        await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
+        await configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new AddUserSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new TestSlashCommand(this));
+
+        // Register API endpoints
+        await configuration.api.provideApi({
+            visibility: ApiVisibility.PUBLIC,
+            security: ApiSecurity.UNSECURE,
+            endpoints: [
+                new AuthenticationEndpoint(this),
+                new SubscriberEndpoint(this)
+            ],
+        });
+
+        // Config context menu item
+        configuration.ui.registerButton({
+            actionId: UIActionId.AddTeamsUserButtonClicked,
+            labelI18n: 'action_button_label_add_teams_user',
+            context: UIActionButtonContext.ROOM_ACTION,
+            when: {
+                roomTypes: [
+                    RoomTypeFilter.PRIVATE_DISCUSSION,
+                    RoomTypeFilter.PRIVATE_CHANNEL,
+                    RoomTypeFilter.PRIVATE_TEAM,
+                ]
+            }
+        });
+
+        // Config a scheduler for UserAccessToken & Subscription auto renew and start it
+        configuration.scheduler.registerProcessors([
+            {
+                id: RegistrationAutoRenewSchedulerId,
+                processor: async (jobContext: IJobContext, read: IRead, modify: IModify, http: IHttp, persis: IPersistence) => {
+                    try {
+                        console.log("Start renew registrations!")
+                        const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.getAccessors(), SubscriberEndpointPath);
+
+                        await handleUserRegistrationAutoRenewAsync(subscriberEndpointUrl, read, modify, http, persis);
+                        console.log("Finish renew registrations!")
+                    } catch (error) {
+                        throw new Error(`Auto renew registration failed with error: ${error}`);
+                    }
+                },
+                startupSetting: {
+                    type: StartupType.RECURRING,
+                    interval: RegistrationAutoRenewInterval,
+                }
+            }
+        ]);
     }
 }
