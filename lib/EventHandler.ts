@@ -80,10 +80,9 @@ export const handlePreMessageSentPreventAsync = async (
         read,
         rocketChatUserId: message.sender.id,
     });
-    console.log("🚀 ~ file: EventHandler.ts:83 ~ wasSent:", wasSent);
 
     if (wasSent) {
-        return true;
+        return false;
     }
 
     const appUser = (await read.getUserReader().getAppUser()) as IUser;
@@ -234,7 +233,7 @@ export const handlePreMessageSentPreventAsync = async (
         }
     }
 
-    return true;
+    return false;
 };
 
 export const handlePostMessageSentAsync = async (
