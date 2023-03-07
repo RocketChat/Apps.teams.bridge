@@ -66,6 +66,7 @@ export const handleInboundNotificationAsync = async (
 
     const userAccessToken = await retrieveUserAccessTokenAsync(
         read,
+        persis,
         receiverRocketChatUserId
     );
     if (!userAccessToken) {
