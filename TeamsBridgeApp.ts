@@ -56,7 +56,6 @@ import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
 import { LogoutTeamsSlashCommand } from './slashcommands/LogoutTeamsSlashCommand';
 import { ProvisionTeamsBotUserSlashCommand } from './slashcommands/ProvisionTeamsBotUserSlashCommand';
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
-import { TestSlashCommand } from './slashcommands/TestSlashCommand';
 
 export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPostMessageSent, IPostMessageUpdated, IPreMessageUpdatedPrevent, IPostMessageDeleted, IPreMessageDeletePrevent, IPreFileUpload, IPreRoomUserLeave {
     private selectedTeamsUserIds: string[];
@@ -233,7 +232,6 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
         await configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand());
         await configuration.slashCommands.provideSlashCommand(new AddUserSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new TestSlashCommand(this));
 
         // Register API endpoints
         await configuration.api.provideApi({
