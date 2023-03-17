@@ -71,15 +71,15 @@ import {
     handlePreMessageSentPreventAsync,
     handlePreRoomUserLeaveAsync,
     handleUserRegistrationAutoRenewAsync,
-} from "./lib/EventHandler";
-import { getRocketChatAppEndpointUrl } from "./lib/UrlHelper";
-import { openAddTeamsUserContextualBarBlocksAsync } from "./lib/UserInterfaceHelper";
-import { AddUserSlashCommand } from "./slashcommands/AddUserSlashCommand";
-import { LoginTeamsSlashCommand } from "./slashcommands/LoginTeamsSlashCommand";
-import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand";
-import { ProvisionTeamsBotUserSlashCommand } from "./slashcommands/ProvisionTeamsBotUserSlashCommand";
-import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
-import { TestSlashCommand } from "./slashcommands/TestSlashCommand";
+} from './lib/EventHandler';
+import { getRocketChatAppEndpointUrl } from './lib/UrlHelper';
+import { openAddTeamsUserContextualBarBlocksAsync } from './lib/UserInterfaceHelper';
+import { AddUserSlashCommand } from './slashcommands/AddUserSlashCommand';
+import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
+import { LogoutTeamsSlashCommand } from './slashcommands/LogoutTeamsSlashCommand';
+import { ProvisionTeamsBotUserSlashCommand } from './slashcommands/ProvisionTeamsBotUserSlashCommand';
+import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
+
 
 export class TeamsBridgeApp
     extends App
@@ -313,24 +313,11 @@ export class TeamsBridgeApp
         );
 
         // Register slash commands
-        await configuration.slashCommands.provideSlashCommand(
-            new SetupVerificationSlashCommand()
-        );
-        await configuration.slashCommands.provideSlashCommand(
-            new ProvisionTeamsBotUserSlashCommand(this)
-        );
-        await configuration.slashCommands.provideSlashCommand(
-            new LoginTeamsSlashCommand(this)
-        );
-        await configuration.slashCommands.provideSlashCommand(
-            new LogoutTeamsSlashCommand()
-        );
-        await configuration.slashCommands.provideSlashCommand(
-            new AddUserSlashCommand()
-        );
-        await configuration.slashCommands.provideSlashCommand(
-            new TestSlashCommand(this)
-        );
+        await configuration.slashCommands.provideSlashCommand(new SetupVerificationSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new ProvisionTeamsBotUserSlashCommand(this));
+        await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
+        await configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand());
+        await configuration.slashCommands.provideSlashCommand(new AddUserSlashCommand());
 
         // Register API endpoints
         await configuration.api.provideApi({
