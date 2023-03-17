@@ -1,5 +1,6 @@
 import {
     IAppAccessors,
+    IAppUninstallationContext,
     IConfigurationExtend,
     IConfigurationModify,
     IHttp,
@@ -7,9 +8,12 @@ import {
     IModify,
     IPersistence,
     IRead,
-} from '@rocket.chat/apps-engine/definition/accessors';
-import { ApiSecurity, ApiVisibility } from '@rocket.chat/apps-engine/definition/api';
-import { App } from '@rocket.chat/apps-engine/definition/App';
+} from "@rocket.chat/apps-engine/definition/accessors";
+import {
+    ApiSecurity,
+    ApiVisibility,
+} from "@rocket.chat/apps-engine/definition/api";
+import { App } from "@rocket.chat/apps-engine/definition/App";
 import {
     IMessage,
     IMessageDeleteContext,
@@ -19,25 +23,44 @@ import {
     IPreMessageDeletePrevent,
     IPreMessageSentPrevent,
     IPreMessageUpdatedPrevent,
-} from '@rocket.chat/apps-engine/definition/messages';
-import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
-import { IPreRoomUserLeave, IRoom, IRoomUserLeaveContext } from '@rocket.chat/apps-engine/definition/rooms';
-import { IJobContext, StartupType } from '@rocket.chat/apps-engine/definition/scheduler';
-import { ISetting } from '@rocket.chat/apps-engine/definition/settings';
-import { RoomTypeFilter, UIActionButtonContext } from '@rocket.chat/apps-engine/definition/ui';
+} from "@rocket.chat/apps-engine/definition/messages";
+import { IAppInfo } from "@rocket.chat/apps-engine/definition/metadata";
+import {
+    IPreRoomUserLeave,
+    IRoom,
+    IRoomUserLeaveContext,
+} from "@rocket.chat/apps-engine/definition/rooms";
+import {
+    IJobContext,
+    StartupType,
+} from "@rocket.chat/apps-engine/definition/scheduler";
+import { ISetting } from "@rocket.chat/apps-engine/definition/settings";
+import {
+    RoomTypeFilter,
+    UIActionButtonContext,
+} from "@rocket.chat/apps-engine/definition/ui";
 import {
     IUIKitResponse,
     UIKitActionButtonInteractionContext,
     UIKitBlockInteractionContext,
     UIKitViewCloseInteractionContext,
     UIKitViewSubmitInteractionContext,
-} from '@rocket.chat/apps-engine/definition/uikit';
-import { IFileUploadContext, IPreFileUpload } from '@rocket.chat/apps-engine/definition/uploads';
-import { IUser } from '@rocket.chat/apps-engine/definition/users';
-import { settings } from './config/Settings';
-import { AuthenticationEndpoint } from './endpoints/AuthenticationEndpoint';
-import { SubscriberEndpoint } from './endpoints/SubscriberEndpoint';
-import { RegistrationAutoRenewInterval, RegistrationAutoRenewSchedulerId, SubscriberEndpointPath, UIActionId, UIElementId } from './lib/Const';
+} from "@rocket.chat/apps-engine/definition/uikit";
+import {
+    IFileUploadContext,
+    IPreFileUpload,
+} from "@rocket.chat/apps-engine/definition/uploads";
+import { IUser, UserType } from "@rocket.chat/apps-engine/definition/users";
+import { settings } from "./config/Settings";
+import { AuthenticationEndpoint } from "./endpoints/AuthenticationEndpoint";
+import { SubscriberEndpoint } from "./endpoints/SubscriberEndpoint";
+import {
+    RegistrationAutoRenewInterval,
+    RegistrationAutoRenewSchedulerId,
+    SubscriberEndpointPath,
+    UIActionId,
+    UIElementId,
+} from "./lib/Const";
 import {
     handleAddTeamsUserContextualBarSubmitAsync,
     handlePostMessageDeletedAsync,
@@ -48,17 +71,28 @@ import {
     handlePreMessageSentPreventAsync,
     handlePreRoomUserLeaveAsync,
     handleUserRegistrationAutoRenewAsync,
-} from './lib/EventHandler';
-import { getRocketChatAppEndpointUrl } from './lib/UrlHelper';
-import { openAddTeamsUserContextualBarBlocksAsync } from './lib/UserInterfaceHelper';
-import { AddUserSlashCommand } from './slashcommands/AddUserSlashCommand';
-import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
-import { LogoutTeamsSlashCommand } from './slashcommands/LogoutTeamsSlashCommand';
-import { ProvisionTeamsBotUserSlashCommand } from './slashcommands/ProvisionTeamsBotUserSlashCommand';
-import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
-import { TestSlashCommand } from './slashcommands/TestSlashCommand';
+} from "./lib/EventHandler";
+import { getRocketChatAppEndpointUrl } from "./lib/UrlHelper";
+import { openAddTeamsUserContextualBarBlocksAsync } from "./lib/UserInterfaceHelper";
+import { AddUserSlashCommand } from "./slashcommands/AddUserSlashCommand";
+import { LoginTeamsSlashCommand } from "./slashcommands/LoginTeamsSlashCommand";
+import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand";
+import { ProvisionTeamsBotUserSlashCommand } from "./slashcommands/ProvisionTeamsBotUserSlashCommand";
+import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
+import { TestSlashCommand } from "./slashcommands/TestSlashCommand";
 
-export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPostMessageSent, IPostMessageUpdated, IPreMessageUpdatedPrevent, IPostMessageDeleted, IPreMessageDeletePrevent, IPreFileUpload, IPreRoomUserLeave {
+export class TeamsBridgeApp
+    extends App
+    implements
+        IPreMessageSentPrevent,
+        IPostMessageSent,
+        IPostMessageUpdated,
+        IPreMessageUpdatedPrevent,
+        IPostMessageDeleted,
+        IPreMessageDeletePrevent,
+        IPreFileUpload,
+        IPreRoomUserLeave
+{
     private selectedTeamsUserIds: string[];
     private changeTeamsUserMemberRoom: IRoom | undefined;
 
@@ -70,16 +104,36 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         setting: ISetting,
         configurationModify: IConfigurationModify,
         read: IRead,
-        http: IHttp): Promise<void> {
-        console.log(`onSettingUpdated for setting ${setting.id} with new value ${setting.value}`);
+        http: IHttp
+    ): Promise<void> {
+        console.log(
+            `onSettingUpdated for setting ${setting.id} with new value ${setting.value}`
+        );
+    }
+
+    public async onUninstall(
+        context: IAppUninstallationContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<void> {
+        await modify.getDeleter().deleteUsers(this.getID(), UserType.APP);
+        await modify.getDeleter().deleteUsers(this.getID(), UserType.BOT); // To remove old bot users
     }
 
     public async executePreMessageSentPrevent(
         message: IMessage,
         read: IRead,
         http: IHttp,
-        persistence: IPersistence): Promise<boolean> {
-        return await handlePreMessageSentPreventAsync(message, read, persistence, this);
+        persistence: IPersistence
+    ): Promise<boolean> {
+        return await handlePreMessageSentPreventAsync(
+            message,
+            read,
+            persistence,
+            this
+        );
     }
 
     public async executePostMessageSent(
@@ -87,7 +141,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persistence: IPersistence,
-        modify: IModify): Promise<void> {
+        modify: IModify
+    ): Promise<void> {
         await handlePostMessageSentAsync(message, read, http, persistence);
     }
 
@@ -95,8 +150,13 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         message: IMessage,
         read: IRead,
         http: IHttp,
-        persistence: IPersistence): Promise<boolean> {
-        return await handlePreMessageOperationPreventAsync(message, read, persistence);
+        persistence: IPersistence
+    ): Promise<boolean> {
+        return await handlePreMessageOperationPreventAsync(
+            message,
+            read,
+            persistence
+        );
     }
 
     public async executePostMessageUpdated(
@@ -104,7 +164,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persistence: IPersistence,
-        modify: IModify): Promise<void> {
+        modify: IModify
+    ): Promise<void> {
         await handlePostMessageUpdatedAsync(message, read, persistence, http);
     }
 
@@ -112,8 +173,13 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         message: IMessage,
         read: IRead,
         http: IHttp,
-        persistence: IPersistence): Promise<boolean> {
-        return await handlePreMessageOperationPreventAsync(message, read, persistence);
+        persistence: IPersistence
+    ): Promise<boolean> {
+        return await handlePreMessageOperationPreventAsync(
+            message,
+            read,
+            persistence
+        );
     }
 
     public async executePostMessageDeleted(
@@ -122,7 +188,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         http: IHttp,
         persistence: IPersistence,
         modify: IModify,
-        context: IMessageDeleteContext): Promise<void> {
+        context: IMessageDeleteContext
+    ): Promise<void> {
         await handlePostMessageDeletedAsync(message, read, persistence, http);
     }
 
@@ -131,7 +198,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persis: IPersistence,
-        modify: IModify): Promise<void> {
+        modify: IModify
+    ): Promise<void> {
         await handlePreFileUploadAsync(context, read, http, persis, modify);
     }
 
@@ -139,8 +207,15 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         context: IRoomUserLeaveContext,
         read: IRead,
         http: IHttp,
-        persistence: IPersistence): Promise<void> {
-        await handlePreRoomUserLeaveAsync(context, read, http, persistence, this);
+        persistence: IPersistence
+    ): Promise<void> {
+        await handlePreRoomUserLeaveAsync(
+            context,
+            read,
+            http,
+            persistence,
+            this
+        );
     }
 
     public async executeActionButtonHandler(
@@ -160,7 +235,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
                 data.user,
                 appUser,
                 read,
-                modify);
+                modify
+            );
         }
 
         return {
@@ -173,7 +249,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persistence: IPersistence,
-        modify: IModify) : Promise<IUIKitResponse> {
+        modify: IModify
+    ): Promise<IUIKitResponse> {
         const data = context.getInteractionData();
         if (data.actionId === UIActionId.TeamsUserNameSearch) {
             this.changeTeamsUserMemberRoom = data.room;
@@ -191,7 +268,7 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         http: IHttp,
         persistence: IPersistence,
         modify: IModify
-    ) : Promise<IUIKitResponse> {
+    ): Promise<IUIKitResponse> {
         return {
             success: true,
         };
@@ -202,7 +279,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         read: IRead,
         http: IHttp,
         persistence: IPersistence,
-        modify: IModify): Promise<IUIKitResponse> {
+        modify: IModify
+    ): Promise<IUIKitResponse> {
         const data = context.getInteractionData();
         if (data.view.id === UIElementId.ContextualBarId) {
             if (this.changeTeamsUserMemberRoom) {
@@ -214,7 +292,8 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
                     modify,
                     persistence,
                     http,
-                    this);
+                    this
+                );
             }
         }
 
@@ -223,17 +302,35 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
         };
     }
 
-    protected async extendConfiguration(configuration: IConfigurationExtend): Promise<void> {
+    protected async extendConfiguration(
+        configuration: IConfigurationExtend
+    ): Promise<void> {
         // Register app settings
-        await Promise.all(settings.map((setting) => configuration.settings.provideSetting(setting)));
+        await Promise.all(
+            settings.map((setting) =>
+                configuration.settings.provideSetting(setting)
+            )
+        );
 
         // Register slash commands
-        await configuration.slashCommands.provideSlashCommand(new SetupVerificationSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new ProvisionTeamsBotUserSlashCommand(this));
-        await configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this));
-        await configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new AddUserSlashCommand());
-        await configuration.slashCommands.provideSlashCommand(new TestSlashCommand(this));
+        await configuration.slashCommands.provideSlashCommand(
+            new SetupVerificationSlashCommand()
+        );
+        await configuration.slashCommands.provideSlashCommand(
+            new ProvisionTeamsBotUserSlashCommand(this)
+        );
+        await configuration.slashCommands.provideSlashCommand(
+            new LoginTeamsSlashCommand(this)
+        );
+        await configuration.slashCommands.provideSlashCommand(
+            new LogoutTeamsSlashCommand()
+        );
+        await configuration.slashCommands.provideSlashCommand(
+            new AddUserSlashCommand()
+        );
+        await configuration.slashCommands.provideSlashCommand(
+            new TestSlashCommand(this)
+        );
 
         // Register API endpoints
         await configuration.api.provideApi({
@@ -241,44 +338,62 @@ export class TeamsBridgeApp extends App implements IPreMessageSentPrevent, IPost
             security: ApiSecurity.UNSECURE,
             endpoints: [
                 new AuthenticationEndpoint(this),
-                new SubscriberEndpoint(this)
+                new SubscriberEndpoint(this),
             ],
         });
 
         // Config context menu item
         configuration.ui.registerButton({
             actionId: UIActionId.AddTeamsUserButtonClicked,
-            labelI18n: 'action_button_label_add_teams_user',
+            labelI18n: "action_button_label_add_teams_user",
             context: UIActionButtonContext.ROOM_ACTION,
             when: {
                 roomTypes: [
                     RoomTypeFilter.PRIVATE_DISCUSSION,
                     RoomTypeFilter.PRIVATE_CHANNEL,
                     RoomTypeFilter.PRIVATE_TEAM,
-                ]
-            }
+                ],
+            },
         });
 
         // Config a scheduler for UserAccessToken & Subscription auto renew and start it
         configuration.scheduler.registerProcessors([
             {
                 id: RegistrationAutoRenewSchedulerId,
-                processor: async (jobContext: IJobContext, read: IRead, modify: IModify, http: IHttp, persis: IPersistence) => {
+                processor: async (
+                    jobContext: IJobContext,
+                    read: IRead,
+                    modify: IModify,
+                    http: IHttp,
+                    persis: IPersistence
+                ) => {
                     try {
-                        console.log("Start renew registrations!")
-                        const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(this.getAccessors(), SubscriberEndpointPath);
+                        console.log("Start renew registrations!");
+                        const subscriberEndpointUrl =
+                            await getRocketChatAppEndpointUrl(
+                                this.getAccessors(),
+                                SubscriberEndpointPath
+                            );
 
-                        await handleUserRegistrationAutoRenewAsync(subscriberEndpointUrl, read, modify, http, persis);
-                        console.log("Finish renew registrations!")
+                        await handleUserRegistrationAutoRenewAsync(
+                            subscriberEndpointUrl,
+                            read,
+                            modify,
+                            http,
+                            persis
+                        );
+                        console.log("Finish renew registrations!");
                     } catch (error) {
-                        throw new Error(`Auto renew registration failed with error: ${error}`);
+                        throw new Error(
+                            `Auto renew registration failed with error: ${error}`
+                        );
                     }
                 },
                 startupSetting: {
                     type: StartupType.RECURRING,
                     interval: RegistrationAutoRenewInterval,
-                }
-            }
+                },
+            },
         ]);
     }
 }
