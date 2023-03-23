@@ -108,7 +108,7 @@ const createAppUserAsync = async ({
 
     const data: Partial<IBotUser> = {
         username: rocketChatUserName,
-        type: UserType.BOT, // should be UserType.BOT
+        type: UserType.APP,
         isEnabled: true,
         name: teamsUserName,
         roles: ["bot", "MS Teams"],
