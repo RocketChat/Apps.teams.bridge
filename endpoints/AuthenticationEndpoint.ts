@@ -128,7 +128,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 );
 
                 // Async operation to create subscription
-                subscribeToAllMessagesForOneUserAsync(
+                await subscribeToAllMessagesForOneUserAsync(
                     http,
                     rocketChatUserId,
                     teamsUserProfile.id,
