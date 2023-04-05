@@ -41,7 +41,7 @@ export class DeleteTeamsBotUserSlashCommand implements ISlashCommand {
         const room = context.getRoom();
 
         try {
-            await this.app.deleteAppUsers(modify)
+            await this.app.deleteAppUsers(modify);
 
             await notifyRocketChatUserInRoomAsync(
                 DeleteTeamsBotUserSucceedMessageText,
