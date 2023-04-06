@@ -20,7 +20,7 @@ const GraphApiEndpoint = {
     ChatMember: (threadId: string) => `chats/${threadId}/members`,
     RemoveChatMember: (threadId: string, userId: string) => `chats/${threadId}/members/${userId}`,
     Message: (threadId: string) => `chats/${threadId}/messages`,
-    DeleteMessage: (userId: string, threadId: string, messageId: string) => 
+    DeleteMessage: (userId: string, threadId: string, messageId: string) =>
         `users/${userId}/chats/${threadId}/messages/${messageId}/softDelete`,
     Subscription: 'subscriptions',
     SubscriptionOperation: (subscriptionId: string) => `subscriptions/${subscriptionId}`,
@@ -36,34 +36,37 @@ export const AppSetupVerificationFailMessageText: string =
 export const ProvisionTeamsBotUserSucceedMessageText: string = 'Provision Teams bot user succeed!';
 export const ProvisionTeamsBotUserFailedMessageText: string =
     'Provision Teams bot user FAILED! Please check trouble shooting guide for further actions.';
+export const DeleteTeamsBotUserSucceedMessageText: string = 'Delete Teams bot user succeed!';
+export const DeleteTeamsBotUserFailedMessageText: string =
+        'Delete Teams bot user FAILED! Please check trouble shooting guide for further actions.';
 export const LoginMessageText: string =
     'To start cross platform collaboration, you need to login to Microsoft with your Teams account or guest account. '
     + 'You\'ll be able to keep using Rocket.Chat, but you\'ll also be able to chat with colleagues using Microsoft Teams. '
     + 'Please click this button to login Teams:';
-export const LoginRequiredHintMessageText: string = 
+export const LoginRequiredHintMessageText: string =
     'The Rocket.Chat user you are messaging represents a colleague in your organization using Microsoft Teams. '
     + 'The message can NOT be delivered to the user on Microsoft Teams before you start cross platform collaboration for your account. '
     + 'Please click this button to login Teams:';
 export const LoginNoNeedHintMessageText: string = 'You have already login Microsoft Teams to start cross platform collaboration for your account. '
     + 'No need to login again.';
-export const LoggedInBridgeUserRequiredHintMessageText: string = 
+export const LoggedInBridgeUserRequiredHintMessageText: string =
     'The Rocket.Chat room you are messaging includes at least one Teams Bot user that represents a colleague in your organization using Microsoft Teams. '
     + 'The message can NOT be delivered to Microsoft Teams before there is at least one user in this room start cross platform collaboration. '
     + 'To start cross platform collaboration for your account, please click this button to login Teams:';
 export const UnsupportedScenarioHintMessageText = (scenario: string) =>
     `${scenario} is not supported by TeamsBridge app for cross platform collaboration.`
     + ' This message won\'t be delivered to target user on Teams.';
-export const BridgeUserNotificationMessageText: string = 
+export const BridgeUserNotificationMessageText: string =
     'This Rocket.Chat room includes at least one Teams Bot user that represents a colleague in your organization using Microsoft Teams. '
     + 'You have became the bridge user of this room. '
     + 'All messages sent by unlogged-in user to this room will be delivered to Microsoft Teams by you.';
-export const AddUserRoomTypeInvalidHintMessageText: string = 
+export const AddUserRoomTypeInvalidHintMessageText: string =
     'Adding a Teams Bot user only supported for private channels, private teams, and private discussions.';
-export const AddUserNoExistingUsersHintMessageText: string = 
+export const AddUserNoExistingUsersHintMessageText: string =
     'No Teams Bot user provisioned for your organization. Please contact your organization admin for help.';
-export const AddUserNameInvalidHintMessageText: string = 
+export const AddUserNameInvalidHintMessageText: string =
     'The user you are trying to add does not exist or is not a Teams Bot user. Please find the correct user name a try again.';
-export const AddUserLoginRequiredHintMessageText: string = 
+export const AddUserLoginRequiredHintMessageText: string =
     'Adding a Teams Bot user to a group chat room requires at least one user in this room start cross platform collaboration. '
     + 'To start cross platform collaboration for your account, please click this button to login Teams:';
 export const LogoutNoNeedHintMessageText: string = 'You have NOT logged in to Microsoft yet. No need to logout.';
