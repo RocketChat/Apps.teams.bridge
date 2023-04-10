@@ -7,5 +7,8 @@
         "emojione-assets": "^4.5.0",
         "tslint": "^5.10.0",
         "typescript": "^4.0.5"
+    },
+    "dependencies": {
+        "@rocket.chat/ui-kit": "^0.31.22"
     }
 }
