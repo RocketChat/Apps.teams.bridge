@@ -961,7 +961,7 @@ export const uploadFileToOneDriveAsync = async(
 
         const response = await http.put(url, httpRequest);
 
-        if (response.statusCode === HttpStatusCode.CREATED) {
+        if ([HttpStatusCode.CREATED, HttpStatusCode.OK].includes(response.statusCode)) {
             const responseBody = response.content;
             if (responseBody === undefined) {
                 throw new Error('Upload file to one drive failed!');
@@ -1005,7 +1005,7 @@ export const shareOneDriveFileAsync = async (
 
     const response = await http.post(url, httpRequest);
 
-    if (response.statusCode === HttpStatusCode.CREATED) {
+    if ([HttpStatusCode.CREATED, HttpStatusCode.OK].includes(response.statusCode)) {
         const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Create share link for onedrive item failed!');
