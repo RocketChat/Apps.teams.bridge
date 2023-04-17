@@ -1,7 +1,7 @@
 {
     "teamsbridge_aad_tenant_id": "Azure Active Directory Directory (tenant) ID",
     "teamsbridge_aad_client_id": "Azure Active Directory Application (client) ID",
-    "teamsbridge_aad_client_secret": "Azure Active Directory Client Secret",
+    "teamsbridge_aad_client_secret": "Azure Active Directory Client Secret Value",
     "setup_verification_slash_command_description": "Verify TeamsBridge app setup correcly for your organization",
     "login_teams_slash_command_description": "Login Teams to enable cross platform collaboration",
     "add_user_slash_command_description": "Add a Teams Bot user to current group chat",
