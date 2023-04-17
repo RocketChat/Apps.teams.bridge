@@ -4,7 +4,7 @@
     "requiredApiVersion": "^1.38.0",
     "iconFile": "icon.png",
     "author": {
-        "name": "Yuqing Bian",
+        "name": "Rocket.chat",
         "homepage": "https://www.rocket.chat/",
         "support": "support@rocket.chat"
     },
