@@ -5,8 +5,8 @@
     "iconFile": "icon.png",
     "author": {
         "name": "Yuqing Bian",
-        "homepage": "https://github.com/Yuq-Bian/Yuq-Bian",
-        "support": "https://github.com/RocketChat/Apps.teams.bridge/blob/main/docs/support.md"
+        "homepage": "https://www.rocket.chat/",
+        "support": "support@rocket.chat"
     },
     "name": "Microsoft Teams Bridge",
     "nameSlug": "microsoftmeamsbridge",
