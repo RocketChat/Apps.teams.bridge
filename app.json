@@ -9,7 +9,7 @@
         "support": "https://github.com/RocketChat/Apps.teams.bridge/blob/main/docs/support.md"
     },
     "name": "Microsoft Teams Bridge",
-    "nameSlug": "MicrosoftTeamsBridge",
+    "nameSlug": "microsoftteamsbridge",
     "classFile": "TeamsBridgeApp.ts",
     "description": "Rocket.Chat app to support connecting collaborators across Rocket.Chat and Microsoft Teams",
     "categories": [
