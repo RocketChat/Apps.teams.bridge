@@ -9,7 +9,7 @@
         "support": "support@rocket.chat"
     },
     "name": "Microsoft Teams Bridge",
-    "nameSlug": "microsofteamsbridge",
+    "nameSlug": "microsoftteamsbridge",
     "classFile": "TeamsBridgeApp.ts",
     "description": "Rocket.Chat app to support connecting collaborators across Rocket.Chat and Microsoft Teams",
     "categories": [
