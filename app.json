@@ -4,9 +4,9 @@
     "requiredApiVersion": "^1.38.0",
     "iconFile": "icon.png",
     "author": {
-        "name": "Rocket.chat",
-        "homepage": "https://www.rocket.chat/",
-        "support": "support@rocket.chat"
+        "name": "Yuqing Bian",
+        "homepage": "https://github.com/Yuq-Bian/Yuq-Bian",
+        "support": "https://github.com/RocketChat/Apps.teams.bridge/blob/main/docs/support.md"
     },
     "name": "Microsoft Teams Bridge",
     "nameSlug": "microsoftteamsbridge",
