@@ -29,13 +29,13 @@ export class AddUserSlashCommand implements ISlashCommand {
 
         const currentRoom = context.getRoom();
         const commandSender = context.getSender();
-        const appUser = (await read.getUserReader().getAppUser()) as IUser;
+        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
 
         if (currentRoom.type === RoomType.DIRECT_MESSAGE || currentRoom.type === RoomType.CHANNEL) {
             await notifyRocketChatUserInRoomAsync(AddUserRoomTypeInvalidHintMessageText, appUser, commandSender, currentRoom, read.getNotifier());
             return;
         }
-        
+
         if (!subcommand) {
             // If no subcommand is provided, open search Teams User ContextualBar
             const triggerId = context.getTriggerId() as string;

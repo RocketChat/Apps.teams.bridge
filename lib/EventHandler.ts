@@ -85,7 +85,7 @@ export const handlePreMessageSentPreventAsync = async (
         return false;
     }
 
-    const appUser = (await read.getUserReader().getAppUser()) as IUser;
+    const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
     const notifier = read.getNotifier();
 
     if (message.threadId) {
@@ -973,7 +973,7 @@ const notifyNotLoggedInUserAsync = async (
     app: TeamsBridgeApp,
     hintMessageText: string
 ): Promise<void> => {
-    const appUser = (await read.getUserReader().getAppUser()) as IUser;
+    const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
 
     const aadTenantId = (
         await read

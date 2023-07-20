@@ -40,7 +40,7 @@ export class ProvisionTeamsBotUserSlashCommand implements ISlashCommand {
         http: IHttp,
         persis: IPersistence
     ): Promise<void> {
-        const appUser = (await read.getUserReader().getAppUser()) as IUser;
+        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
         const messageReceiver = context.getSender();
         const room = context.getRoom();
 
