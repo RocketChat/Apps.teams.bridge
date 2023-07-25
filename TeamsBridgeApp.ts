@@ -218,7 +218,7 @@ export class TeamsBridgeApp
       const data = context.getInteractionData();
 
       if (data.actionId === UIActionId.AddTeamsUserButtonClicked) {
-        const appUser = (await read.getUserReader().getAppUser()) as IUser;
+        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
         await openAddTeamsUserContextualBarBlocksAsync(
           data.triggerId,
           data.room,

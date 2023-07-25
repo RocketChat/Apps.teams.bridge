@@ -27,7 +27,7 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
         modify: IModify,
         http: IHttp,
         persis: IPersistence): Promise<void> {
-        const appUser = (await read.getUserReader().getAppUser()) as IUser;
+        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
         const messageReceiver = context.getSender();
         const room = context.getRoom();
 
@@ -35,7 +35,7 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
             const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
             const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
             const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
-    
+
             const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
             await persistApplicationAccessTokenAsync(persis, response.accessToken);
 

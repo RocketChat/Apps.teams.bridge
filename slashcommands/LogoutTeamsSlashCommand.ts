@@ -43,7 +43,7 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         persis: IPersistence
     ): Promise<void> {
         const notifier = modify.getNotifier();
-        const appUser = (await read.getUserReader().getAppUser()) as IUser;
+        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
         const sender = context.getSender();
         const currentRoom = context.getRoom();
 
