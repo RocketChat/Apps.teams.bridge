@@ -3,6 +3,7 @@ import {
     IPersistenceRead,
     IRead,
 } from '@rocket.chat/apps-engine/definition/accessors';
+import { IMessage } from '@rocket.chat/apps-engine/definition/messages';
 import {
     RocketChatAssociationModel,
     RocketChatAssociationRecord,
@@ -19,6 +20,7 @@ const MiscKeys = {
     TeamsUserProfile: 'TeamsUserProfile',
     OneDriveFile: 'OneDriveFile',
     LoginMessage: 'LoginMessage',
+    BridgedMessage: 'BridgedMessage',
 };
 
 interface ApplicationAccessTokenModel {
@@ -1000,4 +1002,106 @@ export const retrieveLoginMessageSentStatus = async ({
     }
 
     return result[0].isLoginMessageSent;
+};
+
+type LastBridgedMessageInfo = {
+    senderId: string,
+    text: string,
+    roomId: string
+}
+
+export const getLastBridgedMessage = async ({
+    read,
+    rocketChatUserId,
+}: {
+    read: IRead;
+    rocketChatUserId: string;
+}): Promise<LastBridgedMessageInfo | null> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.BridgedMessage
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            rocketChatUserId
+        ),
+    ];
+
+    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
+
+    const result = (await persistenceRead.readByAssociations(
+        associations
+    )) as unknown as Array<LastBridgedMessageInfo>;
+
+    if (!result) {
+        return null;
+    }
+
+    return result[0];
+};
+
+// This function determines if a message has been previously sent based on the sender's id, the message's text,
+// and the room's id. Since the message id changes every time, it cannot be reliably used for this purpose.
+// By checking the sender, text, and room, we can identify if the message content has already been posted.
+export const isLastMessageAlreadySent = async ({
+    read,
+    rocketChatUserId,
+    message
+}: {
+    read: IRead;
+    rocketChatUserId: string;
+    message: IMessage
+}): Promise<boolean> => {
+    const {
+        text: messageText,
+        room: {
+            id: messageRoomId
+        },
+        sender: {
+            id: messageSenderId
+        }
+    } = message
+    const lastBridgedMessageStored = await getLastBridgedMessage({ read, rocketChatUserId })
+
+    if(!lastBridgedMessageStored) return false;
+
+    const {
+        senderId: lastMessageSentSenderId,
+        text: lastMessageSentText,
+        roomId: lastMessageSentRoomId
+    } = lastBridgedMessageStored
+
+    return lastMessageSentSenderId === messageSenderId &&
+    lastMessageSentText === messageText &&
+    lastMessageSentRoomId === messageRoomId
+}
+
+export const saveLastBridgedMessage = async ({
+    persistence,
+    rocketChatUserId,
+    message
+}: {
+    message: IMessage
+    persistence: IPersistence,
+    rocketChatUserId: string;
+}): Promise<string> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.BridgedMessage
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            rocketChatUserId
+        ),
+    ];
+
+    const { text, room: { id: roomId } } = message
+
+    return persistence.updateByAssociations(
+        associations,
+        { senderId: rocketChatUserId, text, roomId },
+        true
+    );
 };

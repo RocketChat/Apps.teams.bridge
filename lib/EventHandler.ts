@@ -51,6 +51,7 @@ import {
 } from "./MicrosoftGraphApi";
 import {
     checkDummyUserByRocketChatUserIdAsync,
+    isLastMessageAlreadySent,
     persistMessageIdMappingAsync,
     persistOneDriveFileAsync,
     persistRoomAsync,
@@ -65,6 +66,7 @@ import {
     retrieveUserAccessTokenAsync,
     retrieveUserByRocketChatUserIdAsync,
     retrieveUserRefreshTokenAsync,
+    saveLastBridgedMessage,
     saveLoginMessageSentStatus,
     UserModel,
 } from "./PersistHelper";
@@ -76,164 +78,179 @@ export const handlePreMessageSentPreventAsync = async (
     persistence: IPersistence,
     app: TeamsBridgeApp
 ): Promise<boolean> => {
-    const wasSent = await retrieveLoginMessageSentStatus({
-        read,
-        rocketChatUserId: message.sender.id,
-    });
-
-    if (wasSent) {
-        return false;
-    }
-
-    const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
-    const notifier = read.getNotifier();
-
-    if (message.threadId) {
-        const isTeamsMessageThread = await isTeamsMessageAsync(
-            message.threadId,
-            read
-        );
-        if (isTeamsMessageThread) {
-            // There's no thread message concept in Teams
-            // Thread message is not a supported scenario for Teams interop
-
-            await notifyRocketChatUserInRoomAsync(
-                UnsupportedScenarioHintMessageText("Thread Message"),
-                appUser,
-                message.sender,
-                message.room,
-                notifier
-            );
-
-            return true;
-        }
-    }
-
-    const roomType = message.room.type;
-    if (
-        roomType === RoomType.PRIVATE_GROUP ||
-        roomType === RoomType.DIRECT_MESSAGE
-    ) {
-        // If room type is PRIVATE_GROUP or DIRECT_MESSAGE, check if there's any dummy user in the room
-        const members = await read.getRoomReader().getMembers(message.room.id);
-
-        const dummyUsers = await findAllDummyUsersInRocketChatUserListAsync(
+    try {
+        const wasSent = await retrieveLoginMessageSentStatus({
             read,
-            members
-        );
+            rocketChatUserId: message.sender.id,
+        });
 
-        if (dummyUsers && dummyUsers.length > 0) {
-            // If there are dummy users in the room, check whether there's at least one teams-logged in user in this room
+        if (wasSent) {
+            return false;
+        }
 
-            // Find whether there's an existing room record
-            let roomRecord = await retrieveRoomByRocketChatRoomIdAsync(
+        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
+        const notifier = read.getNotifier();
+
+        if (message.threadId) {
+            const isTeamsMessageThread = await isTeamsMessageAsync(
+                message.threadId,
+                read
+            );
+            if (isTeamsMessageThread) {
+                // There's no thread message concept in Teams
+                // Thread message is not a supported scenario for Teams interop
+
+                await notifyRocketChatUserInRoomAsync(
+                    UnsupportedScenarioHintMessageText("Thread Message"),
+                    appUser,
+                    message.sender,
+                    message.room,
+                    notifier
+                );
+
+                return true;
+            }
+        }
+
+        const roomType = message.room.type;
+        if (
+            roomType === RoomType.PRIVATE_GROUP ||
+            roomType === RoomType.DIRECT_MESSAGE
+        ) {
+            // If room type is PRIVATE_GROUP or DIRECT_MESSAGE, check if there's any dummy user in the room
+            const members = await read.getRoomReader().getMembers(message.room.id);
+
+            const dummyUsers = await findAllDummyUsersInRocketChatUserListAsync(
                 read,
-                message.room.id
+                members
             );
 
-            if (roomRecord) {
-                // If there's an existing room record, check whether it has a bridge user
-                if (roomRecord.bridgeUserRocketChatUserId) {
-                    // If this room already has assigned a bridge user, check the bridge user login status
+            if (dummyUsers && dummyUsers.length > 0) {
+                // If there are dummy users in the room, check whether there's at least one teams-logged in user in this room
 
-                    const accessToken = await retrieveUserAccessTokenAsync(
-                        read,
-                        persistence,
-                        roomRecord.bridgeUserRocketChatUserId
-                    );
-                    if (!accessToken) {
-                        // If the existing bridge user is logged out, clean the bridge user
-                        roomRecord.bridgeUserRocketChatUserId = undefined;
-                    }
-                }
-            } else {
-                // Create a new room record if there's not an existing one
-                roomRecord = {
-                    rocketChatRoomId: message.room.id,
-                };
-            }
-
-            // Try to find a logged in user and assign to the room as the bridge user
-            if (!roomRecord.bridgeUserRocketChatUserId) {
-                const loggedInUser = await findOneTeamsLoggedInUsersAsync(
+                // Find whether there's an existing room record
+                let roomRecord = await retrieveRoomByRocketChatRoomIdAsync(
                     read,
-                    persistence,
-                    members
+                    message.room.id
                 );
-                const isOneOnOneDirectMessage =
-                    roomType === RoomType.DIRECT_MESSAGE &&
-                    members.length === 2;
-                if (loggedInUser) {
-                    // Assign the room a bridge user
-                    roomRecord.bridgeUserRocketChatUserId =
-                        loggedInUser.rocketChatUserId;
 
-                    // For 1:1 dm chat, no further action required
-                    if (!isOneOnOneDirectMessage) {
-                        // For other type of chat room
-                        // Notify the bridge user that he has became the bridge of this room
-                        // All messages sent by unlogged in user will be delivered to Microsoft Teams by him
-                        const bridgeUser = await read
-                            .getUserReader()
-                            .getById(loggedInUser.rocketChatUserId);
-                        await notifyRocketChatUserInRoomAsync(
-                            BridgeUserNotificationMessageText,
-                            appUser,
-                            bridgeUser,
-                            message.room,
-                            notifier
+                if (roomRecord) {
+
+                    const isLastMessageSent = await isLastMessageAlreadySent({
+                        read,
+                        rocketChatUserId: message.sender.id ,
+                        message
+                    });
+
+                    if (isLastMessageSent) {
+                        return true;
+                    }
+
+
+                    // If there's an existing room record, check whether it has a bridge user
+                    if (roomRecord.bridgeUserRocketChatUserId) {
+
+                        const accessToken = await retrieveUserAccessTokenAsync(
+                            read,
+                            persistence,
+                            roomRecord.bridgeUserRocketChatUserId
                         );
-
-                        // TODO: send a message to Microsoft Teams to let the user there know the bridge user represents some other users
+                        if (!accessToken) {
+                            // If the existing bridge user is logged out, clean the bridge user
+                            roomRecord.bridgeUserRocketChatUserId = undefined;
+                        }
                     }
                 } else {
-                    // If there's no logged in user in the room, prevent the message
-                    if (isOneOnOneDirectMessage) {
-                        // For 1:1 chat, notify the sender to login
+                    // Create a new room record if there's not an existing one
+                    roomRecord = {
+                        rocketChatRoomId: message.room.id,
+                    };
+                }
 
-                        await notifyNotLoggedInUserAsync(
-                            read,
-                            message.sender,
-                            message.room,
-                            app,
-                            LoginRequiredHintMessageText
-                        );
-                        await saveLoginMessageSentStatus({
-                            persistence,
-                            rocketChatUserId: message.sender.id,
-                            wasSent: true,
-                        });
+                // Try to find a logged in user and assign to the room as the bridge user
+                if (!roomRecord.bridgeUserRocketChatUserId) {
+                    const loggedInUser = await findOneTeamsLoggedInUsersAsync(
+                        read,
+                        persistence,
+                        members
+                    );
+                    const isOneOnOneDirectMessage =
+                        roomType === RoomType.DIRECT_MESSAGE &&
+                        members.length === 2;
+                    if (loggedInUser) {
+                        // Assign the room a bridge user
+                        roomRecord.bridgeUserRocketChatUserId =
+                            loggedInUser.rocketChatUserId;
+
+                        // For 1:1 dm chat, no further action required
+                        if (!isOneOnOneDirectMessage) {
+                            // For other type of chat room
+                            // Notify the bridge user that he has became the bridge of this room
+                            // All messages sent by unlogged in user will be delivered to Microsoft Teams by him
+                            const bridgeUser = await read
+                                .getUserReader()
+                                .getById(loggedInUser.rocketChatUserId);
+                            await notifyRocketChatUserInRoomAsync(
+                                BridgeUserNotificationMessageText,
+                                appUser,
+                                bridgeUser,
+                                message.room,
+                                notifier
+                            );
+
+                            // TODO: send a message to Microsoft Teams to let the user there know the bridge user represents some other users
+                        }
                     } else {
-                        // For other type of chat room
-                        // Notify the message sender there's no available bridge user
+                        // If there's no logged in user in the room, prevent the message
+                        if (isOneOnOneDirectMessage) {
+                            // For 1:1 chat, notify the sender to login
 
-                        await notifyNotLoggedInUserAsync(
-                            read,
-                            message.sender,
-                            message.room,
-                            app,
-                            LoggedInBridgeUserRequiredHintMessageText
-                        );
-                        await saveLoginMessageSentStatus({
-                            persistence,
-                            rocketChatUserId: message.sender.id,
-                            wasSent: true,
-                        });
+                            await notifyNotLoggedInUserAsync(
+                                read,
+                                message.sender,
+                                message.room,
+                                app,
+                                LoginRequiredHintMessageText
+                            );
+                            await saveLoginMessageSentStatus({
+                                persistence,
+                                rocketChatUserId: message.sender.id,
+                                wasSent: true,
+                            });
+                        } else {
+                            // For other type of chat room
+                            // Notify the message sender there's no available bridge user
+
+                            await notifyNotLoggedInUserAsync(
+                                read,
+                                message.sender,
+                                message.room,
+                                app,
+                                LoggedInBridgeUserRequiredHintMessageText
+                            );
+                            await saveLoginMessageSentStatus({
+                                persistence,
+                                rocketChatUserId: message.sender.id,
+                                wasSent: true,
+                            });
+                        }
                     }
                 }
+
+                // Persist the room record
+                await persistRoomAsync(
+                    persistence,
+                    roomRecord.rocketChatRoomId,
+                    roomRecord.teamsThreadId,
+                    roomRecord.bridgeUserRocketChatUserId
+                );
             }
-
-            // Persist the room record
-            await persistRoomAsync(
-                persistence,
-                roomRecord.rocketChatRoomId,
-                roomRecord.teamsThreadId,
-                roomRecord.bridgeUserRocketChatUserId
-            );
         }
+        return false;
+    } catch (error) {
+        app.getLogger().error(error);
+        return false
     }
-
-    return false;
 };
 
 export const handlePostMessageSentAsync = async (
@@ -263,6 +280,17 @@ export const handlePostMessageSentAsync = async (
         // Sanity check has been done in PreMessageSentPrevent for Teams interop scenarios
 
         // There should be a room record in persist with a bridge user assigned
+
+        const isLastMessageSent = await isLastMessageAlreadySent({
+            read,
+            rocketChatUserId: message.sender.id ,
+            message
+        });
+
+        if (isLastMessageSent) {
+            return;
+        }
+
         const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(
             read,
             roomId
@@ -419,12 +447,17 @@ export const handlePostMessageSentAsync = async (
             rocketChatMessageId = message.id as string;
         }
 
-        await persistMessageIdMappingAsync(
-            persistence,
-            rocketChatMessageId,
-            teamsMessageId,
-            roomRecord.teamsThreadId
-        );
+        await Promise.all([
+            persistMessageIdMappingAsync(
+                persistence,
+                rocketChatMessageId,
+                teamsMessageId,
+                roomRecord.teamsThreadId
+            ),
+            saveLastBridgedMessage({ persistence, rocketChatUserId: message.sender.id, message })
+        ])
+
+
     }
 };
 
