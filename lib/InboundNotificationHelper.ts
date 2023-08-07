@@ -21,7 +21,6 @@ import {
     ThreadType,
 } from "./MicrosoftGraphApi";
 import {
-    isLastMessageAlreadySent,
     persistMessageIdMappingAsync,
     persistRoomAsync,
     retrieveDummyUserByTeamsUserIdAsync,
@@ -312,15 +311,26 @@ const handleInboundMessageCreatedAsync = async (
                 modify
             );
 
+            const messageInfo = {
+                text: messageText,
+                room,
+                file: {
+                    name: getMessageResponse?.attachments ? getMessageResponse.attachments[0].name:  '',
+                }
+            } as IMessage
+
+            await saveLastBridgedMessage({
+                persistence: persis,
+                rocketChatUserId: senderUser.id,
+                message: messageInfo
+            })
+
             if (messageText === "") {
                 // File message, no text content
                 return;
             }
 
-            const messageInfo = {
-                text: messageText,
-                room
-            } as IMessage
+
 
             const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(
                 messageText,
@@ -329,19 +339,12 @@ const handleInboundMessageCreatedAsync = async (
                 modify
             );
 
-            await Promise.all([
-                persistMessageIdMappingAsync(
-                    persis,
-                    rocketChatMessageId,
-                    getMessageResponse.messageId,
-                    getMessageResponse.threadId
-                ),
-                saveLastBridgedMessage({
-                    persistence: persis,
-                    rocketChatUserId: senderUser.id,
-                    message: messageInfo
-                })
-            ]);
+            await persistMessageIdMappingAsync(
+                persis,
+                rocketChatMessageId,
+                getMessageResponse.messageId,
+                getMessageResponse.threadId
+            );
         } else if (
             getMessageResponse.messageType === MessageType.SystemAddMembers
         ) {

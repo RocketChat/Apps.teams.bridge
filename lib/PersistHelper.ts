@@ -1007,7 +1007,8 @@ export const retrieveLoginMessageSentStatus = async ({
 type LastBridgedMessageInfo = {
     senderId: string,
     text: string,
-    roomId: string
+    roomId: string,
+    fileName: string,
 }
 
 export const getLastBridgedMessage = async ({
@@ -1043,7 +1044,8 @@ export const getLastBridgedMessage = async ({
 
 // This function determines if a message has been previously sent based on the sender's id, the message's text,
 // and the room's id. Since the message id changes every time, it cannot be reliably used for this purpose.
-// By checking the sender, text, and room, we can identify if the message content has already been posted.
+// By checking the sender, text, room and file name (if it is the case) or if the message is bridged
+// we can identify if the message content has already been posted.
 export const isLastMessageAlreadySent = async ({
     read,
     rocketChatUserId,
@@ -1053,6 +1055,11 @@ export const isLastMessageAlreadySent = async ({
     rocketChatUserId: string;
     message: IMessage
 }): Promise<boolean> => {
+    //Trying to filter bridged messages
+    if(['[Bridged Message]'].includes(message.text as string)) {
+        return true
+    }
+
     const {
         text: messageText,
         room: {
@@ -1060,8 +1067,11 @@ export const isLastMessageAlreadySent = async ({
         },
         sender: {
             id: messageSenderId
-        }
+        },
+        file
     } = message
+
+    const fileName = file?.name
     const lastBridgedMessageStored = await getLastBridgedMessage({ read, rocketChatUserId })
 
     if(!lastBridgedMessageStored) return false;
@@ -1069,12 +1079,23 @@ export const isLastMessageAlreadySent = async ({
     const {
         senderId: lastMessageSentSenderId,
         text: lastMessageSentText,
-        roomId: lastMessageSentRoomId
+        roomId: lastMessageSentRoomId,
+        fileName: lastFileName
     } = lastBridgedMessageStored
 
-    return lastMessageSentSenderId === messageSenderId &&
-    lastMessageSentText === messageText &&
-    lastMessageSentRoomId === messageRoomId
+    const isRoomIdEqual = lastMessageSentRoomId === messageRoomId;
+    const isSenderIdEqual = lastMessageSentSenderId === messageSenderId;
+    const isSenderIdAndRoomIdEqual = isSenderIdEqual === isRoomIdEqual;
+
+    if(fileName) {
+        const isFileNameEqual = lastFileName === fileName;
+        return isSenderIdAndRoomIdEqual && isFileNameEqual;
+    }
+
+    const isTextEqual = lastMessageSentText === messageText;
+
+    return isSenderIdAndRoomIdEqual && isTextEqual
+
 }
 
 export const saveLastBridgedMessage = async ({
