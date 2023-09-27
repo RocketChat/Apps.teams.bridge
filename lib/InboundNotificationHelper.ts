@@ -21,6 +21,9 @@ import {
     ThreadType,
 } from "./MicrosoftGraphApi";
 import {
+    UserModel,
+    getMessageFootPrintExistenceInfo,
+    isLastMessageAlreadySent,
     persistMessageIdMappingAsync,
     persistRoomAsync,
     retrieveDummyUserByTeamsUserIdAsync,
@@ -29,6 +32,7 @@ import {
     retrieveUserAccessTokenAsync,
     retrieveUserByTeamsUserIdAsync,
     saveLastBridgedMessage,
+    saveLastBridgedMessageFootprint,
 } from "./PersistHelper";
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 
@@ -59,6 +63,7 @@ export const handleInboundNotificationAsync = async (
     persis: IPersistence,
     appId: string
 ): Promise<void> => {
+    console.log("🚀 ~ file: InboundNotificationHelper.ts:66 ~ inBoundNotification:", inBoundNotification)
     const receiverRocketChatUserId =
         inBoundNotification.receiverRocketChatUserId;
     if (!receiverRocketChatUserId) {
@@ -128,6 +133,7 @@ const handleInboundMessageCreatedAsync = async (
     persis: IPersistence,
     appId: string
 ): Promise<void> => {
+    console.log("🚀 ~ file: InboundNotificationHelper.ts:135 ~ inBoundNotification:", inBoundNotification)
     const receiverRocketChatUserId =
         inBoundNotification.receiverRocketChatUserId;
     const resourceString = inBoundNotification.resourceString;
@@ -267,7 +273,7 @@ const handleInboundMessageCreatedAsync = async (
         if (getMessageResponse.messageType === MessageType.Message) {
             const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
             if (!fromUserTeamsId) {
-                // If there's not a sender, stop processing
+                // If there's no sender, stop processing
                 console.error("No sender for message");
                 return;
             }
@@ -277,28 +283,19 @@ const handleInboundMessageCreatedAsync = async (
                 fromUserTeamsId
             );
 
-            let senderUser: IUser | null = null;
-            if (fromUserRocketChatUser) {
-                const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
-                if (roomMembers && roomMembers.find((user) => user.id === fromUserRocketChatUser.rocketChatUserId)) {
-                    senderUser = await read.getUserReader().getById(fromUserRocketChatUser.rocketChatUserId);
-                }
-            } else {
-                let fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
-                if (!fromDummyUser) {
-                    // There could be a dummy user out of sync issue.
-                    // If the dummy user has not been created for a recently added Teams user, we need to create the dummy user on demand.
-                    // Sync all Teams bot users
-                    await syncAllTeamsBotUsersAsync(http, read, modify, persis, appId);
-                    fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
-                    if (!fromDummyUser) {
-                        throw new Error(`Dummy user with Teams ID ${fromUserTeamsId} not found after trying to sync all Teams bot users!`);
-                    }
-                }
-                senderUser = await read.getUserReader().getById(fromDummyUser.rocketChatUserId);
-            }
+            const senderUser = await getSenderUser({
+                roomRecord,
+                fromUserRocketChatUser,
+                read,
+                persis,
+                modify,
+                appId,
+                fromUserTeamsId,
+                http
+            });
+            console.log("🚀 ~ file: InboundNotificationHelper.ts:292 ~ senderUser:", senderUser)
 
-            if(!senderUser) {
+            if (!senderUser) {
                 throw new Error('No user found to send the message');
             }
 
@@ -310,27 +307,34 @@ const handleInboundMessageCreatedAsync = async (
                 http,
                 modify
             );
+            console.log("🚀 ~ file: InboundNotificationHelper.ts:306 ~ messageText:", messageText)
 
             const messageInfo = {
                 text: messageText,
                 room,
                 file: {
-                    name: getMessageResponse?.attachments ? getMessageResponse.attachments[0].name:  '',
+                    name: getMessageResponse?.attachments ? getMessageResponse.attachments[0].name : '',
                 }
-            } as IMessage
+            } as IMessage;
+            console.log("🚀 ~ file: InboundNotificationHelper.ts:315 ~ messageInfo:", messageInfo)
 
-            await saveLastBridgedMessage({
-                persistence: persis,
-                rocketChatUserId: senderUser.id,
-                message: messageInfo
-            })
+            console.log("🚀 ~ file: InboundNotificationHelper.ts:319 ~ fromUserRocketChatUser:", !!fromUserRocketChatUser)
+            // if (fromUserRocketChatUser) {
+            //     const messageFootprintInfo =  await getMessageFootPrintExistenceInfo(messageInfo, read)
+            //     console.log("🚀 ~ file: InboundNotificationHelper.ts:322 ~ messageFootprintInfo:", messageFootprintInfo)
+
+            //     if (messageFootprintInfo.itDoesMessageFootprintExists) {
+            //         console.log("🚀 ~ file: InboundNotificationHelper.ts:325 ~ messageFootprintInfo.itDoesMessageFootprintExists:", messageFootprintInfo.itDoesMessageFootprintExists)
+            //         // This message has already been processed, prevent recursion
+            //         return;
+            //     }
+            // }
+
 
             if (messageText === "") {
                 // File message, no text content
                 return;
             }
-
-
 
             const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(
                 messageText,
@@ -345,6 +349,7 @@ const handleInboundMessageCreatedAsync = async (
                 getMessageResponse.messageId,
                 getMessageResponse.threadId
             );
+
         } else if (
             getMessageResponse.messageType === MessageType.SystemAddMembers
         ) {
@@ -424,6 +429,48 @@ const handleInboundMessageCreatedAsync = async (
         console.log("Unsupported message type.");
     }
 };
+
+const getSenderUser = async ({
+        roomRecord,
+        fromUserRocketChatUser,
+        read,
+        persis,
+        modify,
+        appId,
+        fromUserTeamsId,
+        http
+    }: {
+        roomRecord: any,
+        fromUserRocketChatUser: UserModel | null,
+        read: IRead,
+        persis: IPersistence,
+        modify: IModify,
+        appId: string,
+        fromUserTeamsId: string,
+        http: IHttp
+}) => {
+    if (fromUserRocketChatUser) {
+        console.log("🚀 ~ file: InboundNotificationHelper.ts:282 ~ fromUserRocketChatUser:", fromUserRocketChatUser)
+        const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
+        if (roomMembers && roomMembers.find((user) => user.id === fromUserRocketChatUser.rocketChatUserId)) {
+            return read.getUserReader().getById(fromUserRocketChatUser.rocketChatUserId);
+        }
+    }
+
+    let fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
+    if (!fromDummyUser) {
+        // There could be a dummy user out of sync issue.
+        // If the dummy user has not been created for a recently added Teams user, we need to create the dummy user on demand.
+        // Sync all Teams bot users
+        await syncAllTeamsBotUsersAsync(http, read, modify, persis, appId);
+        fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
+        if (!fromDummyUser) {
+            throw new Error(`Dummy user with Teams ID ${fromUserTeamsId} not found after trying to sync all Teams bot users!`);
+        }
+    }
+    return read.getUserReader().getById(fromDummyUser.rocketChatUserId);
+
+}
 
 const handleInboundMessageUpdatedAsync = async (
     userAccessToken: string,

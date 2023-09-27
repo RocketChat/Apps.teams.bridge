@@ -51,6 +51,10 @@ import {
 } from "./MicrosoftGraphApi";
 import {
     checkDummyUserByRocketChatUserIdAsync,
+    doesMessageFootPrintExists,
+    generateMessageFootprint,
+    getLastBridgedMessageFootprint,
+    getMessageFootPrintExistenceInfo,
     isLastMessageAlreadySent,
     persistMessageIdMappingAsync,
     persistOneDriveFileAsync,
@@ -65,8 +69,10 @@ import {
     retrieveRoomByRocketChatRoomIdAsync,
     retrieveUserAccessTokenAsync,
     retrieveUserByRocketChatUserIdAsync,
+    retrieveUserByTeamsUserIdAsync,
     retrieveUserRefreshTokenAsync,
     saveLastBridgedMessage,
+    saveLastBridgedMessageFootprint,
     saveLoginMessageSentStatus,
     UserModel,
 } from "./PersistHelper";
@@ -135,14 +141,12 @@ export const handlePreMessageSentPreventAsync = async (
                 );
 
                 if (roomRecord) {
+                    const messageFootprintInfo = await getMessageFootPrintExistenceInfo(message, read)
+                    console.log("🚀 ~ file: PRE EventHandler.ts:145 ~ messageFootprintInfo:", messageFootprintInfo)
 
-                    const isLastMessageSent = await isLastMessageAlreadySent({
-                        read,
-                        rocketChatUserId: message.sender.id ,
-                        message
-                    });
-
-                    if (isLastMessageSent) {
+                    if (messageFootprintInfo.itDoesMessageFootprintExists) {
+                        console.log("🚀 ~ file: PRE EventHandler.ts:148 ~ messageFootprintInfo.itDoesMessageFootprintExists:", messageFootprintInfo.itDoesMessageFootprintExists)
+                        // This message has already been processed, prevent recursion
                         return true;
                     }
 
@@ -276,20 +280,35 @@ export const handlePostMessageSentAsync = async (
         members
     );
     if (dummyUsers && dummyUsers.length > 0) {
+        const messageFootprintInfo =  await getMessageFootPrintExistenceInfo(message, read)
+        console.log("🚀 ~ file: POST EventHandler.ts:284 ~ messageFootprintInfo:", messageFootprintInfo)
+
+        // if (messageFootprintInfo.itDoesMessageFootprintExists) {
+        //     // This message has already been processed, prevent recursion
+        //     return;
+        // }
+
+        await saveLastBridgedMessageFootprint({
+            messageFootprint: messageFootprintInfo.messageFootprint,
+            persistence,
+            rocketChatUserId: message.sender.id
+        })
+
         // If there's any dummy user in the room, this is a Teams interop chat room
         // Sanity check has been done in PreMessageSentPrevent for Teams interop scenarios
 
         // There should be a room record in persist with a bridge user assigned
 
-        const isLastMessageSent = await isLastMessageAlreadySent({
-            read,
-            rocketChatUserId: message.sender.id ,
-            message
-        });
 
-        if (isLastMessageSent) {
-            return;
-        }
+        // const isLastMessageSent = await isLastMessageAlreadySent({
+        //     read,
+        //     rocketChatUserId: message.sender.id ,
+        //     message
+        // });
+
+        // if (isLastMessageSent) {
+        //     return;
+        // }
 
         const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(
             read,

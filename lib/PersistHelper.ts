@@ -8,6 +8,9 @@ import {
     RocketChatAssociationModel,
     RocketChatAssociationRecord,
 } from '@rocket.chat/apps-engine/definition/metadata';
+import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
+import { IUser } from '@rocket.chat/apps-engine/definition/users';
+import * as sha256 from 'crypto-js/sha256';
 
 const MiscKeys = {
     ApplicationAccessToken: 'ApplicationAccessToken',
@@ -21,6 +24,8 @@ const MiscKeys = {
     OneDriveFile: 'OneDriveFile',
     LoginMessage: 'LoginMessage',
     BridgedMessage: 'BridgedMessage',
+    BridgedMessageFootprint: 'BridgedMessageFootprint',
+
 };
 
 interface ApplicationAccessTokenModel {
@@ -1042,6 +1047,19 @@ export const getLastBridgedMessage = async ({
     return result[0];
 };
 
+
+export const generateMessageFootprint = (message: IMessage, room: IRoom, sender: IUser): string => {
+    const messageProperties = `${message.id}${message.text}`;
+    const roomProperties = `${room.id}${room.type}${room.displayName}`;
+    const senderProperties = `${sender.id}${sender.username}`;
+
+    const combinedProperties = `${messageProperties}${roomProperties}${senderProperties}`;
+
+    return simpleHash(combinedProperties);
+  }
+
+const simpleHash = (input: string): string => sha256(input).toString()
+
 // This function determines if a message has been previously sent based on the sender's id, the message's text,
 // and the room's id. Since the message id changes every time, it cannot be reliably used for this purpose.
 // By checking the sender, text, room and file name (if it is the case) or if the message is bridged
@@ -1070,6 +1088,7 @@ export const isLastMessageAlreadySent = async ({
         },
         file
     } = message
+    console.log("🚀 ~ file: PersistHelper.ts:1073 ~ messageText:", messageText)
 
     const fileName = file?.name
     const lastBridgedMessageStored = await getLastBridgedMessage({ read, rocketChatUserId })
@@ -1082,6 +1101,7 @@ export const isLastMessageAlreadySent = async ({
         roomId: lastMessageSentRoomId,
         fileName: lastFileName
     } = lastBridgedMessageStored
+    console.log("🚀 ~ file: PersistHelper.ts:1085 ~ lastMessageSentText:", lastMessageSentText)
 
     const isRoomIdEqual = lastMessageSentRoomId === messageRoomId;
     const isSenderIdEqual = lastMessageSentSenderId === messageSenderId;
@@ -1098,14 +1118,120 @@ export const isLastMessageAlreadySent = async ({
 
 }
 
+export const saveLastBridgedMessageFootprint = async ({
+    persistence,
+    rocketChatUserId,
+    messageFootprint,
+    // source
+}: {
+    messageFootprint: string
+    persistence: IPersistence,
+    rocketChatUserId: string;
+    // source: 'rocket.chat' | 'msteams'
+}): Promise<string> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.BridgedMessageFootprint
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            rocketChatUserId
+        ),
+    ];
+
+    return persistence.updateByAssociations(
+        associations,
+        { messageFootprint, timestamp: new Date() },
+        true
+    );
+};
+
+export type MessageFootprintInfo = {
+    messageFootprint: string
+    timestamp: string
+}
+
+export const getLastBridgedMessageFootprint = async (
+    {
+        read,
+        rocketChatUserId,
+    }: {
+        read: IRead,
+        rocketChatUserId: string;
+    }
+): Promise<MessageFootprintInfo> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.BridgedMessageFootprint
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            rocketChatUserId
+        ),
+    ];
+
+    return (await read.getPersistenceReader().readByAssociations(associations)).shift() as MessageFootprintInfo
+}
+
+export const doesMessageFootPrintExists = async (
+    {
+        currentMessageFootprint,
+        read,
+        rocketChatUserId
+    }:
+    {
+        currentMessageFootprint: string,
+        read: IRead,
+        rocketChatUserId: string;
+    }
+) => {
+    const storedMessageFootprint = (await getLastBridgedMessageFootprint({ rocketChatUserId, read })).messageFootprint
+    console.log("🚀 ~ file: PersistHelper.ts:1191 ~ storedMessageFootprint:", storedMessageFootprint)
+    console.log("🚀 ~ file: PersistHelper.ts:1194 ~ currentMessageFootprint:", currentMessageFootprint)
+
+    return currentMessageFootprint === storedMessageFootprint
+}
+
+export const getMessageFootPrintExistenceInfo = async (message: IMessage, read: IRead):
+    Promise<{
+        itDoesMessageFootprintExists: boolean,
+        messageFootprint: string
+    }> => {
+
+    try {
+        const currentMessageFootprint = generateMessageFootprint(message, message.room, message.sender);
+        console.log("🚀 ~ file: EventHandler.ts:82 ~ checkIfMessageFootPrintExists ~ currentMessageFootprint:", currentMessageFootprint)
+
+        // Check if the message's footprint exists in the database and returns
+        const itDoesMessageFootprintExists = await doesMessageFootPrintExists({
+            currentMessageFootprint, read, rocketChatUserId: message.sender.id
+        });
+        console.log("🚀 ~ file: EventHandler.ts:94 ~ itDoesMessageFootprintExists:", itDoesMessageFootprintExists)
+
+        return {
+            itDoesMessageFootprintExists,
+            messageFootprint: currentMessageFootprint
+        }
+
+    } catch (error) {
+        console.log("🚀 ~ file: EventHandler.ts:100 ~ error:", error)
+        return {} as any
+    }
+
+}
+
 export const saveLastBridgedMessage = async ({
     persistence,
     rocketChatUserId,
-    message
+    message,
+    // source
 }: {
     message: IMessage
     persistence: IPersistence,
     rocketChatUserId: string;
+    // source: 'rocket.chat' | 'msteams'
 }): Promise<string> => {
     const associations: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(
