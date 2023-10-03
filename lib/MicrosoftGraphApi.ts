@@ -105,29 +105,6 @@ export interface ShareOneDriveFileResponse {
     shareLink: string;
 };
 
-export type SubscriptionsResponse = {
-    "@odata.context": string
-    value: Array<SubscriptionValue>
-  }
-
-type SubscriptionValue = {
-    id: string
-    resource: string
-    applicationId: string
-    changeType: string
-    clientState: any
-    notificationUrl: string
-    notificationQueryOptions: any
-    lifecycleNotificationUrl: any
-    expirationDateTime: string
-    creatorId: string
-    includeResourceData: boolean
-    latestSupportedTlsVersion: string
-    encryptionCertificate: any
-    encryptionCertificateId: any
-    notificationUrlAppId: any
-}
-
 export const getApplicationAccessTokenAsync = async (
     http: IHttp,
     aadTenantId: string,
@@ -147,16 +124,17 @@ export const getApplicationAccessTokenAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Get application access token failed!');
         }
 
+        const jsonBody = JSON.parse(responseBody);
         const result : TokenResponse = {
-            tokenType: responseBody.token_type,
-            expiresIn: responseBody.expires_in,
-            extExpiresIn: responseBody.ext_expires_in,
-            accessToken: responseBody.access_token,
+            tokenType: jsonBody.token_type,
+            expiresIn: jsonBody.expires_in,
+            extExpiresIn: jsonBody.ext_expires_in,
+            accessToken: jsonBody.access_token,
         };
 
         return result;
@@ -178,13 +156,13 @@ export const listTeamsUserProfilesAsync = async (
     const response = await http.get(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('List users failed!');
         }
 
-
-        const userList = responseBody.value as any[];
+        const jsonBody = JSON.parse(responseBody);
+        const userList = jsonBody.value as any[];
         const result : TeamsUserProfile[] = [];
         for (let index = 0; index < userList.length; index++) {
             try {
@@ -224,7 +202,7 @@ export const getUserAccessTokenAsync = async (
     body += `&grant_type=authorization_code`;
     body += `&client_secret=${aadClientSecret}`;
     body = encodeURI(body);
-
+    
     const httpRequest: IHttpRequest = {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -236,18 +214,18 @@ export const getUserAccessTokenAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Get user access token failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : TokenResponse = {
-            tokenType: responseBody.token_type,
-            expiresIn: responseBody.expires_in,
-            extExpiresIn: responseBody.ext_expires_in,
-            accessToken: responseBody.access_token,
-            refreshToken: responseBody.refresh_token,
+            tokenType: jsonBody.token_type,
+            expiresIn: jsonBody.expires_in,
+            extExpiresIn: jsonBody.ext_expires_in,
+            accessToken: jsonBody.access_token,
+            refreshToken: jsonBody.refresh_token,
         };
 
         return result;
@@ -268,7 +246,7 @@ export const renewUserAccessTokenAsync = async (
     body += `&grant_type=refresh_token`;
     body += `&client_secret=${aadClientSecret}`;
     body = encodeURI(body);
-
+    
     const httpRequest: IHttpRequest = {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
@@ -280,18 +258,18 @@ export const renewUserAccessTokenAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Refresh user access token failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : TokenResponse = {
-            tokenType: responseBody.token_type,
-            expiresIn: responseBody.expires_in,
-            extExpiresIn: responseBody.ext_expires_in,
-            accessToken: responseBody.access_token,
-            refreshToken: responseBody.refresh_token,
+            tokenType: jsonBody.token_type,
+            expiresIn: jsonBody.expires_in,
+            extExpiresIn: jsonBody.ext_expires_in,
+            accessToken: jsonBody.access_token,
+            refreshToken: jsonBody.refresh_token,
         };
 
         return result;
@@ -328,18 +306,18 @@ export const getUserProfileAsync = async (http: IHttp, userAccessToken: string) 
     const response = await http.get(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Get user profile failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : TeamsUserProfile = {
-            displayName: responseBody.displayName,
-            givenName: responseBody.givenName,
-            surname: responseBody.surname,
-            mail: responseBody.mail,
-            id: responseBody.id,
+            displayName: jsonBody.displayName,
+            givenName: jsonBody.givenName,
+            surname: jsonBody.surname,
+            mail: jsonBody.mail,
+            id: jsonBody.id,
         };
 
         return result;
@@ -382,14 +360,14 @@ export const createOneOnOneChatThreadAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.CREATED) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Create one on one chat thread failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : CreateThreadResponse = {
-            threadId: responseBody.id,
+            threadId: jsonBody.id,
         };
 
         return result;
@@ -432,14 +410,14 @@ export const createChatThreadAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.CREATED) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Create group chat thread failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : CreateThreadResponse = {
-            threadId: responseBody.id,
+            threadId: jsonBody.id,
         };
 
         return result;
@@ -453,7 +431,7 @@ export const getChatThreadWithMembersAsync = async (
     threadId: string,
     userAccessToken: string) : Promise<GetThreadResponse> => {
     const url = getGraphApiChatThreadWithMemberUrl(threadId);
-
+    
     const httpRequest: IHttpRequest = {
         headers: {
             'Content-Type': 'application/json',
@@ -464,16 +442,16 @@ export const getChatThreadWithMembersAsync = async (
     const response = await http.get(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Get chat thread failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
 
         let memberIds : string[] | undefined = undefined;
 
-        const jsonMembers = responseBody.members as any[];
+        const jsonMembers = jsonBody.members as any[];
         if (jsonMembers) {
             memberIds = [];
             for (const jsonMember of jsonMembers) {
@@ -482,9 +460,9 @@ export const getChatThreadWithMembersAsync = async (
         }
 
         const result : GetThreadResponse = {
-            threadId: responseBody.id,
-            topic: responseBody.topic,
-            type: parseThreadType(responseBody.chatType),
+            threadId: jsonBody.id,
+            topic: jsonBody.topic,
+            type: parseThreadType(jsonBody.chatType),
             memberIds: memberIds,
         };
 
@@ -538,13 +516,13 @@ export const listMembersInChatThreadAsync = async (
     const response = await http.get(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('List members in chat thread failed!');
         }
 
-
-        const userList = responseBody.value as any[];
+        const jsonBody = JSON.parse(responseBody);
+        const userList = jsonBody.value as any[];
 
         const result : string[] = [];
 
@@ -605,14 +583,14 @@ export const sendTextMessageToChatThreadAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.CREATED) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Send message to chat thread failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : SendMessageResponse = {
-            messageId: responseBody.id,
+            messageId: jsonBody.id,
         };
 
         return result;
@@ -648,14 +626,14 @@ export const sendFileMessageToChatThreadAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.CREATED) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Send file message to chat thread failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : SendMessageResponse = {
-            messageId: responseBody.id,
+            messageId: jsonBody.id,
         };
 
         return result;
@@ -733,14 +711,16 @@ export const getMessageWithResourceStringAsync = async (
     const response = await http.get(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Get message with resource string failed!');
         }
 
+        const jsonBody = JSON.parse(responseBody);
+
         let attachments : Attachment[] | undefined = undefined;
 
-        const jsonAttachments = responseBody.attachments as any[];
+        const jsonAttachments = jsonBody.attachments as any[];
         if (jsonAttachments && jsonAttachments.length > 0) {
             attachments = [];
             for (const jsonAttachment of jsonAttachments) {
@@ -754,24 +734,24 @@ export const getMessageWithResourceStringAsync = async (
             }
         }
 
-        const messageType = parseMessageType(responseBody.messageType, responseBody.eventDetail);
+        const messageType = parseMessageType(jsonBody.messageType, jsonBody.eventDetail);
 
         let memberIds : string[] | undefined = undefined;
         if (messageType === MessageType.SystemAddMembers) {
             memberIds = [];
-            const jsonMembers = responseBody.eventDetail.members as any[];
+            const jsonMembers = jsonBody.eventDetail.members as any[];
             for (const jsonMember of jsonMembers) {
                 memberIds.push(jsonMember.id);
             }
         }
 
         const result : GetMessageResponse = {
-            threadId: responseBody.chatId,
-            messageId: responseBody.id,
+            threadId: jsonBody.chatId,
+            messageId: jsonBody.id,
             messageType: messageType,
-            fromUserTeamsId: responseBody.from?.user?.id,
-            messageContentType: parseMessageContentType(responseBody.body?.contentType),
-            messageContent: responseBody.body?.content,
+            fromUserTeamsId: jsonBody.from?.user?.id,
+            messageContentType: parseMessageContentType(jsonBody.body?.contentType),
+            messageContent: jsonBody.body?.content,
             attachments: attachments,
             memberIds: memberIds,
         };
@@ -786,7 +766,7 @@ export const listSubscriptionsAsync = async (
     http: IHttp,
     userAccessToken: string) : Promise<string[] | undefined> => {
     const url = getGraphApiSubscriptionUrl();
-
+    
     const httpRequest: IHttpRequest = {
         headers: {
             'Content-Type': 'application/json',
@@ -797,25 +777,25 @@ export const listSubscriptionsAsync = async (
     const response = await http.get(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('List subscriptions failed!');
         }
 
-        // let result : string[] | undefined = undefined;
+        const jsonBody = JSON.parse(responseBody);
+        let result : string[] | undefined = undefined;
 
-        // const jsonValues = responseBody.value as any[];
-        // if (jsonValues && jsonValues.length > 0) {
-        //     result = [];
-        //     for (const value of jsonValues) {
-        //         result.push(value.id);
-        //     }
-        // }
-
-        return (response.data as SubscriptionsResponse).value.map(subscribeValue => subscribeValue.id);
+        const jsonValues = jsonBody.value as any[];
+        if (jsonValues && jsonValues.length > 0) {
+            result = [];
+            for (const value of jsonValues) {
+                result.push(value.id);
+            }
+        }
+    
+        return result;
     } else {
-        console.error(`List subscriptions failed with http status code ${response.statusCode}.`);
-        return
+        throw new Error(`List subscriptions failed with http status code ${response.statusCode}.`);
     }
 };
 
@@ -823,8 +803,7 @@ export const renewSubscriptionAsync = async (
     http: IHttp,
     subscriptionId: string,
     userAccessToken: string,
-    expirationDateTime?: Date) : Promise<SubscriptionResponse|undefined> => {
-
+    expirationDateTime?: Date) : Promise<SubscriptionResponse> => {
     if (!expirationDateTime) {
         expirationDateTime = new Date();
         expirationDateTime.setSeconds(expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond);
@@ -847,45 +826,22 @@ export const renewSubscriptionAsync = async (
     const response = await http.patch(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Renew subscription failed!');
         }
 
+        const jsonBody = JSON.parse(responseBody);
         const result : SubscriptionResponse = {
-            subscriptionId: responseBody.id,
-            expirationTime: new Date(responseBody.expirationDateTime),
+            subscriptionId: jsonBody.id,
+            expirationTime: new Date(jsonBody.expirationDateTime),
         };
-
+    
         return result;
     } else {
-        console.error(`Renew subscription failed with http status code ${response.statusCode}.`);
-        return
+        throw new Error(`Renew subscription failed with http status code ${response.statusCode}.`);
     }
 };
-
-export const deleteAllSubscriptions = async (http: IHttp, userAccessToken: string) => {
-    // Delete all subscriptions
-    const subscriptionsId = await listSubscriptionsAsync(
-        http,
-        userAccessToken
-    );
-    if (subscriptionsId) {
-        for (const subscriptionId of subscriptionsId) {
-            try {
-                await deleteSubscriptionAsync(
-                    http,
-                    subscriptionId,
-                    userAccessToken
-                );
-            } catch (error) {
-                console.error(
-                    `Error during delete subscription, will ignore and continue. ${error}`
-                );
-            }
-        }
-    }
-}
 
 export const deleteSubscriptionAsync = async (
     http: IHttp,
@@ -931,7 +887,7 @@ export const subscribeToAllMessagesForOneUserAsync = async (
         'includeResourceData': false,
         'expirationDateTime': expirationDateTime.toISOString()
     };
-
+    
     const httpRequest: IHttpRequest = {
         headers: {
             'Content-Type': 'application/json',
@@ -943,17 +899,17 @@ export const subscribeToAllMessagesForOneUserAsync = async (
     const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.CREATED) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Subscribe to notification for user failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : SubscriptionResponse = {
-            subscriptionId: responseBody.id,
-            expirationTime: new Date(responseBody.expirationDateTime),
+            subscriptionId: jsonBody.id,
+            expirationTime: new Date(jsonBody.expirationDateTime),
         };
-
+    
         return result;
     } else {
         throw new Error(`Subscribe to notification for user failed with http status code ${response.statusCode}.`);
@@ -1006,18 +962,18 @@ export const uploadFileToOneDriveAsync = async(
         const response = await http.put(url, httpRequest);
 
         if ([HttpStatusCode.CREATED, HttpStatusCode.OK].includes(response.statusCode)) {
-            const responseBody = response.data;
+            const responseBody = response.content;
             if (responseBody === undefined) {
                 throw new Error('Upload file to one drive failed!');
             }
 
-
+            const jsonBody = JSON.parse(responseBody);
             const result : UploadFileResponse = {
-                driveItemId: responseBody.id,
-                fileName: responseBody.name,
-                size: responseBody.size,
+                driveItemId: jsonBody.id,
+                fileName: jsonBody.name,
+                size: jsonBody.size,
             };
-
+        
             return result;
         } else {
             throw new Error(`Upload file to one drive failed with http status code ${response.statusCode}.`);
@@ -1050,17 +1006,17 @@ export const shareOneDriveFileAsync = async (
     const response = await http.post(url, httpRequest);
 
     if ([HttpStatusCode.CREATED, HttpStatusCode.OK].includes(response.statusCode)) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Create share link for onedrive item failed!');
         }
 
-
+        const jsonBody = JSON.parse(responseBody);
         const result : ShareOneDriveFileResponse = {
-            shareId: responseBody.id,
-            shareLink: responseBody.link.webUrl,
+            shareId: jsonBody.id,
+            shareLink: jsonBody.link.webUrl,
         };
-
+    
         return result;
     } else {
         throw new Error(`Create share link for onedrive item failed with http status code ${response.statusCode}.`);
@@ -1083,14 +1039,14 @@ export const getOneDriveFileLinkAsync = async (
     const response = await http.get(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
+        const responseBody = response.content;
         if (responseBody === undefined) {
             throw new Error('Get one drive file link failed!');
         }
 
+        const jsonBody = JSON.parse(responseBody);
 
-
-        const result : string = responseBody.webUrl as string;
+        const result : string = jsonBody.webUrl as string;
 
         return result;
     } else {

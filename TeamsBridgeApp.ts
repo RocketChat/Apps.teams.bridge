@@ -70,7 +70,6 @@ import {
     handlePreMessageOperationPreventAsync,
     handlePreMessageSentPreventAsync,
     handlePreRoomUserLeaveAsync,
-    handleUninstallApp,
     handleUserRegistrationAutoRenewAsync,
   } from './lib/EventHandler';
 import { getRocketChatAppEndpointUrl } from './lib/UrlHelper';
@@ -118,7 +117,7 @@ export class TeamsBridgeApp
       persistence: IPersistence,
       modify: IModify,
     ): Promise<void> {
-      return handleUninstallApp(read, http, modify, this)
+      this.deleteAppUsers(modify);
     }
 
     public async executePreMessageSentPrevent(

@@ -121,14 +121,14 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 http,
                 userAccessToken
             );
-            if (!subscriptions || subscriptions.length === 0) {
+            if (!subscriptions || subscriptions.length == 0) {
                 const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(
                     this.app.getAccessors(),
                     SubscriberEndpointPath
                 );
 
                 // Async operation to create subscription
-                await subscribeToAllMessagesForOneUserAsync(
+                subscribeToAllMessagesForOneUserAsync(
                     http,
                     rocketChatUserId,
                     teamsUserProfile.id,
