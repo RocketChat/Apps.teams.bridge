@@ -103,7 +103,7 @@ export const TeamsAppUserNameSurfix = 'msteams.alias';
 
 export const RegistrationAutoRenewSchedulerId = 'registration.auto.renew.scheduler';
 
-export const RegistrationAutoRenewInterval = '10 seconds';
+export const RegistrationAutoRenewInterval = '1800 seconds';
 
 export const DefaultThreadName = 'Rocket.Chat interop group';
 

@@ -23,7 +23,6 @@ import {
     DefaultThreadName,
     LoggedInBridgeUserRequiredHintMessageText,
     LoginRequiredHintMessageText,
-    SubscriberEndpointPath,
     UnsupportedScenarioHintMessageText,
 } from "./Const";
 import {
@@ -36,6 +35,7 @@ import {
     addMemberToChatThreadAsync,
     createChatThreadAsync,
     createOneOnOneChatThreadAsync,
+    deleteAllSubscriptions,
     deleteTextMessageInChatThreadAsync,
     listMembersInChatThreadAsync,
     listSubscriptionsAsync,
@@ -51,16 +51,14 @@ import {
 } from "./MicrosoftGraphApi";
 import {
     checkDummyUserByRocketChatUserIdAsync,
-    doesMessageFootPrintExists,
     generateMessageFootprint,
-    getLastBridgedMessageFootprint,
     getMessageFootPrintExistenceInfo,
-    isLastMessageAlreadySent,
     persistMessageIdMappingAsync,
     persistOneDriveFileAsync,
     persistRoomAsync,
     persistUserAccessTokenAsync,
     retrieveAllUserRegistrationsAsync,
+    retrieveAllUsersAccessTokenAsync,
     retrieveDummyUserByRocketChatUserIdAsync,
     retrieveDummyUserByTeamsUserIdAsync,
     retrieveLoginMessageSentStatus,
@@ -69,14 +67,14 @@ import {
     retrieveRoomByRocketChatRoomIdAsync,
     retrieveUserAccessTokenAsync,
     retrieveUserByRocketChatUserIdAsync,
-    retrieveUserByTeamsUserIdAsync,
     retrieveUserRefreshTokenAsync,
-    saveLastBridgedMessage,
     saveLastBridgedMessageFootprint,
     saveLoginMessageSentStatus,
     UserModel,
 } from "./PersistHelper";
 import { getLoginUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
+
+let wasPrevent = false
 
 export const handlePreMessageSentPreventAsync = async (
     message: IMessage,
@@ -123,6 +121,21 @@ export const handlePreMessageSentPreventAsync = async (
             roomType === RoomType.PRIVATE_GROUP ||
             roomType === RoomType.DIRECT_MESSAGE
         ) {
+            const messageFootprintInfo =  await getMessageFootPrintExistenceInfo(message, read)
+
+            if (messageFootprintInfo?.itDoesMessageFootprintExists) {
+                // This message has already been processed, prevent recursion
+                wasPrevent = true
+                return true;
+            } else {
+                const messageFootprint = generateMessageFootprint(message, message.room, message.sender)
+
+                await saveLastBridgedMessageFootprint({
+                    messageFootprint,
+                    persistence,
+                    rocketChatUserId: message.sender.id
+                })
+            }
             // If room type is PRIVATE_GROUP or DIRECT_MESSAGE, check if there's any dummy user in the room
             const members = await read.getRoomReader().getMembers(message.room.id);
 
@@ -141,16 +154,6 @@ export const handlePreMessageSentPreventAsync = async (
                 );
 
                 if (roomRecord) {
-                    const messageFootprintInfo = await getMessageFootPrintExistenceInfo(message, read)
-                    console.log("🚀 ~ file: PRE EventHandler.ts:145 ~ messageFootprintInfo:", messageFootprintInfo)
-
-                    if (messageFootprintInfo.itDoesMessageFootprintExists) {
-                        console.log("🚀 ~ file: PRE EventHandler.ts:148 ~ messageFootprintInfo.itDoesMessageFootprintExists:", messageFootprintInfo.itDoesMessageFootprintExists)
-                        // This message has already been processed, prevent recursion
-                        return true;
-                    }
-
-
                     // If there's an existing room record, check whether it has a bridge user
                     if (roomRecord.bridgeUserRocketChatUserId) {
 
@@ -280,35 +283,14 @@ export const handlePostMessageSentAsync = async (
         members
     );
     if (dummyUsers && dummyUsers.length > 0) {
+
+
         const messageFootprintInfo =  await getMessageFootPrintExistenceInfo(message, read)
-        console.log("🚀 ~ file: POST EventHandler.ts:284 ~ messageFootprintInfo:", messageFootprintInfo)
 
-        // if (messageFootprintInfo.itDoesMessageFootprintExists) {
-        //     // This message has already been processed, prevent recursion
-        //     return;
-        // }
-
-        await saveLastBridgedMessageFootprint({
-            messageFootprint: messageFootprintInfo.messageFootprint,
-            persistence,
-            rocketChatUserId: message.sender.id
-        })
-
-        // If there's any dummy user in the room, this is a Teams interop chat room
-        // Sanity check has been done in PreMessageSentPrevent for Teams interop scenarios
-
-        // There should be a room record in persist with a bridge user assigned
-
-
-        // const isLastMessageSent = await isLastMessageAlreadySent({
-        //     read,
-        //     rocketChatUserId: message.sender.id ,
-        //     message
-        // });
-
-        // if (isLastMessageSent) {
-        //     return;
-        // }
+        if (wasPrevent) {
+            // This message has already been processed, prevent recursion
+            return;
+        }
 
         const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(
             read,
@@ -343,6 +325,7 @@ export const handlePostMessageSentAsync = async (
 
         if (!roomRecord.teamsThreadId) {
             // Not yet a thread exist in Teams side, create one & persist in room record
+
             if (
                 message.room.type === RoomType.DIRECT_MESSAGE &&
                 members.length === 2
@@ -466,17 +449,12 @@ export const handlePostMessageSentAsync = async (
             rocketChatMessageId = message.id as string;
         }
 
-        await Promise.all([
-            persistMessageIdMappingAsync(
-                persistence,
-                rocketChatMessageId,
-                teamsMessageId,
-                roomRecord.teamsThreadId
-            ),
-            saveLastBridgedMessage({ persistence, rocketChatUserId: message.sender.id, message })
-        ])
-
-
+        await persistMessageIdMappingAsync(
+            persistence,
+            rocketChatMessageId,
+            teamsMessageId,
+            roomRecord.teamsThreadId
+        )
     }
 };
 
@@ -1058,4 +1036,39 @@ const notifyNotLoggedInUserAsync = async (
     );
 
     await notifyRocketChatUserAsync(message, user, read.getNotifier());
+};
+
+const deleteAllUsersSubscriptions = async (read: IRead, http: IHttp) => {
+    const allRegisteredUsersAccessToken = await retrieveAllUsersAccessTokenAsync(read);
+
+    if (!allRegisteredUsersAccessToken) {
+        return;
+    }
+
+    const deletePromises = allRegisteredUsersAccessToken.map(async (registeredUsersAccessToken) => {
+        try {
+            await deleteAllSubscriptions(http, registeredUsersAccessToken);
+        } catch (error) {
+            console.error(`Error deleting subscriptions for user: ${error.message}`);
+        }
+    });
+
+    await Promise.all(deletePromises); // Wait for all deletions to complete
+};
+
+export const handleUninstallApp = async (
+    read: IRead,
+    http: IHttp,
+    modify: IModify,
+    app: TeamsBridgeApp
+) => {
+    try {
+        await Promise.all([
+            app.deleteAppUsers(modify),
+            deleteAllUsersSubscriptions(read, http),
+        ]);
+
+    } catch (error) {
+        console.error(`Error during app uninstallation: ${error.message}`);
+    }
 };

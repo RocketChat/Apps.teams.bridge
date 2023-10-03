@@ -7,23 +7,19 @@ import {
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { syncAllTeamsBotUsersAsync } from "./AppUserHelper";
-import { DefaultTeamName, DefaultThreadName } from "./Const";
+import { DefaultTeamName } from "./Const";
 import {
     mapTeamsMessageToRocketChatMessage,
     sendRocketChatMessageInRoomAsync,
-    sendRocketChatOneOnOneMessageAsync,
 } from "./MessageHelper";
 import {
     getChatThreadWithMembersAsync,
     getMessageWithResourceStringAsync,
-    MessageContentType,
     MessageType,
     ThreadType,
 } from "./MicrosoftGraphApi";
 import {
     UserModel,
-    getMessageFootPrintExistenceInfo,
-    isLastMessageAlreadySent,
     persistMessageIdMappingAsync,
     persistRoomAsync,
     retrieveDummyUserByTeamsUserIdAsync,
@@ -31,8 +27,6 @@ import {
     retrieveRoomByTeamsThreadIdAsync,
     retrieveUserAccessTokenAsync,
     retrieveUserByTeamsUserIdAsync,
-    saveLastBridgedMessage,
-    saveLastBridgedMessageFootprint,
 } from "./PersistHelper";
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 
@@ -63,7 +57,6 @@ export const handleInboundNotificationAsync = async (
     persis: IPersistence,
     appId: string
 ): Promise<void> => {
-    console.log("🚀 ~ file: InboundNotificationHelper.ts:66 ~ inBoundNotification:", inBoundNotification)
     const receiverRocketChatUserId =
         inBoundNotification.receiverRocketChatUserId;
     if (!receiverRocketChatUserId) {
@@ -133,7 +126,6 @@ const handleInboundMessageCreatedAsync = async (
     persis: IPersistence,
     appId: string
 ): Promise<void> => {
-    console.log("🚀 ~ file: InboundNotificationHelper.ts:135 ~ inBoundNotification:", inBoundNotification)
     const receiverRocketChatUserId =
         inBoundNotification.receiverRocketChatUserId;
     const resourceString = inBoundNotification.resourceString;
@@ -293,7 +285,6 @@ const handleInboundMessageCreatedAsync = async (
                 fromUserTeamsId,
                 http
             });
-            console.log("🚀 ~ file: InboundNotificationHelper.ts:292 ~ senderUser:", senderUser)
 
             if (!senderUser) {
                 throw new Error('No user found to send the message');
@@ -307,29 +298,6 @@ const handleInboundMessageCreatedAsync = async (
                 http,
                 modify
             );
-            console.log("🚀 ~ file: InboundNotificationHelper.ts:306 ~ messageText:", messageText)
-
-            const messageInfo = {
-                text: messageText,
-                room,
-                file: {
-                    name: getMessageResponse?.attachments ? getMessageResponse.attachments[0].name : '',
-                }
-            } as IMessage;
-            console.log("🚀 ~ file: InboundNotificationHelper.ts:315 ~ messageInfo:", messageInfo)
-
-            console.log("🚀 ~ file: InboundNotificationHelper.ts:319 ~ fromUserRocketChatUser:", !!fromUserRocketChatUser)
-            // if (fromUserRocketChatUser) {
-            //     const messageFootprintInfo =  await getMessageFootPrintExistenceInfo(messageInfo, read)
-            //     console.log("🚀 ~ file: InboundNotificationHelper.ts:322 ~ messageFootprintInfo:", messageFootprintInfo)
-
-            //     if (messageFootprintInfo.itDoesMessageFootprintExists) {
-            //         console.log("🚀 ~ file: InboundNotificationHelper.ts:325 ~ messageFootprintInfo.itDoesMessageFootprintExists:", messageFootprintInfo.itDoesMessageFootprintExists)
-            //         // This message has already been processed, prevent recursion
-            //         return;
-            //     }
-            // }
-
 
             if (messageText === "") {
                 // File message, no text content
@@ -450,7 +418,6 @@ const getSenderUser = async ({
         http: IHttp
 }) => {
     if (fromUserRocketChatUser) {
-        console.log("🚀 ~ file: InboundNotificationHelper.ts:282 ~ fromUserRocketChatUser:", fromUserRocketChatUser)
         const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
         if (roomMembers && roomMembers.find((user) => user.id === fromUserRocketChatUser.rocketChatUserId)) {
             return read.getUserReader().getById(fromUserRocketChatUser.rocketChatUserId);
