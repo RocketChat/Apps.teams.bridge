@@ -574,7 +574,7 @@ export const retrieveAllUsersAccessTokenAsync = async (
     const persistenceRead: IPersistenceRead = read.getPersistenceReader();
     const results = await persistenceRead.readByAssociations(associations) as Array<UserRegistrationModel>;
 
-    if (results === undefined || results === null || results.length == 0) {
+    if (results == null || results.length == 0) {
         return null;
     }
 
@@ -1099,12 +1099,10 @@ export const saveLastBridgedMessageFootprint = async ({
     persistence,
     rocketChatUserId,
     messageFootprint,
-    // source
 }: {
     messageFootprint: string
     persistence: IPersistence,
     rocketChatUserId: string;
-    // source: 'rocket.chat' | 'msteams'
 }): Promise<string> => {
     const associations: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(
@@ -1193,6 +1191,7 @@ export const getMessageFootPrintExistenceInfo = async (message: IMessage, read: 
         }
 
     } catch (error) {
+        console.error("An error occured when trying to get message footprint info", error)
         return
     }
 
