@@ -9,9 +9,9 @@ To enable Rocket.Chat and Microsoft Teams collaboration for your organization wi
 - On Rocket.Chat Marketplace, find the Teams Bridge App and install.
 - Navigate to App Admin Page, scroll to APIs, and copy `GET auth endpoint URL`. This endpoint URL will be used in following steps. If it’s a localhost url, tunnel service such as Ngrok is required to expose the localhost port to the internet.
 
-### 2. Setup an Azure Active Directory App for your organization
+### 2. Setup an Microsoft Entra ID App for your organization
 
-- Login to [Microsoft Azure Portal](portal.azure.com) with Microsoft Teams admin account of your organization. Find and select `Azure Active Directory` service with the search box.
+- Login to [Microsoft Azure Portal](portal.azure.com) with Microsoft Teams admin account of your organization. Find and select `Microsoft Entra ID` service with the search box.
 - Select `Add` => `App registration`.
 - Give your AAD App a name. Select `Accounts in this organizational directory only` for Supported account type. Select `Web` as Redirect URI type and paste `GET auth endpoint URL` (copied in previous step) of the TeamsBridge App here as value. Click Register to complete the registration.
 - An AAD App will be created after a while. Copy `Application (client) ID` and `Directory (tenant) ID` showed on the Overview page. Those IDs will be used in following steps. Then, select `Certificates & Secret` blade.
@@ -32,7 +32,7 @@ To enable Rocket.Chat and Microsoft Teams collaboration for your organization wi
 If the slash command `teamsbridge-setup-verification` prompts nagative result, you can try the following steps.
 
 - Make sure in Rocket.Chat App Info Settings page you see the correct value for `Directory (tenant) ID`, `Application (client) ID`, and `Client Secret`.
-- Make sure you gives all required permission on `Microsoft Azure Portal - Azure Active Directory - API permissions` blade.
+- Make sure you gives all required permission on `Microsoft Azure Portal - Microsoft Entra ID - API permissions` blade.
 
 ## Setup Microsoft Teams access for Rocket.Chat users in your organization
 
