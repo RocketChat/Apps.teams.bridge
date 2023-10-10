@@ -58,7 +58,7 @@ export const sendRocketChatMessageInRoomAsync = async (
     }
 
     const messageBuilder: IMessageBuilder = creator.startMessage(message as IMessage);
-    return await creator.finish(messageBuilder);
+    return creator.finish(messageBuilder);
 };
 
 export const notifyRocketChatUserInRoomAsync = async (
@@ -166,7 +166,7 @@ export const mapTeamsMessageToRocketChatMessage = (
                             const url = attachment.contentUrl;
 
                             downloadAttachmentFileFromExternalAndUploadToRocketChatAsync(url, fileName, accessToken, room, sender, http, modify);
-                           
+
                             return '';
                         }
                     }
@@ -241,7 +241,7 @@ const downloadInlineImgFromExternalAndUploadToRocketChatAsync = async (
             'Authorization': `Bearer ${accessToken}`,
         };
     }
-    
+
     const response = await http.get(url, httpRequest);
     let fileMIMEType = '';
     if (response.headers) {
@@ -249,7 +249,7 @@ const downloadInlineImgFromExternalAndUploadToRocketChatAsync = async (
     }
     const imgStr = response.content as string;
     const buff = Buffer.from(imgStr, 'binary');
-    
+
     const uploadCreator = modify.getCreator().getUploadCreator();
     const imgInfo: IUploadDescriptor = {
         filename: `${fileName}.${fileMIMEType.split('/')[1]}`,

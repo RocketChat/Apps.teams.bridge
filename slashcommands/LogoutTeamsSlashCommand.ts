@@ -15,8 +15,7 @@ import {
 } from '../lib/Const';
 import { notifyRocketChatUserInRoomAsync } from '../lib/MessageHelper';
 import {
-    deleteSubscriptionAsync,
-    listSubscriptionsAsync,
+    deleteAllSubscriptions,
     revokeUserRefreshTokenAsync,
 } from '../lib/MicrosoftGraphApi';
 import {
@@ -82,6 +81,8 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
             return;
         }
 
+        await deleteAllSubscriptions(http, userAccessToken);
+
         // Revoke refresh token
         try {
             await revokeUserRefreshTokenAsync(http, userAccessToken);
@@ -90,27 +91,6 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
                 `Error during user log out revoking user refresh token. ${error}`
             );
             console.error('This error will be ignored and continue log out.');
-        }
-
-        // Delete all subscriptions
-        const subscriptionIds = await listSubscriptionsAsync(
-            http,
-            userAccessToken
-        );
-        if (subscriptionIds) {
-            for (const subscriptionId of subscriptionIds) {
-                try {
-                    await deleteSubscriptionAsync(
-                        http,
-                        subscriptionId,
-                        userAccessToken
-                    );
-                } catch (error) {
-                    console.error(
-                        `Error during delete subscription, will ignore and continue. ${error}`
-                    );
-                }
-            }
         }
 
         await Promise.all([

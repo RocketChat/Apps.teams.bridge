@@ -7,20 +7,19 @@ import {
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { syncAllTeamsBotUsersAsync } from "./AppUserHelper";
-import { DefaultTeamName, DefaultThreadName } from "./Const";
+import { DefaultTeamName } from "./Const";
 import {
     mapTeamsMessageToRocketChatMessage,
     sendRocketChatMessageInRoomAsync,
-    sendRocketChatOneOnOneMessageAsync,
 } from "./MessageHelper";
 import {
     getChatThreadWithMembersAsync,
     getMessageWithResourceStringAsync,
-    MessageContentType,
     MessageType,
     ThreadType,
 } from "./MicrosoftGraphApi";
 import {
+    UserModel,
     persistMessageIdMappingAsync,
     persistRoomAsync,
     retrieveDummyUserByTeamsUserIdAsync,
@@ -29,6 +28,7 @@ import {
     retrieveUserAccessTokenAsync,
     retrieveUserByTeamsUserIdAsync,
 } from "./PersistHelper";
+import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 
 export enum NotificationChangeType {
     Created = "created",
@@ -265,7 +265,7 @@ const handleInboundMessageCreatedAsync = async (
         if (getMessageResponse.messageType === MessageType.Message) {
             const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
             if (!fromUserTeamsId) {
-                // If there's not a sender, stop processing
+                // If there's no sender, stop processing
                 console.error("No sender for message");
                 return;
             }
@@ -274,58 +274,27 @@ const handleInboundMessageCreatedAsync = async (
                 read,
                 fromUserTeamsId
             );
-            if (fromUserRocketChatUser) {
-                // If this message is sent from a Teams user that his/her corresponding real Rocket Chat user is in current room, stop processing
-                const roomMembers = await read
-                    .getRoomReader()
-                    .getMembers(roomRecord.rocketChatRoomId);
-                if (
-                    roomMembers &&
-                    roomMembers.find(
-                        (user) =>
-                            user.id === fromUserRocketChatUser.rocketChatUserId
-                    )
-                ) {
-                    console.log("Message not from dummy user!");
-                    return;
-                }
-            }
 
-            let fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(
+            const senderUser = await getSenderUser({
+                roomRecord,
+                fromUserRocketChatUser,
                 read,
-                fromUserTeamsId
-            );
-            if (!fromDummyUser) {
-                // There could be dummy user out of sync issue.
-                // If the dummy user has not been created for a recently added Teams user, we need to create dummy user on demand.
-                // Sync all Teams bot user
-                await syncAllTeamsBotUsersAsync(
-                    http,
-                    read,
-                    modify,
-                    persis,
-                    appId
-                );
-                fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(
-                    read,
-                    fromUserTeamsId
-                );
-                if (!fromDummyUser) {
-                    throw new Error(
-                        `Dummy user with Teams ID ${fromUserTeamsId} not found after try sync all Teams bot users!`
-                    );
-                }
-            }
+                persis,
+                modify,
+                appId,
+                fromUserTeamsId,
+                http
+            });
 
-            const sender: IUser = await read
-                .getUserReader()
-                .getById(fromDummyUser.rocketChatUserId);
+            if (!senderUser) {
+                throw new Error('No user found to send the message');
+            }
 
             const messageText = mapTeamsMessageToRocketChatMessage(
                 getMessageResponse,
                 userAccessToken,
                 room,
-                sender,
+                senderUser,
                 http,
                 modify
             );
@@ -337,16 +306,18 @@ const handleInboundMessageCreatedAsync = async (
 
             const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(
                 messageText,
-                sender,
+                senderUser,
                 room,
                 modify
             );
+
             await persistMessageIdMappingAsync(
                 persis,
                 rocketChatMessageId,
                 getMessageResponse.messageId,
                 getMessageResponse.threadId
             );
+
         } else if (
             getMessageResponse.messageType === MessageType.SystemAddMembers
         ) {
@@ -426,6 +397,47 @@ const handleInboundMessageCreatedAsync = async (
         console.log("Unsupported message type.");
     }
 };
+
+const getSenderUser = async ({
+        roomRecord,
+        fromUserRocketChatUser,
+        read,
+        persis,
+        modify,
+        appId,
+        fromUserTeamsId,
+        http
+    }: {
+        roomRecord: any,
+        fromUserRocketChatUser: UserModel | null,
+        read: IRead,
+        persis: IPersistence,
+        modify: IModify,
+        appId: string,
+        fromUserTeamsId: string,
+        http: IHttp
+}) => {
+    if (fromUserRocketChatUser) {
+        const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
+        if (roomMembers && roomMembers.find((user) => user.id === fromUserRocketChatUser.rocketChatUserId)) {
+            return read.getUserReader().getById(fromUserRocketChatUser.rocketChatUserId);
+        }
+    }
+
+    let fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
+    if (!fromDummyUser) {
+        // There could be a dummy user out of sync issue.
+        // If the dummy user has not been created for a recently added Teams user, we need to create the dummy user on demand.
+        // Sync all Teams bot users
+        await syncAllTeamsBotUsersAsync(http, read, modify, persis, appId);
+        fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
+        if (!fromDummyUser) {
+            throw new Error(`Dummy user with Teams ID ${fromUserTeamsId} not found after trying to sync all Teams bot users!`);
+        }
+    }
+    return read.getUserReader().getById(fromDummyUser.rocketChatUserId);
+
+}
 
 const handleInboundMessageUpdatedAsync = async (
     userAccessToken: string,

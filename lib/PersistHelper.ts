@@ -3,10 +3,14 @@ import {
     IPersistenceRead,
     IRead,
 } from '@rocket.chat/apps-engine/definition/accessors';
+import { IMessage } from '@rocket.chat/apps-engine/definition/messages';
 import {
     RocketChatAssociationModel,
     RocketChatAssociationRecord,
 } from '@rocket.chat/apps-engine/definition/metadata';
+import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
+import { IUser } from '@rocket.chat/apps-engine/definition/users';
+import * as sha256 from 'crypto-js/sha256';
 
 const MiscKeys = {
     ApplicationAccessToken: 'ApplicationAccessToken',
@@ -19,6 +23,9 @@ const MiscKeys = {
     TeamsUserProfile: 'TeamsUserProfile',
     OneDriveFile: 'OneDriveFile',
     LoginMessage: 'LoginMessage',
+    BridgedMessage: 'BridgedMessage',
+    BridgedMessageFootprint: 'BridgedMessageFootprint',
+
 };
 
 interface ApplicationAccessTokenModel {
@@ -554,6 +561,26 @@ export const retrieveUserAccessTokenAsync = async (
     return data.accessToken;
 };
 
+export const retrieveAllUsersAccessTokenAsync = async (
+    read: IRead,
+): Promise<Array<string> | null> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.UserRegistration
+        ),
+    ];
+
+    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociations(associations) as Array<UserRegistrationModel>;
+
+    if (results == null || results.length == 0) {
+        return null;
+    }
+
+    return results.map((result) => result.accessToken);
+};
+
 export const retrieveUserRefreshTokenAsync = async (
     read: IRead,
     persistence: IPersistence,
@@ -618,22 +645,13 @@ export const retrieveAllUserRegistrationsAsync = async (
         return null;
     }
 
-    const data: Array<UserRegistrationModel> = [];
-
     const now = new Date();
     const epochInSecond = Math.round(now.getTime() / 1000);
-    for (const result of results) {
-        const registration = result as UserRegistrationModel;
-        if (
-            !registration.extExpires ||
-            epochInSecond > registration.extExpires
-        ) {
-            continue;
-        }
-        data.push(registration);
-    }
 
-    return data;
+    return (results as Array<UserRegistrationModel>).filter((registration) => {
+        return registration.extExpires && epochInSecond <= registration.extExpires;
+    });
+
 };
 
 export const retrieveSubscriptionAsync = async (
@@ -1001,3 +1019,180 @@ export const retrieveLoginMessageSentStatus = async ({
 
     return result[0].isLoginMessageSent;
 };
+
+type LastBridgedMessageInfo = {
+    senderId: string,
+    text: string,
+    roomId: string,
+    fileName: string,
+}
+
+export const getLastBridgedMessage = async ({
+    read,
+    rocketChatUserId,
+}: {
+    read: IRead;
+    rocketChatUserId: string;
+}): Promise<LastBridgedMessageInfo | null> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.BridgedMessage
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            rocketChatUserId
+        ),
+    ];
+
+    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
+
+    const result = (await persistenceRead.readByAssociations(
+        associations
+    )) as unknown as Array<LastBridgedMessageInfo>;
+
+    if (!result) {
+        return null;
+    }
+
+    return result[0];
+};
+
+const simpleHash = (input: string): string => sha256(input).toString()
+
+const calculatePriorityDate = (message: IMessage) => {
+    const currentDate = new Date();
+    let priorityDate = currentDate;
+
+    if (message.updatedAt) {
+      const updatedAtDate = new Date(message.updatedAt);
+      if (!isNaN(updatedAtDate.getTime())) {
+        priorityDate = updatedAtDate;
+      }
+    } else if (message.createdAt) {
+      const createdAtDate = new Date(message.createdAt);
+      if (!isNaN(createdAtDate.getTime())) {
+        priorityDate = createdAtDate;
+      }
+    }
+
+    return priorityDate;
+  }
+
+export const generateMessageFootprint = (message: IMessage, room: IRoom, sender: IUser): string => {
+    const dateObject = calculatePriorityDate(message);
+    dateObject.setSeconds(0);
+    dateObject.setMilliseconds(0);
+
+    const timestamp = dateObject.getTime();
+    const messageProperties = `${message.text}${timestamp}`;
+    const roomProperties = `${room.id}${room.type}${room.displayName}`;
+
+    const senderProperties = `${sender.id}${sender.username}`;
+
+    const combinedProperties = `${messageProperties}${roomProperties}${senderProperties}`;
+
+    return simpleHash(combinedProperties);
+}
+
+export const saveLastBridgedMessageFootprint = async ({
+    persistence,
+    rocketChatUserId,
+    messageFootprint,
+}: {
+    messageFootprint: string
+    persistence: IPersistence,
+    rocketChatUserId: string;
+}): Promise<string> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.BridgedMessageFootprint
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            rocketChatUserId
+        ),
+    ];
+
+    return persistence.updateByAssociations(
+        associations,
+        { messageFootprint, createdAt: new Date().toString() },
+        true
+    );
+};
+
+export type MessageFootprintInfo = {
+    messageFootprint: string
+    createdAt: string
+}
+
+export const getLastBridgedMessageFootprint = async (
+    {
+        read,
+        rocketChatUserId,
+    }: {
+        read: IRead,
+        rocketChatUserId: string;
+    }
+): Promise<MessageFootprintInfo> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.BridgedMessageFootprint
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            rocketChatUserId
+        ),
+    ];
+
+    return (await read.getPersistenceReader().readByAssociations(associations)).shift() as MessageFootprintInfo
+}
+
+export const doesMessageFootPrintExists = async (
+    {
+        currentMessageFootprint,
+        storedMessageFootprintInfo
+    }:
+    {
+        currentMessageFootprint: string,
+        storedMessageFootprintInfo: MessageFootprintInfo
+    }
+) => {
+    return currentMessageFootprint === storedMessageFootprintInfo.messageFootprint
+};
+
+export const getMessageFootPrintExistenceInfo = async (message: IMessage, read: IRead):
+    Promise<{
+        itDoesMessageFootprintExists: boolean,
+        messageFootprint: string
+    } | undefined> => {
+
+    try {
+        const rocketChatUserId =  message.sender.id
+        const storedMessageFootprintInfo = await getLastBridgedMessageFootprint({
+            rocketChatUserId,
+            read,
+        });
+
+        if (!storedMessageFootprintInfo) return;
+
+        const currentMessageFootprint = generateMessageFootprint(message, message.room, message.sender);
+
+        // Check if the message's footprint exists in the database and returns
+        const itDoesMessageFootprintExists = await doesMessageFootPrintExists({
+            currentMessageFootprint, storedMessageFootprintInfo
+        });
+
+        return {
+            itDoesMessageFootprintExists,
+            messageFootprint: currentMessageFootprint
+        }
+
+    } catch (error) {
+        console.error("An error occured when trying to get message footprint info", error)
+        return
+    }
+
+}
