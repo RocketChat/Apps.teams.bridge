@@ -135,6 +135,8 @@ export const handlePreMessageSentPreventAsync = async (
                     persistence,
                     rocketChatUserId: message.sender.id
                 })
+
+                wasPrevent = false
             }
             // If room type is PRIVATE_GROUP or DIRECT_MESSAGE, check if there's any dummy user in the room
             const members = await read.getRoomReader().getMembers(message.room.id);
