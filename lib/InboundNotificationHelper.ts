@@ -126,8 +126,7 @@ const handleInboundMessageCreatedAsync = async (
     persis: IPersistence,
     appId: string
 ): Promise<void> => {
-    const receiverRocketChatUserId =
-        inBoundNotification.receiverRocketChatUserId;
+    const receiverRocketChatUserId = inBoundNotification.receiverRocketChatUserId;
     const resourceString = inBoundNotification.resourceString;
     const getMessageResponse = await getMessageWithResourceStringAsync(
         http,
@@ -136,6 +135,13 @@ const handleInboundMessageCreatedAsync = async (
     );
 
     if (getMessageResponse.messageType) {
+        const storedMessageMap = await retrieveMessageIdMappingByTeamsMessageIdAsync(read, getMessageResponse.messageId);
+
+        if (storedMessageMap?.rocketChatMessageId) {
+            // An echo message. Should skip. Else this will create a loop.
+            return;
+        }
+
         let roomRecord = await retrieveRoomByTeamsThreadIdAsync(
             read,
             getMessageResponse.threadId

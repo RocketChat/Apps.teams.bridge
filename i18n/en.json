@@ -2,9 +2,12 @@
     "teamsbridge_aad_tenant_id": "Microsoft Entra Directory (tenant) ID",
     "teamsbridge_aad_client_id": "Microsoft Entra Application (client) ID",
     "teamsbridge_aad_client_secret": "Microsoft Entra Client Secret",
+    "teamsbridge_proxy_url": "Proxy URL",
+    "teamsbridge_proxy_url_description": "Specify a publicly accessible URL to be used as a proxy if Rocket.Chat is not directly accessible. This URL will replace the Site URL during webhook registration with Microsoft Teams. Example: https://proxy.mycompany.com",
     "setup_verification_slash_command_description": "Verify TeamsBridge app setup correcly for your organization",
     "login_teams_slash_command_description": "Login Teams to enable cross platform collaboration",
     "add_user_slash_command_description": "Add a Teams Bot user to current group chat",
     "provision_teams_bot_user_slash_command_description": "Create a Teams Bot user in Rocket.Chat for each Teams user in your organization",
-    "action_button_label_add_teams_user": "Add Teams user"
+    "action_button_label_add_teams_user": "Add Teams user",
+    "teamsbridge-resubscribe-messages_command_description": "Resubscribe to Teams messages if you are not receiving them"
 }

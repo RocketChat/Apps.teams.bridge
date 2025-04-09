@@ -4,6 +4,7 @@ export enum AppSetting {
     AadTenantId = 'teamsbridge_aad_tenant_id',
     AadClientId = 'teamsbridge_aad_client_id',
     AadClientSecret = 'teamsbridge_aad_client_secret',
+    ProxyUrl = 'teamsbridge_proxy_url',
 }
 
 export const settings: Array<ISetting> = [
@@ -31,4 +32,13 @@ export const settings: Array<ISetting> = [
         i18nLabel: AppSetting.AadClientSecret,
         required: true,
     },
+    {
+        id: AppSetting.ProxyUrl,
+        public: false,
+        type: SettingType.STRING,
+        packageValue: '',
+        i18nLabel: AppSetting.ProxyUrl,
+        i18nDescription: 'teamsbridge_proxy_url_description',
+        required: false,
+    }
 ];

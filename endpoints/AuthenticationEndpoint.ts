@@ -21,7 +21,6 @@ import {
 import {
     getUserAccessTokenAsync,
     getUserProfileAsync,
-    listSubscriptionsAsync,
     subscribeToAllMessagesForOneUserAsync,
 } from "../lib/MicrosoftGraphApi";
 import {
@@ -116,26 +115,21 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 }),
             ]);
 
-            // Only create subscription if there's no existing one to prevent error
-            const subscriptions = await listSubscriptionsAsync(
-                http,
-                userAccessToken
+            const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(
+                this.app.getAccessors(),
+                SubscriberEndpointPath
             );
-            if (!subscriptions || subscriptions.length === 0) {
-                const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(
-                    this.app.getAccessors(),
-                    SubscriberEndpointPath
-                );
 
-                // Async operation to create subscription
-                await subscribeToAllMessagesForOneUserAsync(
-                    http,
-                    rocketChatUserId,
-                    teamsUserProfile.id,
-                    subscriberEndpointUrl,
-                    userAccessToken
-                );
-            }
+            await subscribeToAllMessagesForOneUserAsync({
+                http,
+                read,
+                persis,
+                rocketChatUserId,
+                subscriberEndpointUrl,
+                teamsUserId: teamsUserProfile.id,
+                userAccessToken,
+                renewIfExists: true,
+            });
 
             return this.success(this.embeddedLoginSuccessMessage);
         } catch (error) {

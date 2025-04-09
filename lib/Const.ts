@@ -18,16 +18,20 @@ const GraphApiEndpoint = {
     Chat: 'chats',
     ChatThread: (threadId: string) => `chats/${threadId}`,
     ChatMember: (threadId: string) => `chats/${threadId}/members`,
-    RemoveChatMember: (threadId: string, userId: string) => `chats/${threadId}/members/${userId}`,
+    RemoveChatMember: (threadId: string, userId: string) =>
+        `chats/${threadId}/members/${userId}`,
     Message: (threadId: string) => `chats/${threadId}/messages`,
     DeleteMessage: (userId: string, threadId: string, messageId: string) =>
         `users/${userId}/chats/${threadId}/messages/${messageId}/softDelete`,
-    Subscription: 'subscriptions',
-    SubscriptionOperation: (subscriptionId: string) => `subscriptions/${subscriptionId}`,
+    Subscription: "subscriptions",
+    SubscriptionOperation: (subscriptionId: string) =>
+        `subscriptions/${subscriptionId}`,
     Share: (encodedUrl: string) => `shares/${encodedUrl}/driveItem/content`,
-    Upload: (filename: string) => `/me/drive/items/root:/rocketchatshare/${filename}:/content`,
+    Upload: (filename: string) =>
+        `/me/drive/items/root:/rocketchatshare/${filename}:/content`,
     OneDriveItem: (driveItemId: string) => `/me/drive/items/${driveItemId}`,
-    ShareLink: (driveItemId: string) => `/me/drive/items/${driveItemId}/createLink`,
+    ShareLink: (driveItemId: string) =>
+        `/me/drive/items/${driveItemId}/createLink`,
 };
 
 export const AppSetupVerificationPassMessageText: string = 'TeamsBridge app setup verification PASSED!';
@@ -105,6 +109,8 @@ export const RegistrationAutoRenewSchedulerId = 'registration.auto.renew.schedul
 
 export const RegistrationAutoRenewInterval = '1800 seconds';
 
+export const WebhookSecretCreationJobId = 'teamsbridge.secret.creation.job';
+
 export const DefaultThreadName = 'Rocket.Chat interop group';
 
 export const DefaultTeamName = 'TeamsInteropGroupChat';
@@ -135,7 +141,7 @@ export const getMicrosoftAuthorizeUrl = (aadTenantId: string) => {
 };
 
 export const getGraphApiRevokeRefreshTokenUrl = () => {
-    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.RevokeRefreshToken}`;
+    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.RevokeRefreshToken}?$format=json`;
 };
 
 export const getGraphApiProfileUrl = () => {

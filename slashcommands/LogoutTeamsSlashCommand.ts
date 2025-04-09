@@ -25,6 +25,8 @@ import {
     retrieveUserAccessTokenAsync,
     saveLoginMessageSentStatus,
 } from '../lib/PersistHelper';
+import { getNotificationEndpointUrl } from '../lib/UrlHelper';
+import { TeamsBridgeApp } from '../TeamsBridgeApp';
 
 export class LogoutTeamsSlashCommand implements ISlashCommand {
     public command: string = 'teamsbridge-logout-teams';
@@ -33,6 +35,8 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
 
     public permission?: string | undefined;
     public providesPreview: boolean = false;
+
+    public constructor(private readonly app: TeamsBridgeApp) {}
 
     public async executor(
         context: SlashCommandContext,
@@ -81,7 +85,14 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
             return;
         }
 
-        await deleteAllSubscriptions(http, userAccessToken);
+        await deleteAllSubscriptions(
+            http,
+            userAccessToken,
+            await getNotificationEndpointUrl({
+                appAccessors: this.app.getAccessors(),
+                rocketChatUserId,
+            })
+        );
 
         // Revoke refresh token
         try {

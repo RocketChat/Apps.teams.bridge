@@ -1,4 +1,5 @@
 import {
+    IAppAccessors,
     IHttp,
     IModify,
     IPersistence,
@@ -38,9 +39,7 @@ import {
     deleteAllSubscriptions,
     deleteTextMessageInChatThreadAsync,
     listMembersInChatThreadAsync,
-    listSubscriptionsAsync,
     removeMemberFromChatThreadAsync,
-    renewSubscriptionAsync,
     renewUserAccessTokenAsync,
     sendFileMessageToChatThreadAsync,
     sendTextMessageToChatThreadAsync,
@@ -58,7 +57,6 @@ import {
     persistRoomAsync,
     persistUserAccessTokenAsync,
     retrieveAllUserRegistrationsAsync,
-    retrieveAllUsersAccessTokenAsync,
     retrieveDummyUserByRocketChatUserIdAsync,
     retrieveDummyUserByTeamsUserIdAsync,
     retrieveLoginMessageSentStatus,
@@ -72,7 +70,7 @@ import {
     saveLoginMessageSentStatus,
     UserModel,
 } from "./PersistHelper";
-import { getLoginUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
+import { getLoginUrl, getNotificationEndpointUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
 
 let wasPrevent = false
 
@@ -286,9 +284,6 @@ export const handlePostMessageSentAsync = async (
     );
     if (dummyUsers && dummyUsers.length > 0) {
 
-
-        const messageFootprintInfo =  await getMessageFootPrintExistenceInfo(message, read)
-
         if (wasPrevent) {
             // This message has already been processed, prevent recursion
             return;
@@ -333,10 +328,17 @@ export const handlePostMessageSentAsync = async (
                 members.length === 2
             ) {
                 // If 1:1 DM, create 1:1 Teams chat thread
+                const otherUser = dummyUsers.find((du) => du.teamsUserId !== bridgeUser.teamsUserId);
+
+                if (!otherUser) {
+                   // If there's no other user, this is a 1:1 chat with the bridge user. The api does not allow to create a thread with the duplicate user
+                   console.log("Bridge user is sending a message to self, stop processing.");
+                   return;
+                }
                 const response = await createOneOnOneChatThreadAsync(
                     http,
                     bridgeUser.teamsUserId,
-                    dummyUsers[0].teamsUserId,
+                    otherUser.teamsUserId,
                     userAccessToken
                 );
                 roomRecord.teamsThreadId = response.threadId;
@@ -915,37 +917,27 @@ export const handleUserRegistrationAutoRenewAsync = async (
                     response.extExpiresIn
                 );
 
-                const subscriptionIds = await listSubscriptionsAsync(
-                    http,
-                    userAccessToken
+                const user = await retrieveUserByRocketChatUserIdAsync(
+                    read,
+                    registration.rocketChatUserId
                 );
-                if (subscriptionIds) {
-                    for (const subscriptionId of subscriptionIds) {
-                        await renewSubscriptionAsync(
-                            http,
-                            subscriptionId,
-                            userAccessToken
-                        );
-                    }
-                } else {
-                    const user = await retrieveUserByRocketChatUserIdAsync(
-                        read,
-                        registration.rocketChatUserId
-                    );
-                    if (!user) {
-                        throw new Error(
-                            `User record for user ${registration.rocketChatUserId} not found!`
-                        );
-                    }
 
-                    await subscribeToAllMessagesForOneUserAsync(
-                        http,
-                        user.rocketChatUserId,
-                        user.teamsUserId,
-                        subscriberEndpointUrl,
-                        userAccessToken
+                if (!user) {
+                    throw new Error(
+                        `User record for user ${registration.rocketChatUserId} not found!`
                     );
                 }
+
+                await subscribeToAllMessagesForOneUserAsync({
+                    read,
+                    http,
+                    persis,
+                    rocketChatUserId: user.rocketChatUserId,
+                    subscriberEndpointUrl,
+                    teamsUserId: user.teamsUserId,
+                    userAccessToken,
+                    renewIfExists: true,
+                });
             } catch (error) {
                 console.error(
                     `Error during renew registration for user ${registration.rocketChatUserId}. Ignore this error and continue. Error: ${error}`
@@ -1040,16 +1032,20 @@ const notifyNotLoggedInUserAsync = async (
     await notifyRocketChatUserAsync(message, user, read.getNotifier());
 };
 
-const deleteAllUsersSubscriptions = async (read: IRead, http: IHttp) => {
-    const allRegisteredUsersAccessToken = await retrieveAllUsersAccessTokenAsync(read);
+const deleteAllUsersSubscriptions = async (read: IRead, http: IHttp, appAccessors: IAppAccessors) => {
+    const allRegisteredUsers = await retrieveAllUserRegistrationsAsync(read);
 
-    if (!allRegisteredUsersAccessToken) {
+    if (!allRegisteredUsers) {
         return;
     }
 
-    const deletePromises = allRegisteredUsersAccessToken.map(async (registeredUsersAccessToken) => {
+    const deletePromises = allRegisteredUsers.map(async (registeredUser) => {
         try {
-            await deleteAllSubscriptions(http, registeredUsersAccessToken);
+            const notificationUrl = await getNotificationEndpointUrl({
+                appAccessors,
+                rocketChatUserId: registeredUser.rocketChatUserId,
+            });
+            await deleteAllSubscriptions(http, registeredUser.accessToken, notificationUrl);
         } catch (error) {
             console.error(`Error deleting subscriptions for user: ${error.message}`);
         }
@@ -1067,7 +1063,7 @@ export const handleUninstallApp = async (
     try {
         await Promise.all([
             app.deleteAppUsers(modify),
-            deleteAllUsersSubscriptions(read, http),
+            deleteAllUsersSubscriptions(read, http, app.getAccessors()),
         ]);
 
     } catch (error) {

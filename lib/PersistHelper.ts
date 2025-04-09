@@ -10,6 +10,7 @@ import {
 } from '@rocket.chat/apps-engine/definition/metadata';
 import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
 import { IUser } from '@rocket.chat/apps-engine/definition/users';
+import { randomBytes, createHmac } from 'crypto';
 import * as sha256 from 'crypto-js/sha256';
 
 const MiscKeys = {
@@ -25,7 +26,7 @@ const MiscKeys = {
     LoginMessage: 'LoginMessage',
     BridgedMessage: 'BridgedMessage',
     BridgedMessageFootprint: 'BridgedMessageFootprint',
-
+    WebhookSecret: 'webhook-secret',
 };
 
 interface ApplicationAccessTokenModel {
@@ -1017,7 +1018,7 @@ export const retrieveLoginMessageSentStatus = async ({
         return false;
     }
 
-    return result[0].isLoginMessageSent;
+    return !!result[0]?.isLoginMessageSent;
 };
 
 type LastBridgedMessageInfo = {
@@ -1196,3 +1197,71 @@ export const getMessageFootPrintExistenceInfo = async (message: IMessage, read: 
     }
 
 }
+
+export const createWebhookSecret = async ({ persistence }: { persistence: IPersistence }) => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.WebhookSecret
+        ),
+    ];
+
+    const secretLength = 16;
+    const secret = randomBytes(secretLength).toString("hex");
+    await persistence.createWithAssociations({ secret }, associations);
+    return secret;
+}
+
+export const getWebhookSecret = async ({
+    persistenceRead
+}: {
+    persistenceRead: IPersistenceRead;
+}): Promise<string | null> => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.WebhookSecret
+        ),
+    ];
+    const [record] = await persistenceRead.readByAssociations(associations);
+    return (record as any)?.secret || null;
+}
+
+export const getOrCreatWebhookSecret = async ({
+    persistenceRead,
+    persistenceWrite,
+}: {
+    persistenceRead: IPersistenceRead;
+    persistenceWrite: IPersistence;
+}): Promise<string> => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.WebhookSecret
+        ),
+    ];
+    const [record] = await persistenceRead.readByAssociations(associations);
+    const secret = (record as any)?.secret || null;
+
+    if (secret) {
+        return secret;
+    }
+    return await createWebhookSecret({ persistence: persistenceWrite });
+};
+
+export const getSubscriptionStateHashForUser = async (
+    persistenceRead: IPersistenceRead,
+    persistenceWrite: IPersistence,
+    user: Pick<UserModel, "rocketChatUserId">
+) => {
+    const webhookSecret = await getOrCreatWebhookSecret({
+        persistenceRead,
+        persistenceWrite,
+    });
+
+    const hmac = createHmac("sha256", webhookSecret).update(
+        user.rocketChatUserId
+    );
+
+    return hmac.digest("hex");
+};

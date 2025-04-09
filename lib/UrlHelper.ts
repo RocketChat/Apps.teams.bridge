@@ -3,8 +3,10 @@ import { IApiEndpointMetadata } from "@rocket.chat/apps-engine/definition/api";
 import {
     AuthenticationScopes,
     getMicrosoftAuthorizeUrl,
-    TestEnvironment,
+    SubscriberEndpointPath,
 } from "./Const";
+
+import { AppSetting } from "../config/Settings";
 
 export const getRocketChatAppEndpointUrl = async (
     appAccessors: IAppAccessors,
@@ -18,20 +20,45 @@ export const getRocketChatAppEndpointUrl = async (
         .getServerSettings()
         .getValueById("Site_Url");
 
-    siteUrl =
-        siteUrl.slice(-1) === "/"
-            ? siteUrl.substring(0, siteUrl.length - 1)
-            : siteUrl;
+    const proxyUrl = await appAccessors.environmentReader
+        .getSettings()
+        .getValueById(AppSetting.ProxyUrl);
 
-    if (
-        TestEnvironment.tunnelServiceUrl &&
-        TestEnvironment.tunnelServiceUrl !== ""
-    ) {
-        siteUrl = TestEnvironment.tunnelServiceUrl;
+    if (proxyUrl && proxyUrl !== "") {
+        siteUrl = proxyUrl;
     }
 
-    return siteUrl + webhookEndpoint.computedPath;
+    return new URL(webhookEndpoint.computedPath, siteUrl).toString();
 };
+
+export function getNotificationEndpointUrl(params: {
+    appAccessors: IAppAccessors;
+    rocketChatUserId: string;
+}): Promise<string>;
+export function getNotificationEndpointUrl(params: {
+    rocketChatUserId: string;
+    subscriberEndpoint: string;
+}): string;
+export function getNotificationEndpointUrl({
+    appAccessors,
+    rocketChatUserId,
+    subscriberEndpoint,
+}: {
+    appAccessors?: IAppAccessors;
+    rocketChatUserId?: string;
+    subscriberEndpoint?: string;
+}): Promise<string> | string {
+    if (appAccessors) {
+        return new Promise(async (resolve) => {
+            const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(appAccessors, SubscriberEndpointPath);
+            resolve(`${subscriberEndpointUrl}?userId=${rocketChatUserId}`);
+        });
+    } else if (subscriberEndpoint && rocketChatUserId) {
+        return `${subscriberEndpoint}?userId=${rocketChatUserId}`;
+    }
+    throw new Error("Invalid parameters");
+}
+
 
 export const getLoginUrl = (
     aadTenantId: string,

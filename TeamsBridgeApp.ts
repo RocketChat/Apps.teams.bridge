@@ -1,8 +1,10 @@
 import {
     IAppAccessors,
+    IAppInstallationContext,
     IAppUninstallationContext,
     IConfigurationExtend,
     IConfigurationModify,
+    IEnvironmentRead,
     IHttp,
     ILogger,
     IModify,
@@ -42,15 +44,13 @@ import {
 import {
     IUIKitResponse,
     UIKitActionButtonInteractionContext,
-    UIKitBlockInteractionContext,
-    UIKitViewCloseInteractionContext,
     UIKitViewSubmitInteractionContext,
   } from '@rocket.chat/apps-engine/definition/uikit';
 import {
     IFileUploadContext,
     IPreFileUpload,
   } from '@rocket.chat/apps-engine/definition/uploads';
-import { IUser, UserType } from '@rocket.chat/apps-engine/definition/users';
+import { UserType } from '@rocket.chat/apps-engine/definition/users';
 import { settings } from './config/Settings';
 import { AuthenticationEndpoint } from './endpoints/AuthenticationEndpoint';
 import { SubscriberEndpoint } from './endpoints/SubscriberEndpoint';
@@ -60,6 +60,7 @@ import {
     SubscriberEndpointPath,
     UIActionId,
     UIElementId,
+    WebhookSecretCreationJobId,
   } from './lib/Const';
 import {
     handleAddTeamsUserContextualBarSubmitAsync,
@@ -74,13 +75,15 @@ import {
     handleUserRegistrationAutoRenewAsync,
   } from './lib/EventHandler';
 import { getRocketChatAppEndpointUrl } from './lib/UrlHelper';
-import { openAddTeamsUserContextualBarBlocksAsync } from './lib/UserInterfaceHelper';
+import { getRoomIdFromSubmitActionId, openAddTeamsUserContextualBarBlocksAsync } from './lib/UserInterfaceHelper';
 import { AddUserSlashCommand } from './slashcommands/AddUserSlashCommand';
 import { DeleteTeamsBotUserSlashCommand } from './slashcommands/DeleteTeamsBotUserSlashCommand';
 import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
 import { LogoutTeamsSlashCommand } from './slashcommands/LogoutTeamsSlashCommand';
 import { ProvisionTeamsBotUserSlashCommand } from './slashcommands/ProvisionTeamsBotUserSlashCommand';
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
+import { ResubscribeMessages } from './slashcommands/ResubscriptionMessages';
+import { createWebhookSecret, getWebhookSecret } from './lib/PersistHelper';
 
 export class TeamsBridgeApp
     extends App
@@ -93,22 +96,35 @@ export class TeamsBridgeApp
       IPreMessageDeletePrevent,
       IPreFileUpload,
       IPreRoomUserLeave {
-    private selectedTeamsUserIds: Array<string>;
-    private changeTeamsUserMemberRoom: IRoom | undefined;
 
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
       super(info, logger, accessors);
     }
 
-    public async onSettingUpdated(
-      setting: ISetting,
-      configurationModify: IConfigurationModify,
-      read: IRead,
-      http: IHttp,
+    async onInstall(
+        context: IAppInstallationContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
     ): Promise<void> {
-      console.log(
-        `onSettingUpdated for setting ${setting.id} with new value ${setting.value}`,
-      );
+        await createWebhookSecret({ persistence });
+    }
+
+    async onEnable(environment: IEnvironmentRead, configurationModify: IConfigurationModify): Promise<boolean> {
+        try {
+            await configurationModify.scheduler.scheduleOnce({
+                id: WebhookSecretCreationJobId,
+                when: new Date(),
+            });
+        } catch (e) {
+            this.getLogger().error(e);
+        }
+        return true;
+    }
+
+    async onDisable(configurationModify: IConfigurationModify): Promise<void> {
+        await configurationModify.scheduler.cancelAllJobs();
     }
 
     public async onUninstall(
@@ -142,7 +158,7 @@ export class TeamsBridgeApp
       persistence: IPersistence,
       modify: IModify,
     ): Promise<void> {
-      await handlePostMessageSentAsync(message, read, http, persistence);
+        await handlePostMessageSentAsync(message, read, http, persistence);
     }
 
     public async executePreMessageUpdatedPrevent(
@@ -214,12 +230,19 @@ export class TeamsBridgeApp
     public async executeActionButtonHandler(
       context: UIKitActionButtonInteractionContext,
       read: IRead,
+      http: IHttp,
+      persistence: IPersistence,
       modify: IModify,
     ): Promise<IUIKitResponse> {
       const data = context.getInteractionData();
 
       if (data.actionId === UIActionId.AddTeamsUserButtonClicked) {
-        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
+        const appUser = await read.getUserReader().getAppUser();
+
+        if (!appUser) {
+          throw new Error('App user not found');
+        }
+
         await openAddTeamsUserContextualBarBlocksAsync(
           data.triggerId,
           data.room,
@@ -228,19 +251,6 @@ export class TeamsBridgeApp
           read,
           modify,
         );
-      }
-
-      return {
-        success: true,
-      };
-    }
-
-    public async executeBlockActionHandler(
-      context: UIKitBlockInteractionContext    ): Promise<IUIKitResponse> {
-      const data = context.getInteractionData();
-      if (data.actionId === UIActionId.TeamsUserNameSearch) {
-        this.changeTeamsUserMemberRoom = data.room;
-        this.selectedTeamsUserIds = data.value as any as Array<string>;
       }
 
       return {
@@ -262,13 +272,41 @@ export class TeamsBridgeApp
       persistence: IPersistence,
       modify: IModify,
     ): Promise<IUIKitResponse> {
-      const data = context.getInteractionData();
-      if (data.view.id === UIElementId.ContextualBarId) {
-        if (this.changeTeamsUserMemberRoom) {
-          await handleAddTeamsUserContextualBarSubmitAsync(
-            context.getInteractionData().user,
-            this.changeTeamsUserMemberRoom,
-            this.selectedTeamsUserIds,
+      const { user, view } = context.getInteractionData();
+
+      if (view.id === UIElementId.ContextualBarId) {
+        const submitActionId = view.submit?.actionId;
+
+        let currentRoom: IRoom | undefined;
+        const roomIdFromActionId = submitActionId && getRoomIdFromSubmitActionId(submitActionId);
+        this.getLogger().error({ submitActionId });
+        if (roomIdFromActionId) {
+            const room = await read
+                .getRoomReader()
+                .getById(roomIdFromActionId);
+            if (room) {
+                currentRoom = room;
+            }
+        }
+
+        let selectedTeamsUserIds: string[] | undefined;
+
+        if (view.state) {
+          Object.values(view.state).forEach((item) => {
+            Object.entries(item).forEach(([key, value]) => {
+              if (key === UIActionId.TeamsUserNameSearch) {
+                selectedTeamsUserIds = value as string[] | undefined;
+              }
+            })
+          })
+        }
+
+        // Fallback to object property implementation
+        if (selectedTeamsUserIds && currentRoom) {
+            await handleAddTeamsUserContextualBarSubmitAsync(
+            user,
+            currentRoom,
+            selectedTeamsUserIds,
             read,
             modify,
             persistence,
@@ -303,8 +341,9 @@ export class TeamsBridgeApp
         configuration.slashCommands.provideSlashCommand(new ProvisionTeamsBotUserSlashCommand(this)),
         configuration.slashCommands.provideSlashCommand(new DeleteTeamsBotUserSlashCommand(this)),
         configuration.slashCommands.provideSlashCommand(new LoginTeamsSlashCommand(this)),
-        configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand()),
+        configuration.slashCommands.provideSlashCommand(new LogoutTeamsSlashCommand(this)),
         configuration.slashCommands.provideSlashCommand(new AddUserSlashCommand()),
+        configuration.slashCommands.provideSlashCommand(new ResubscribeMessages(this)),
     ]);
 
       // Register API endpoints
@@ -368,6 +407,50 @@ export class TeamsBridgeApp
             interval: RegistrationAutoRenewInterval,
           },
         },
+        {
+            id: WebhookSecretCreationJobId,
+            processor: async (
+                jobContext: IJobContext,
+                read: IRead,
+                modify: IModify,
+                http: IHttp,
+                persis: IPersistence,
+            ) => {
+                try {
+                    const webhookSecret = await getWebhookSecret({ persistenceRead: read.getPersistenceReader() });
+                    if (!webhookSecret) {
+                        this.getLogger().info('Webhook secret is not created. Creating it now.')
+                        await createWebhookSecret({ persistence: persis });
+                        const subscriberEndpointUrl =
+                            await getRocketChatAppEndpointUrl(
+                                this.getAccessors(),
+                                SubscriberEndpointPath
+                            );
+
+                        await handleUserRegistrationAutoRenewAsync(
+                            subscriberEndpointUrl,
+                            read,
+                            modify,
+                            http,
+                            persis
+                        );
+                        this.getLogger().info('Webhook secret created and subscriptions were renewed.')
+                        console.log('Webhook secret created and subscriptions were renewed.')
+                    } else {
+                        this.getLogger().info('Webhook secret already present.');
+                        console.log('Webhook secret already present.');
+                    }
+                } catch (error) {
+                    this.getLogger().error(
+                        `Webhook secret creation failed with error, Incoming messages may fail to be processed`,
+                        error
+                    );
+                    throw new Error(
+                        `Webhook secret creation failed with error: ${error}`,
+                    );
+                }
+            }
+        }
       ]);
     }
   }
