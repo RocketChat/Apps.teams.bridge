@@ -101,6 +101,10 @@ export class TeamsBridgeApp
       super(info, logger, accessors);
     }
 
+    async getSettingValueById(id: string) {
+        return this.getAccessors().environmentReader.getSettings().getValueById(id)
+    }
+
     async onInstall(
         context: IAppInstallationContext,
         read: IRead,
@@ -143,12 +147,13 @@ export class TeamsBridgeApp
       http: IHttp,
       persistence: IPersistence,
     ): Promise<boolean> {
-      return await handlePreMessageSentPreventAsync(
-        message,
-        read,
-        persistence,
-        this,
-      );
+        return await handlePreMessageSentPreventAsync({
+            app: this,
+            message,
+            read,
+            persistence,
+            http,
+        });
     }
 
     public async executePostMessageSent(
@@ -158,7 +163,13 @@ export class TeamsBridgeApp
       persistence: IPersistence,
       modify: IModify,
     ): Promise<void> {
-        await handlePostMessageSentAsync(message, read, http, persistence);
+        await handlePostMessageSentAsync({
+            app: this,
+            message,
+            read,
+            persistence,
+            http,
+        });
     }
 
     public async executePreMessageUpdatedPrevent(
@@ -167,11 +178,13 @@ export class TeamsBridgeApp
       http: IHttp,
       persistence: IPersistence,
     ): Promise<boolean> {
-      return await handlePreMessageOperationPreventAsync(
-        message,
-        read,
-        persistence,
-      );
+      return await handlePreMessageOperationPreventAsync({
+          app: this,
+          message,
+          read,
+          persistence,
+          http,
+      });
     }
 
     public async executePostMessageUpdated(
@@ -181,7 +194,13 @@ export class TeamsBridgeApp
       persistence: IPersistence,
       modify: IModify,
     ): Promise<void> {
-      await handlePostMessageUpdatedAsync(message, read, persistence, http);
+        await handlePostMessageUpdatedAsync({
+            app: this,
+            message,
+            read,
+            persistence,
+            http,
+        });
     }
 
     public async executePreMessageDeletePrevent(
@@ -190,11 +209,13 @@ export class TeamsBridgeApp
       http: IHttp,
       persistence: IPersistence,
     ): Promise<boolean> {
-      return await handlePreMessageOperationPreventAsync(
-        message,
-        read,
-        persistence,
-      );
+        return await handlePreMessageOperationPreventAsync({
+            app: this,
+            message,
+            read,
+            persistence,
+            http,
+        });
     }
 
     public async executePostMessageDeleted(
@@ -205,17 +226,29 @@ export class TeamsBridgeApp
       modify: IModify,
       context: IMessageDeleteContext,
     ): Promise<void> {
-      await handlePostMessageDeletedAsync(message, read, persistence, http);
+        await handlePostMessageDeletedAsync({
+            app: this,
+            message,
+            read,
+            persistence,
+            http,
+        });
     }
 
     public async executePreFileUpload(
       context: IFileUploadContext,
       read: IRead,
       http: IHttp,
-      persis: IPersistence,
+      persistence: IPersistence,
       modify: IModify,
     ): Promise<void> {
-      await handlePreFileUploadAsync(context, read, http, persis, modify);
+        await handlePreFileUploadAsync({
+            app: this,
+            context,
+            read,
+            persistence,
+            http
+        });
     }
 
     public async executePreRoomUserLeave(
@@ -224,7 +257,13 @@ export class TeamsBridgeApp
       http: IHttp,
       persistence: IPersistence,
     ): Promise<void> {
-      await handlePreRoomUserLeaveAsync(context, read, http, persistence, this);
+        await handlePreRoomUserLeaveAsync({
+            app: this,
+            context,
+            read,
+            persistence,
+            http,
+        });
     }
 
     public async executeActionButtonHandler(
@@ -289,30 +328,30 @@ export class TeamsBridgeApp
             }
         }
 
-        let selectedTeamsUserIds: string[] | undefined;
+        let teamsUserIdsToSave: string[] | undefined;
 
         if (view.state) {
           Object.values(view.state).forEach((item) => {
             Object.entries(item).forEach(([key, value]) => {
               if (key === UIActionId.TeamsUserNameSearch) {
-                selectedTeamsUserIds = value as string[] | undefined;
+                teamsUserIdsToSave = value as string[] | undefined;
               }
             })
           })
         }
 
         // Fallback to object property implementation
-        if (selectedTeamsUserIds && currentRoom) {
-            await handleAddTeamsUserContextualBarSubmitAsync(
-            user,
-            currentRoom,
-            selectedTeamsUserIds,
-            read,
-            modify,
-            persistence,
-            http,
-            this,
-          );
+        if (teamsUserIdsToSave && currentRoom) {
+            await handleAddTeamsUserContextualBarSubmitAsync({
+                operator: user,
+                room: currentRoom,
+                teamsUserIdsToSave,
+                read,
+                modify,
+                persistence,
+                http,
+                app: this,
+            });
         }
       }
 
@@ -379,7 +418,7 @@ export class TeamsBridgeApp
             read: IRead,
             modify: IModify,
             http: IHttp,
-            persis: IPersistence,
+            persistence: IPersistence,
           ) => {
             try {
               console.log('Start renew registrations!');
@@ -388,13 +427,13 @@ export class TeamsBridgeApp
                 SubscriberEndpointPath,
               );
 
-              await handleUserRegistrationAutoRenewAsync(
+              await handleUserRegistrationAutoRenewAsync({
                 subscriberEndpointUrl,
                 read,
-                modify,
                 http,
-                persis,
-              );
+                persistence,
+                app: this,
+              });
               console.log('Finish renew registrations!');
             } catch (error) {
               throw new Error(
@@ -414,26 +453,26 @@ export class TeamsBridgeApp
                 read: IRead,
                 modify: IModify,
                 http: IHttp,
-                persis: IPersistence,
+                persistence: IPersistence,
             ) => {
                 try {
                     const webhookSecret = await getWebhookSecret({ persistenceRead: read.getPersistenceReader() });
                     if (!webhookSecret) {
                         this.getLogger().info('Webhook secret is not created. Creating it now.')
-                        await createWebhookSecret({ persistence: persis });
+                        await createWebhookSecret({ persistence });
                         const subscriberEndpointUrl =
                             await getRocketChatAppEndpointUrl(
                                 this.getAccessors(),
                                 SubscriberEndpointPath
                             );
 
-                        await handleUserRegistrationAutoRenewAsync(
+                        await handleUserRegistrationAutoRenewAsync({
                             subscriberEndpointUrl,
                             read,
-                            modify,
                             http,
-                            persis
-                        );
+                            persistence,
+                            app: this,
+                        });
                         this.getLogger().info('Webhook secret created and subscriptions were renewed.')
                         console.log('Webhook secret created and subscriptions were renewed.')
                     } else {

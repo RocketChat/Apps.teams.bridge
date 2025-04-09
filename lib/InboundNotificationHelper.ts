@@ -25,10 +25,10 @@ import {
     retrieveDummyUserByTeamsUserIdAsync,
     retrieveMessageIdMappingByTeamsMessageIdAsync,
     retrieveRoomByTeamsThreadIdAsync,
-    retrieveUserAccessTokenAsync,
     retrieveUserByTeamsUserIdAsync,
 } from "./PersistHelper";
-import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
+import { TeamsBridgeApp } from "../TeamsBridgeApp";
+import { getUserAccessTokenAsync } from "./AuthHelper";
 
 export enum NotificationChangeType {
     Created = "created",
@@ -49,14 +49,15 @@ export interface InBoundNotification {
     resourceType: NotificationResourceType;
 }
 
-export const handleInboundNotificationAsync = async (
-    inBoundNotification: InBoundNotification,
-    read: IRead,
-    modify: IModify,
-    http: IHttp,
-    persis: IPersistence,
-    appId: string
-): Promise<void> => {
+export const handleInboundNotificationAsync = async (options: {
+    inBoundNotification: InBoundNotification;
+    read: IRead;
+    modify: IModify;
+    http: IHttp;
+    persistence: IPersistence;
+    app: TeamsBridgeApp;
+}): Promise<void> => {
+    const { app, http, inBoundNotification, modify, persistence, read } = options;
     const receiverRocketChatUserId =
         inBoundNotification.receiverRocketChatUserId;
     if (!receiverRocketChatUserId) {
@@ -64,11 +65,13 @@ export const handleInboundNotificationAsync = async (
         return;
     }
 
-    const userAccessToken = await retrieveUserAccessTokenAsync(
+    const userAccessToken = await getUserAccessTokenAsync({
         read,
-        persis,
-        receiverRocketChatUserId
-    );
+        persistence,
+        rocketChatUserId: receiverRocketChatUserId,
+        app,
+        http,
+    });
     if (!userAccessToken) {
         // If receiver's access token does not exist in persist or expired, stop processing
         console.error(
@@ -85,8 +88,8 @@ export const handleInboundNotificationAsync = async (
                 read,
                 modify,
                 http,
-                persis,
-                appId
+                persistence,
+                app.getID(),
             );
             break;
 
@@ -97,7 +100,7 @@ export const handleInboundNotificationAsync = async (
                 read,
                 modify,
                 http,
-                persis
+                persistence
             );
             break;
 
@@ -107,7 +110,7 @@ export const handleInboundNotificationAsync = async (
                 read,
                 modify,
                 http,
-                persis
+                persistence
             );
             break;
 

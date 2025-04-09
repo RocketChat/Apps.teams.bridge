@@ -1,4 +1,5 @@
 import {
+    IHttp,
     IPersistence,
     IPersistenceRead,
     IRead,
@@ -12,8 +13,10 @@ import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
 import { IUser } from '@rocket.chat/apps-engine/definition/users';
 import { randomBytes, createHmac } from 'crypto';
 import * as sha256 from 'crypto-js/sha256';
+import type { TeamsBridgeApp } from '../TeamsBridgeApp';
+import { AppSetting } from '../config/Settings';
 
-const MiscKeys = {
+export const MiscKeys = {
     ApplicationAccessToken: 'ApplicationAccessToken',
     UserRegistration: 'UserAccessToken',
     User: 'User',
@@ -33,7 +36,7 @@ interface ApplicationAccessTokenModel {
     accessToken: string;
 }
 
-interface UserRegistrationModel {
+export interface UserRegistrationModel {
     rocketChatUserId: string;
     accessToken: string;
     refreshToken: string;
@@ -516,11 +519,11 @@ export const retrieveUserByTeamsUserIdAsync = async (
     return data;
 };
 
-export const retrieveUserAccessTokenAsync = async (
-    read: IRead,
-    persistence: IPersistence,
-    rocketChatUserId: string
-): Promise<string | null> => {
+export const retrieveUserAccessTokenDataAsync = async (options: {
+    read: IRead;
+    rocketChatUserId: string;
+}): Promise<UserRegistrationModel | null> => {
+    const { read, rocketChatUserId } = options;
     const associations: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(
             RocketChatAssociationModel.MISC,
@@ -547,19 +550,7 @@ export const retrieveUserAccessTokenAsync = async (
 
     const data: UserRegistrationModel = results[0] as UserRegistrationModel;
 
-    const now = new Date();
-    const epochInSecond = Math.round(now.getTime() / 1000);
-
-    if (!data.expires || epochInSecond > data.expires) {
-        await saveLoginMessageSentStatus({
-            persistence,
-            rocketChatUserId,
-            wasSent: false,
-        });
-        return null;
-    }
-
-    return data.accessToken;
+    return data || null;
 };
 
 export const retrieveAllUsersAccessTokenAsync = async (
@@ -580,53 +571,6 @@ export const retrieveAllUsersAccessTokenAsync = async (
     }
 
     return results.map((result) => result.accessToken);
-};
-
-export const retrieveUserRefreshTokenAsync = async (
-    read: IRead,
-    persistence: IPersistence,
-    rocketChatUserId: string
-): Promise<string | null> => {
-    const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.UserRegistration
-        ),
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.USER,
-            rocketChatUserId
-        ),
-    ];
-
-    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
-    const results = await persistenceRead.readByAssociations(associations);
-
-    if (results === undefined || results === null || results.length == 0) {
-        return null;
-    }
-
-    if (results.length > 1) {
-        throw new Error(
-            `More than one UserAccessToken record for user ${rocketChatUserId}`
-        );
-    }
-
-    const data: UserRegistrationModel = results[0] as UserRegistrationModel;
-
-    const now = new Date();
-    const epochInSecond = Math.round(now.getTime() / 1000);
-
-    if (!data.extExpires || epochInSecond > data.extExpires) {
-        await saveLoginMessageSentStatus({
-            persistence,
-            rocketChatUserId,
-            wasSent: false,
-        });
-
-        return null;
-    }
-
-    return data.refreshToken;
 };
 
 export const retrieveAllUserRegistrationsAsync = async (

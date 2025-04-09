@@ -10,7 +10,6 @@ import {
     IApiRequest,
     IApiResponse,
 } from "@rocket.chat/apps-engine/definition/api";
-import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
 import { SubscriberEndpointPath } from "../lib/Const";
 import {
     handleInboundNotificationAsync,
@@ -19,8 +18,10 @@ import {
     NotificationResourceType,
 } from "../lib/InboundNotificationHelper";
 import { getSubscriptionStateHashForUser } from "../lib/PersistHelper";
+import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export class SubscriberEndpoint extends ApiEndpoint {
+    app: TeamsBridgeApp;
     private supportedChangeTypeMapping = {
         created: NotificationChangeType.Created,
         updated: NotificationChangeType.Updated,
@@ -33,7 +34,7 @@ export class SubscriberEndpoint extends ApiEndpoint {
 
     public path = SubscriberEndpointPath;
 
-    constructor(app: IApp) {
+    constructor(app: TeamsBridgeApp) {
         super(app);
         this.parseChangeType = this.parseChangeType.bind(this);
         this.parseResourceType = this.parseResourceType.bind(this);
@@ -114,14 +115,14 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     resourceType: resourceType,
                 };
 
-                await handleInboundNotificationAsync(
+                await handleInboundNotificationAsync({
                     inBoundNotification,
                     read,
                     modify,
                     http,
-                    persis,
-                    this.app.getID()
-                );
+                    persistence: persis,
+                    app: this.app,
+                });
             } catch (error) {
                 // If there's an error, print a warning but not block the whole process
                 console.error(

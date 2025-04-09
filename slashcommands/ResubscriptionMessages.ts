@@ -22,11 +22,9 @@ import {
 } from "../lib/Const";
 import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
-import {
-    retrieveUserAccessTokenAsync,
-    retrieveUserByRocketChatUserIdAsync,
-} from "../lib/PersistHelper";
+import { retrieveUserByRocketChatUserIdAsync } from "../lib/PersistHelper";
 import { subscribeToAllMessagesForOneUserAsync } from "../lib/MicrosoftGraphApi";
+import { getUserAccessTokenAsync } from "../lib/AuthHelper";
 
 export class ResubscribeMessages implements ISlashCommand {
     public command: string = "teamsbridge-resubscribe-messages";
@@ -74,11 +72,13 @@ export class ResubscribeMessages implements ISlashCommand {
         );
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
 
-        const userAccessToken = await retrieveUserAccessTokenAsync(
+        const userAccessToken = await getUserAccessTokenAsync({
             read,
-            persis,
-            commandSender.id
-        );
+            persistence: persis,
+            rocketChatUserId: commandSender.id,
+            app: this.app,
+            http,
+        });
         if (!userAccessToken) {
             const message = generateHintMessageWithTeamsLoginButton(
                 loginUrl,
