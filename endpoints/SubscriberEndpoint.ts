@@ -79,7 +79,6 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     // If clientState is not present, either it's an old subscription or
                     // the notification is not from our app. We should ignore it.
                     const message = `Source of notification cannot be verified. clientState is missing. Processing skipped.`;
-                    console.error(message);
                     this.app.getLogger().error(message);
                     return {
                         status: 401,
@@ -98,7 +97,6 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     ))
                 ) {
                     const message = `Source of notification cannot be verified. clientState is invalid. Processing skipped.`;
-                    console.error(message);
                     this.app.getLogger().error(message);
                     return {
                         status: 401,

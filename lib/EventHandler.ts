@@ -248,7 +248,7 @@ export const handlePreMessageSentPreventAsync = async (options: {
                                 message.sender,
                                 message.room,
                                 app,
-                                `LoggedInBridgeUserRequiredHintMessageText`
+                                LoggedInBridgeUserRequiredHintMessageText
                             );
                             await saveLoginMessageSentStatus({
                                 persistence,

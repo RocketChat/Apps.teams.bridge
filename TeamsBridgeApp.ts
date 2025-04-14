@@ -318,7 +318,6 @@ export class TeamsBridgeApp
 
         let currentRoom: IRoom | undefined;
         const roomIdFromActionId = submitActionId && getRoomIdFromSubmitActionId(submitActionId);
-        this.getLogger().error({ submitActionId });
         if (roomIdFromActionId) {
             const room = await read
                 .getRoomReader()
@@ -473,11 +472,7 @@ export class TeamsBridgeApp
                             persistence,
                             app: this,
                         });
-                        this.getLogger().info('Webhook secret created and subscriptions were renewed.')
-                        console.log('Webhook secret created and subscriptions were renewed.')
-                    } else {
-                        this.getLogger().info('Webhook secret already present.');
-                        console.log('Webhook secret already present.');
+                        this.getLogger().info('Webhook secret created and subscriptions were renewed.');
                     }
                 } catch (error) {
                     this.getLogger().error(
