@@ -2,7 +2,10 @@ import {
     HttpStatusCode,
     IHttp,
     IHttpRequest,
+    IPersistence,
+    IRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
+import * as ms from 'ms';
 import {
     AuthenticationScopes,
     getGraphApiChatUrl,
@@ -24,7 +27,10 @@ import {
     getGraphApiRevokeRefreshTokenUrl,
     getGraphApiSubscriptionOperationUrl,
     getGraphApiChatThreadWithMemberUrl,
+    RegistrationAutoRenewInterval,
 } from "./Const";
+import { getNotificationEndpointUrl } from "./UrlHelper";
+import { getSubscriptionStateHashForUser } from "./PersistHelper";
 
 export interface TokenResponse {
     tokenType: string;
@@ -305,15 +311,18 @@ export const revokeUserRefreshTokenAsync = async (http: IHttp, userAccessToken: 
     const httpRequest: IHttpRequest = {
         headers: {
             'Authorization': `Bearer ${userAccessToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
         },
+        content: '{}'
     };
 
-    const response = await http.get(url, httpRequest);
+    const response = await http.post(url, httpRequest);
 
     if (response.statusCode === HttpStatusCode.OK) {
         return;
     } else {
-        throw new Error(`Revoke user refresh token failed with http status code ${response.statusCode}.`);
+        throw new Error(`Revoke user refresh token failed with http status code ${response.statusCode}.\nReceived: ${JSON.stringify(response.data, null, 2)}`);
     }
 };
 
@@ -356,20 +365,13 @@ export const createOneOnOneChatThreadAsync = async (
     const url = getGraphApiChatUrl();
 
     const body = {
-        'chatType': 'oneOnOne',
-        'members': [
-            {
-                '@odata.type': '#microsoft.graph.aadUserConversationMember',
-                'roles': ['owner'],
-                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${senderUserTeamsId}')`,
-            },
-            {
-                '@odata.type': '#microsoft.graph.aadUserConversationMember',
-                'roles': ['owner'],
-                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${receiverUserTeamsId}')`,
-            },
-        ],
-    }
+        chatType: 'oneOnOne',
+        members: [senderUserTeamsId, receiverUserTeamsId].map(userId => ({
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${userId}')`,
+        })),
+    };
 
     const httpRequest: IHttpRequest = {
         headers: {
@@ -394,7 +396,7 @@ export const createOneOnOneChatThreadAsync = async (
 
         return result;
     } else {
-        throw new Error(`Create one on one chat thread failed with http status code ${response.statusCode}.`);
+        throw new Error(`Create one on one chat thread failed with http status code ${response.statusCode}.\n Received: ${JSON.stringify(response.data, null, 2)}`);
     }
 };
 
@@ -405,8 +407,10 @@ export const createChatThreadAsync = async (
     userAccessToken: string) : Promise<CreateThreadResponse> => {
     const url = getGraphApiChatUrl();
 
+    const uniqueMembersTeamsIds = [...new Set(membersTeamsIds)];
+
     const members: any[] = [];
-    for (const teamsIds of membersTeamsIds) {
+    for (const teamsIds of uniqueMembersTeamsIds) {
         const member = {
             '@odata.type': '#microsoft.graph.aadUserConversationMember',
             'roles': ['owner'],
@@ -444,7 +448,11 @@ export const createChatThreadAsync = async (
 
         return result;
     } else {
-        throw new Error(`Create group chat thread failed with http status code ${response.statusCode}.`);
+        throw new Error(
+            `Create group chat thread failed with http status code ${
+                response.statusCode
+            }.\nReceived: ${JSON.stringify(response.data, null, 2)}`
+        );
     }
 };
 
@@ -784,13 +792,15 @@ export const getMessageWithResourceStringAsync = async (
 
 export const listSubscriptionsAsync = async (
     http: IHttp,
-    userAccessToken: string) : Promise<string[] | undefined> => {
+    userAccessToken: string,
+    notificationUrl: string,
+): Promise<SubscriptionsResponse['value'] | undefined> => {
     const url = getGraphApiSubscriptionUrl();
 
     const httpRequest: IHttpRequest = {
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userAccessToken}`,
         },
     };
 
@@ -799,23 +809,18 @@ export const listSubscriptionsAsync = async (
     if (response.statusCode === HttpStatusCode.OK) {
         const responseBody = response.data;
         if (responseBody === undefined) {
-            throw new Error('List subscriptions failed!');
+            throw new Error("List subscriptions failed!");
         }
 
-        // let result : string[] | undefined = undefined;
-
-        // const jsonValues = responseBody.value as any[];
-        // if (jsonValues && jsonValues.length > 0) {
-        //     result = [];
-        //     for (const value of jsonValues) {
-        //         result.push(value.id);
-        //     }
-        // }
-
-        return (response.data as SubscriptionsResponse).value.map(subscribeValue => subscribeValue.id);
+        const subscriptions = response.data?.value as SubscriptionsResponse['value'];
+        const urlObj = new URL(notificationUrl);
+        const pathWithQuery = urlObj.pathname + urlObj.search;
+        return subscriptions.filter((subscription) => subscription.notificationUrl.includes(pathWithQuery));
     } else {
-        console.error(`List subscriptions failed with http status code ${response.statusCode}.`);
-        return
+        console.error(
+            `List subscriptions failed with http status code ${response.statusCode}. \nReceived: ${JSON.stringify(response.data, null, 2)}`
+        );
+        return;
     }
 };
 
@@ -823,25 +828,29 @@ export const renewSubscriptionAsync = async (
     http: IHttp,
     subscriptionId: string,
     userAccessToken: string,
-    expirationDateTime?: Date) : Promise<SubscriptionResponse|undefined> => {
-
+    expirationDateTime?: Date,
+    clientState?: string
+): Promise<SubscriptionResponse | undefined> => {
     if (!expirationDateTime) {
         expirationDateTime = new Date();
-        expirationDateTime.setSeconds(expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond);
+        expirationDateTime.setSeconds(
+            expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond
+        );
     }
 
     const url = getGraphApiSubscriptionOperationUrl(subscriptionId);
 
     const body = {
-        'expirationDateTime': expirationDateTime.toISOString()
+        expirationDateTime: expirationDateTime.toISOString(),
+        ...(clientState && { clientState }),
     };
 
     const httpRequest: IHttpRequest = {
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userAccessToken}`,
         },
-        content: JSON.stringify(body)
+        content: JSON.stringify(body),
     };
 
     const response = await http.patch(url, httpRequest);
@@ -849,27 +858,34 @@ export const renewSubscriptionAsync = async (
     if (response.statusCode === HttpStatusCode.OK) {
         const responseBody = response.data;
         if (responseBody === undefined) {
-            throw new Error('Renew subscription failed!');
+            throw new Error("Renew subscription failed!");
         }
 
-        const result : SubscriptionResponse = {
+        const result: SubscriptionResponse = {
             subscriptionId: responseBody.id,
             expirationTime: new Date(responseBody.expirationDateTime),
         };
 
         return result;
     } else {
-        console.error(`Renew subscription failed with http status code ${response.statusCode}.`);
-        return
+        console.error(
+            `Renew subscription failed with http status code ${
+                response.statusCode
+            }.\nReceived: ${JSON.stringify(response.data, null, 2)}`
+        );
+        return;
     }
 };
 
-export const deleteAllSubscriptions = async (http: IHttp, userAccessToken: string) => {
+export const deleteAllSubscriptions = async (http: IHttp, userAccessToken: string, notificationUrl: string) => {
     // Delete all subscriptions
-    const subscriptionsId = await listSubscriptionsAsync(
-        http,
-        userAccessToken
-    );
+    const subscriptionsId = (
+        await listSubscriptionsAsync(
+            http,
+            userAccessToken,
+            notificationUrl,
+        )
+    )?.map((subscription) => (subscription as any).id);
     if (subscriptionsId) {
         for (const subscriptionId of subscriptionsId) {
             try {
@@ -909,35 +925,123 @@ export const deleteSubscriptionAsync = async (
     }
 };
 
-export const subscribeToAllMessagesForOneUserAsync = async (
-    http: IHttp,
-    rocketChatUserId: string,
-    teamsUserId: string,
-    subscriberEndpointUrl: string,
-    userAccessToken: string,
-    expirationDateTime?: Date
-) : Promise<SubscriptionResponse> => {
+export const subscribeToAllMessagesForOneUserAsync = async (options: {
+    http: IHttp;
+    read: IRead;
+    persis: IPersistence,
+    rocketChatUserId: string;
+    teamsUserId: string;
+    subscriberEndpointUrl: string;
+    userAccessToken: string;
+    expirationDateTime?: Date;
+    renewIfExists?: boolean;
+    forceRenew?: boolean;
+}): Promise<SubscriptionResponse | undefined> => {
+    const {
+        rocketChatUserId,
+        teamsUserId,
+        subscriberEndpointUrl,
+        userAccessToken,
+        expirationDateTime: inputExpirationDateTime,
+        renewIfExists = true,
+        forceRenew = false,
+        http,
+        read,
+        persis,
+    } = options;
+
+    let expirationDateTime = inputExpirationDateTime;
     if (!expirationDateTime) {
         expirationDateTime = new Date();
-        expirationDateTime.setSeconds(expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond);
+        expirationDateTime.setSeconds(
+            expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond
+        );
     }
 
     const url = getGraphApiSubscriptionUrl();
 
+    const notificationUrl = getNotificationEndpointUrl({
+        subscriberEndpoint: subscriberEndpointUrl,
+        rocketChatUserId,
+    });
+
+    const clientState = await getSubscriptionStateHashForUser(
+        read.getPersistenceReader(),
+        persis,
+        { rocketChatUserId }
+    );
     const body = {
-        'changeType': SupportedNotificationChangeTypes.join(','),
-        'notificationUrl': `${subscriberEndpointUrl}?userId=${rocketChatUserId}`,
-        'resource': `/users/${teamsUserId}/chats/getAllMessages`,
-        'includeResourceData': false,
-        'expirationDateTime': expirationDateTime.toISOString()
+        changeType: SupportedNotificationChangeTypes.join(","),
+        notificationUrl,
+        resource: `/users/${teamsUserId}/chats/getAllMessages`,
+        includeResourceData: false,
+        expirationDateTime: expirationDateTime.toISOString(),
+        clientState,
     };
+
+    if (renewIfExists) {
+        const existingSubscriptions = await listSubscriptionsAsync(http, userAccessToken, notificationUrl) || [];
+
+        if (existingSubscriptions.length > 0) {
+
+            console.log(`Subscription expires`);
+            if (existingSubscriptions.length > 1) {
+                await Promise.all(
+                    existingSubscriptions
+                        .slice(1)
+                        .map((sub) =>
+                            deleteSubscriptionAsync(
+                                http,
+                                sub.id,
+                                userAccessToken
+                            )
+                        )
+                );
+            }
+            // For older versions of the app, clientState is not set
+            const hasClientState = new URL(
+                existingSubscriptions[0].notificationUrl
+            ).searchParams.has('hasClientState');
+            if (!hasClientState) {
+                await deleteSubscriptionAsync(
+                    http,
+                    existingSubscriptions[0].id,
+                    userAccessToken
+                );
+            } else {
+                const existingSub = existingSubscriptions[0];
+                const currentExpireTime = new Date(existingSub.expirationDateTime);
+                const now = new Date();
+                const nextUpdateTime = new Date(
+                    now.getTime() + ms(RegistrationAutoRenewInterval)
+                );
+
+                const timeLeftAtNextUpdate = currentExpireTime.getTime() - nextUpdateTime.getTime();
+
+                const threshold = ms(RegistrationAutoRenewInterval) / 2;
+
+                const shouldRenew = timeLeftAtNextUpdate <= threshold;
+
+                if (!shouldRenew && !forceRenew) {
+                    return;
+                }
+                return await renewSubscriptionAsync(
+                    http,
+                    existingSubscriptions[0].id,
+                    userAccessToken,
+                    expirationDateTime,
+                    clientState
+                );
+            }
+        }
+    }
 
     const httpRequest: IHttpRequest = {
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userAccessToken}`,
         },
-        content: JSON.stringify(body)
+        content: JSON.stringify(body),
     };
 
     const response = await http.post(url, httpRequest);
@@ -945,18 +1049,23 @@ export const subscribeToAllMessagesForOneUserAsync = async (
     if (response.statusCode === HttpStatusCode.CREATED) {
         const responseBody = response.data;
         if (responseBody === undefined) {
-            throw new Error('Subscribe to notification for user failed!');
+            throw new Error("Subscribe to notification for user failed!");
         }
 
-
-        const result : SubscriptionResponse = {
+        const result: SubscriptionResponse = {
             subscriptionId: responseBody.id,
             expirationTime: new Date(responseBody.expirationDateTime),
         };
 
         return result;
     } else {
-        throw new Error(`Subscribe to notification for user failed with http status code ${response.statusCode}.`);
+        throw new Error(
+            `Subscribe to notification for user failed with http status code ${response.statusCode}.\nReceived: ${JSON.stringify(
+                response.data,
+                null,
+                2
+            )}`
+        );
     }
 };
 

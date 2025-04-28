@@ -6,7 +6,7 @@ import { generateHintMessageWithTeamsLoginButton, notifyRocketChatUserAsync, not
 import { AuthenticationEndpointPath, LoginMessageText, LoginNoNeedHintMessageText } from "../lib/Const";
 import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
-import { retrieveUserAccessTokenAsync } from "../lib/PersistHelper";
+import { getUserAccessTokenAsync } from "../lib/AuthHelper";
 
 export class LoginTeamsSlashCommand implements ISlashCommand {
     public command: string = 'teamsbridge-login-teams';
@@ -24,7 +24,7 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
         read: IRead,
         modify: IModify,
         http: IHttp,
-        persis: IPersistence): Promise<void> {
+        persistence: IPersistence): Promise<void> {
         const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
         const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
         const accessors = this.app.getAccessors();
@@ -36,7 +36,13 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
         const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
 
         // If the user has already logged, print some other information instead of the login url
-        const userAccessToken = await retrieveUserAccessTokenAsync(read, persis, commandSender.id);
+        const userAccessToken = await getUserAccessTokenAsync({
+            read,
+            persistence,
+            rocketChatUserId: commandSender.id,
+            app: this.app,
+            http,
+        });
         if (userAccessToken) {
             await notifyRocketChatUserInRoomAsync(LoginNoNeedHintMessageText, appUser, commandSender, room, modify.getNotifier());
             return;

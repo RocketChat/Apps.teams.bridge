@@ -1,4 +1,5 @@
 import {
+    IHttp,
     IPersistence,
     IPersistenceRead,
     IRead,
@@ -10,9 +11,10 @@ import {
 } from '@rocket.chat/apps-engine/definition/metadata';
 import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
 import { IUser } from '@rocket.chat/apps-engine/definition/users';
+import { randomBytes, createHmac } from 'crypto';
 import * as sha256 from 'crypto-js/sha256';
 
-const MiscKeys = {
+export const MiscKeys = {
     ApplicationAccessToken: 'ApplicationAccessToken',
     UserRegistration: 'UserAccessToken',
     User: 'User',
@@ -25,14 +27,15 @@ const MiscKeys = {
     LoginMessage: 'LoginMessage',
     BridgedMessage: 'BridgedMessage',
     BridgedMessageFootprint: 'BridgedMessageFootprint',
-
+    WebhookSecret: 'webhook-secret',
+    SubscriptionRenewalJobState: 'TeamsBridgeSubscriptionRenewalJobState',
 };
 
 interface ApplicationAccessTokenModel {
     accessToken: string;
 }
 
-interface UserRegistrationModel {
+export interface UserRegistrationModel {
     rocketChatUserId: string;
     accessToken: string;
     refreshToken: string;
@@ -74,6 +77,10 @@ export interface TeamsUserProfileModel {
 export interface OneDriveFileModel {
     fileName: string;
     driveItemId: string;
+}
+
+export interface SubscriptionRenewalJobState {
+    lastStartedJobTimestamp: string | Date;
 }
 
 export const persistApplicationAccessTokenAsync = async (
@@ -515,11 +522,11 @@ export const retrieveUserByTeamsUserIdAsync = async (
     return data;
 };
 
-export const retrieveUserAccessTokenAsync = async (
-    read: IRead,
-    persistence: IPersistence,
-    rocketChatUserId: string
-): Promise<string | null> => {
+export const retrieveUserAccessTokenDataAsync = async (options: {
+    read: IRead;
+    rocketChatUserId: string;
+}): Promise<UserRegistrationModel | null> => {
+    const { read, rocketChatUserId } = options;
     const associations: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(
             RocketChatAssociationModel.MISC,
@@ -546,86 +553,7 @@ export const retrieveUserAccessTokenAsync = async (
 
     const data: UserRegistrationModel = results[0] as UserRegistrationModel;
 
-    const now = new Date();
-    const epochInSecond = Math.round(now.getTime() / 1000);
-
-    if (!data.expires || epochInSecond > data.expires) {
-        await saveLoginMessageSentStatus({
-            persistence,
-            rocketChatUserId,
-            wasSent: false,
-        });
-        return null;
-    }
-
-    return data.accessToken;
-};
-
-export const retrieveAllUsersAccessTokenAsync = async (
-    read: IRead,
-): Promise<Array<string> | null> => {
-    const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.UserRegistration
-        ),
-    ];
-
-    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
-    const results = await persistenceRead.readByAssociations(associations) as Array<UserRegistrationModel>;
-
-    if (results == null || results.length == 0) {
-        return null;
-    }
-
-    return results.map((result) => result.accessToken);
-};
-
-export const retrieveUserRefreshTokenAsync = async (
-    read: IRead,
-    persistence: IPersistence,
-    rocketChatUserId: string
-): Promise<string | null> => {
-    const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.UserRegistration
-        ),
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.USER,
-            rocketChatUserId
-        ),
-    ];
-
-    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
-    const results = await persistenceRead.readByAssociations(associations);
-
-    if (results === undefined || results === null || results.length == 0) {
-        return null;
-    }
-
-    if (results.length > 1) {
-        throw new Error(
-            `More than one UserAccessToken record for user ${rocketChatUserId}`
-        );
-    }
-
-    const data: UserRegistrationModel = results[0] as UserRegistrationModel;
-
-    const now = new Date();
-    const epochInSecond = Math.round(now.getTime() / 1000);
-
-    if (!data.extExpires || epochInSecond > data.extExpires) {
-        await saveLoginMessageSentStatus({
-            persistence,
-            rocketChatUserId,
-            wasSent: false,
-        });
-
-        return null;
-    }
-
-    return data.refreshToken;
+    return data || null;
 };
 
 export const retrieveAllUserRegistrationsAsync = async (
@@ -644,14 +572,7 @@ export const retrieveAllUserRegistrationsAsync = async (
     if (results === undefined || results === null || results.length == 0) {
         return null;
     }
-
-    const now = new Date();
-    const epochInSecond = Math.round(now.getTime() / 1000);
-
-    return (results as Array<UserRegistrationModel>).filter((registration) => {
-        return registration.extExpires && epochInSecond <= registration.extExpires;
-    });
-
+    return (results as Array<UserRegistrationModel>);
 };
 
 export const retrieveSubscriptionAsync = async (
@@ -1017,7 +938,7 @@ export const retrieveLoginMessageSentStatus = async ({
         return false;
     }
 
-    return result[0].isLoginMessageSent;
+    return !!result[0]?.isLoginMessageSent;
 };
 
 type LastBridgedMessageInfo = {
@@ -1196,3 +1117,113 @@ export const getMessageFootPrintExistenceInfo = async (message: IMessage, read: 
     }
 
 }
+
+export const createWebhookSecret = async ({ persistence }: { persistence: IPersistence }) => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.WebhookSecret
+        ),
+    ];
+
+    const secretLength = 16;
+    const secret = randomBytes(secretLength).toString("hex");
+    await persistence.createWithAssociations({ secret }, associations);
+    return secret;
+}
+
+export const getWebhookSecret = async ({
+    persistenceRead
+}: {
+    persistenceRead: IPersistenceRead;
+}): Promise<string | null> => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.WebhookSecret
+        ),
+    ];
+    const [record] = await persistenceRead.readByAssociations(associations);
+    return (record as any)?.secret || null;
+}
+
+export const getOrCreatWebhookSecret = async ({
+    persistenceRead,
+    persistenceWrite,
+}: {
+    persistenceRead: IPersistenceRead;
+    persistenceWrite: IPersistence;
+}): Promise<string> => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.WebhookSecret
+        ),
+    ];
+    const [record] = await persistenceRead.readByAssociations(associations);
+    const secret = (record as any)?.secret || null;
+
+    if (secret) {
+        return secret;
+    }
+    return await createWebhookSecret({ persistence: persistenceWrite });
+};
+
+export const getSubscriptionStateHashForUser = async (
+    persistenceRead: IPersistenceRead,
+    persistenceWrite: IPersistence,
+    user: Pick<UserModel, "rocketChatUserId">
+) => {
+    const webhookSecret = await getOrCreatWebhookSecret({
+        persistenceRead,
+        persistenceWrite,
+    });
+
+    const hmac = createHmac("sha256", webhookSecret).update(
+        user.rocketChatUserId
+    );
+
+    return hmac.digest("hex");
+};
+
+export const retrieveSubscriptionRenewalJobState = async ({
+    persistenceRead,
+}: {
+    persistenceRead: IPersistenceRead;
+}) => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.SubscriptionRenewalJobState
+        ),
+    ];
+    const [record] = await persistenceRead.readByAssociations(associations);
+    if (!record) {
+        return null;
+    }
+
+    return record as SubscriptionRenewalJobState | null;
+};
+
+
+export const persistSubscriptionRenewalJobState = async ({
+    persistence,
+    lastStartedJobTimestamp,
+}: {
+    persistence: IPersistence;
+} & SubscriptionRenewalJobState) => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.SubscriptionRenewalJobState
+        ),
+    ];
+
+    const data: SubscriptionRenewalJobState = {
+        lastStartedJobTimestamp,
+    };
+
+    await persistence.updateByAssociations(associations, data, true);
+
+    return data;
+};

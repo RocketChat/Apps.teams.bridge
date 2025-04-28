@@ -10,7 +10,6 @@ import {
     IApiRequest,
     IApiResponse,
 } from "@rocket.chat/apps-engine/definition/api";
-import { IApp } from "@rocket.chat/apps-engine/definition/IApp";
 import { SubscriberEndpointPath } from "../lib/Const";
 import {
     handleInboundNotificationAsync,
@@ -18,8 +17,11 @@ import {
     NotificationChangeType,
     NotificationResourceType,
 } from "../lib/InboundNotificationHelper";
+import { getSubscriptionStateHashForUser } from "../lib/PersistHelper";
+import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export class SubscriberEndpoint extends ApiEndpoint {
+    app: TeamsBridgeApp;
     private supportedChangeTypeMapping = {
         created: NotificationChangeType.Created,
         updated: NotificationChangeType.Updated,
@@ -32,7 +34,7 @@ export class SubscriberEndpoint extends ApiEndpoint {
 
     public path = SubscriberEndpointPath;
 
-    constructor(app: IApp) {
+    constructor(app: TeamsBridgeApp) {
         super(app);
         this.parseChangeType = this.parseChangeType.bind(this);
         this.parseResourceType = this.parseResourceType.bind(this);
@@ -71,6 +73,37 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     continue;
                 }
 
+                const clientState = rawNotification.clientState;
+
+                if (!clientState) {
+                    // If clientState is not present, either it's an old subscription or
+                    // the notification is not from our app. We should ignore it.
+                    const message = `Source of notification cannot be verified. clientState is missing. Processing skipped.`;
+                    this.app.getLogger().error(message);
+                    return {
+                        status: 401,
+                        content: message,
+                    };
+                }
+
+                if (
+                    clientState !==
+                    (await getSubscriptionStateHashForUser(
+                        read.getPersistenceReader(),
+                        persis,
+                        {
+                            rocketChatUserId: receiverRocketChatUserId
+                        }
+                    ))
+                ) {
+                    const message = `Source of notification cannot be verified. clientState is invalid. Processing skipped.`;
+                    this.app.getLogger().error(message);
+                    return {
+                        status: 401,
+                        content: message,
+                    };
+                }
+
                 const inBoundNotification: InBoundNotification = {
                     receiverRocketChatUserId: receiverRocketChatUserId,
                     subscriptionId: rawNotification.subscriptionId,
@@ -80,18 +113,18 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     resourceType: resourceType,
                 };
 
-                await handleInboundNotificationAsync(
+                await handleInboundNotificationAsync({
                     inBoundNotification,
                     read,
                     modify,
                     http,
-                    persis,
-                    this.app.getID()
-                );
+                    persistence: persis,
+                    app: this.app,
+                });
             } catch (error) {
                 // If there's an error, print a warning but not block the whole process
                 console.error(
-                    `Error when handling inbound notification. Details: ${error}`
+                    `Error when handling inbound notification. Details: ${error.message}`
                 );
             }
         }

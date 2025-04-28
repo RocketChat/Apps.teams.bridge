@@ -22,9 +22,11 @@ import {
     deleteUserAccessTokenAsync,
     deleteUserAsync,
     retrieveLoginMessageSentStatus,
-    retrieveUserAccessTokenAsync,
     saveLoginMessageSentStatus,
 } from '../lib/PersistHelper';
+import { getNotificationEndpointUrl } from '../lib/UrlHelper';
+import { TeamsBridgeApp } from '../TeamsBridgeApp';
+import { getUserAccessTokenAsync } from '../lib/AuthHelper';
 
 export class LogoutTeamsSlashCommand implements ISlashCommand {
     public command: string = 'teamsbridge-logout-teams';
@@ -34,12 +36,14 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
     public permission?: string | undefined;
     public providesPreview: boolean = false;
 
+    public constructor(private readonly app: TeamsBridgeApp) {}
+
     public async executor(
         context: SlashCommandContext,
         read: IRead,
         modify: IModify,
         http: IHttp,
-        persis: IPersistence
+        persistence: IPersistence
     ): Promise<void> {
         const notifier = modify.getNotifier();
         const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
@@ -48,11 +52,13 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
 
         // Retrieve existing access token
         const rocketChatUserId = sender.id;
-        const userAccessToken = await retrieveUserAccessTokenAsync(
+        const userAccessToken = await getUserAccessTokenAsync({
             read,
-            persis,
-            rocketChatUserId
-        );
+            persistence,
+            rocketChatUserId,
+            app: this.app,
+            http,
+        });
 
         const wasSent = await retrieveLoginMessageSentStatus({
             read,
@@ -73,7 +79,7 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
             );
 
             await saveLoginMessageSentStatus({
-                persistence: persis,
+                persistence,
                 rocketChatUserId,
                 wasSent: false,
             });
@@ -81,7 +87,14 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
             return;
         }
 
-        await deleteAllSubscriptions(http, userAccessToken);
+        await deleteAllSubscriptions(
+            http,
+            userAccessToken,
+            await getNotificationEndpointUrl({
+                appAccessors: this.app.getAccessors(),
+                rocketChatUserId,
+            })
+        );
 
         // Revoke refresh token
         try {
@@ -94,10 +107,10 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         }
 
         await Promise.all([
-            deleteUserAccessTokenAsync(persis, rocketChatUserId),
+            deleteUserAccessTokenAsync(persistence, rocketChatUserId),
 
             // Delete user record
-            deleteUserAsync(read, persis, rocketChatUserId),
+            deleteUserAsync(read, persistence, rocketChatUserId),
 
             // Notify the user
             notifyRocketChatUserInRoomAsync(
@@ -110,7 +123,7 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
 
             // Set the login message status to false
             saveLoginMessageSentStatus({
-                persistence: persis,
+                persistence,
                 rocketChatUserId,
                 wasSent: false,
             }),
