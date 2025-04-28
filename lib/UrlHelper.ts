@@ -54,7 +54,7 @@ export function getNotificationEndpointUrl({
             resolve(`${subscriberEndpointUrl}?userId=${rocketChatUserId}`);
         });
     } else if (subscriberEndpoint && rocketChatUserId) {
-        return `${subscriberEndpoint}?userId=${rocketChatUserId}`;
+        return `${subscriberEndpoint}?userId=${rocketChatUserId}&hasClientState=1`;
     }
     throw new Error("Invalid parameters");
 }

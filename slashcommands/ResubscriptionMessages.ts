@@ -117,6 +117,7 @@ export class ResubscribeMessages implements ISlashCommand {
                 teamsUserId: user.teamsUserId,
                 userAccessToken,
                 renewIfExists: true,
+                forceRenew: true,
             });
             const message = `You have been successfully subscribed to messages.`;
             await notifyRocketChatUserInRoomAsync(

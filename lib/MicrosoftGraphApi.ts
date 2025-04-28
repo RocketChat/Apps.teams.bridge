@@ -5,6 +5,7 @@ import {
     IPersistence,
     IRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
+import * as ms from 'ms';
 import {
     AuthenticationScopes,
     getGraphApiChatUrl,
@@ -26,6 +27,7 @@ import {
     getGraphApiRevokeRefreshTokenUrl,
     getGraphApiSubscriptionOperationUrl,
     getGraphApiChatThreadWithMemberUrl,
+    RegistrationAutoRenewInterval,
 } from "./Const";
 import { getNotificationEndpointUrl } from "./UrlHelper";
 import { getSubscriptionStateHashForUser } from "./PersistHelper";
@@ -826,25 +828,29 @@ export const renewSubscriptionAsync = async (
     http: IHttp,
     subscriptionId: string,
     userAccessToken: string,
-    expirationDateTime?: Date) : Promise<SubscriptionResponse|undefined> => {
-
+    expirationDateTime?: Date,
+    clientState?: string
+): Promise<SubscriptionResponse | undefined> => {
     if (!expirationDateTime) {
         expirationDateTime = new Date();
-        expirationDateTime.setSeconds(expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond);
+        expirationDateTime.setSeconds(
+            expirationDateTime.getSeconds() + SubscriptionMaxExpireTimeInSecond
+        );
     }
 
     const url = getGraphApiSubscriptionOperationUrl(subscriptionId);
 
     const body = {
-        'expirationDateTime': expirationDateTime.toISOString()
+        expirationDateTime: expirationDateTime.toISOString(),
+        ...(clientState && { clientState }),
     };
 
     const httpRequest: IHttpRequest = {
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userAccessToken}`,
         },
-        content: JSON.stringify(body)
+        content: JSON.stringify(body),
     };
 
     const response = await http.patch(url, httpRequest);
@@ -852,10 +858,10 @@ export const renewSubscriptionAsync = async (
     if (response.statusCode === HttpStatusCode.OK) {
         const responseBody = response.data;
         if (responseBody === undefined) {
-            throw new Error('Renew subscription failed!');
+            throw new Error("Renew subscription failed!");
         }
 
-        const result : SubscriptionResponse = {
+        const result: SubscriptionResponse = {
             subscriptionId: responseBody.id,
             expirationTime: new Date(responseBody.expirationDateTime),
         };
@@ -867,7 +873,7 @@ export const renewSubscriptionAsync = async (
                 response.statusCode
             }.\nReceived: ${JSON.stringify(response.data, null, 2)}`
         );
-        return
+        return;
     }
 };
 
@@ -929,6 +935,7 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
     userAccessToken: string;
     expirationDateTime?: Date;
     renewIfExists?: boolean;
+    forceRenew?: boolean;
 }): Promise<SubscriptionResponse | undefined> => {
     const {
         rocketChatUserId,
@@ -937,6 +944,7 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
         userAccessToken,
         expirationDateTime: inputExpirationDateTime,
         renewIfExists = true,
+        forceRenew = false,
         http,
         read,
         persis,
@@ -957,19 +965,26 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
         rocketChatUserId,
     });
 
+    const clientState = await getSubscriptionStateHashForUser(
+        read.getPersistenceReader(),
+        persis,
+        { rocketChatUserId }
+    );
     const body = {
         changeType: SupportedNotificationChangeTypes.join(","),
         notificationUrl,
         resource: `/users/${teamsUserId}/chats/getAllMessages`,
         includeResourceData: false,
         expirationDateTime: expirationDateTime.toISOString(),
-        clientState: await getSubscriptionStateHashForUser(read.getPersistenceReader(), persis, { rocketChatUserId }),
+        clientState,
     };
 
     if (renewIfExists) {
         const existingSubscriptions = await listSubscriptionsAsync(http, userAccessToken, notificationUrl) || [];
 
         if (existingSubscriptions.length > 0) {
+
+            console.log(`Subscription expires`);
             if (existingSubscriptions.length > 1) {
                 await Promise.all(
                     existingSubscriptions
@@ -984,18 +999,38 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
                 );
             }
             // For older versions of the app, clientState is not set
-            if (!existingSubscriptions[0].clientState) {
+            const hasClientState = new URL(
+                existingSubscriptions[0].notificationUrl
+            ).searchParams.has('hasClientState');
+            if (!hasClientState) {
                 await deleteSubscriptionAsync(
                     http,
                     existingSubscriptions[0].id,
                     userAccessToken
                 );
             } else {
+                const existingSub = existingSubscriptions[0];
+                const currentExpireTime = new Date(existingSub.expirationDateTime);
+                const now = new Date();
+                const nextUpdateTime = new Date(
+                    now.getTime() + ms(RegistrationAutoRenewInterval)
+                );
+
+                const timeLeftAtNextUpdate = currentExpireTime.getTime() - nextUpdateTime.getTime();
+
+                const threshold = ms(RegistrationAutoRenewInterval) / 2;
+
+                const shouldRenew = timeLeftAtNextUpdate <= threshold;
+
+                if (!shouldRenew && !forceRenew) {
+                    return;
+                }
                 return await renewSubscriptionAsync(
                     http,
                     existingSubscriptions[0].id,
                     userAccessToken,
-                    expirationDateTime
+                    expirationDateTime,
+                    clientState
                 );
             }
         }

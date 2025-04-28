@@ -68,7 +68,7 @@ import {
     UserModel,
 } from "./PersistHelper";
 import { getLoginUrl, getNotificationEndpointUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
-import { getUserAccessTokenAsync } from "./AuthHelper";
+import { getAllUsersAccessTokensAsync, getUserAccessTokenAsync } from "./AuthHelper";
 
 let wasPrevent = false
 
@@ -934,7 +934,6 @@ export const handleUserRegistrationAutoRenewAsync = async (options: {
                     persistence,
                     read,
                     rocketChatUserId: registration.rocketChatUserId,
-                    forceRefresh: true,
                 });
 
                 if (!userAccessToken) {
@@ -962,6 +961,7 @@ export const handleUserRegistrationAutoRenewAsync = async (options: {
                     teamsUserId: user.teamsUserId,
                     userAccessToken,
                     renewIfExists: true,
+                    forceRenew: false,
                 });
             } catch (error) {
                 console.error(
@@ -1065,40 +1065,61 @@ const notifyNotLoggedInUserAsync = async (
     await notifyRocketChatUserAsync(message, user, read.getNotifier());
 };
 
-const deleteAllUsersSubscriptions = async (read: IRead, http: IHttp, appAccessors: IAppAccessors) => {
-    const allRegisteredUsers = await retrieveAllUserRegistrationsAsync(read);
+const deleteAllUsersSubscriptions = async (options: {
+    read: IRead;
+    persistence: IPersistence;
+    http: IHttp;
+    app: TeamsBridgeApp;
+}) => {
+    const { read, persistence, http, app } = options;
+    const allRegisteredUsers = await getAllUsersAccessTokensAsync({
+        read,
+        http,
+        app,
+        persistence,
+    });
 
     if (!allRegisteredUsers) {
         return;
     }
 
-    const deletePromises = allRegisteredUsers.map(async (registeredUser) => {
-        try {
-            const notificationUrl = await getNotificationEndpointUrl({
-                appAccessors,
-                rocketChatUserId: registeredUser.rocketChatUserId,
-            });
-            await deleteAllSubscriptions(http, registeredUser.accessToken, notificationUrl);
-        } catch (error) {
-            console.error(`Error deleting subscriptions for user: ${error.message}`);
-        }
-    });
-
-    await Promise.all(deletePromises); // Wait for all deletions to complete
+    const batchSize = 10;
+    for (let i = 0; i < allRegisteredUsers.length; i += batchSize) {
+        const batch = allRegisteredUsers.slice(i, i + batchSize);
+        const deletePromises = batch.map(async ({ accessToken, rocketChatUserId }) => {
+            try {
+                const notificationUrl = await getNotificationEndpointUrl({
+                    appAccessors: app.getAccessors(),
+                    rocketChatUserId: rocketChatUserId,
+                });
+                if (accessToken) {
+                    await deleteAllSubscriptions(
+                        http,
+                        accessToken,
+                        notificationUrl
+                    );
+                }
+            } catch (error) {
+                console.error(
+                    `Error deleting subscriptions for user: ${error.message}`
+                );
+            }
+        });
+        await Promise.all(deletePromises); // Wait for the current batch to complete
+    }
 };
 
-export const handleUninstallApp = async (
-    read: IRead,
-    http: IHttp,
-    modify: IModify,
-    app: TeamsBridgeApp
-) => {
+export const handleUninstallApp = async (options: {
+    read: IRead;
+    http: IHttp;
+    modify: IModify;
+    persistence: IPersistence;
+    app: TeamsBridgeApp;
+}) => {
+    const { modify, app } = options;
     try {
-        await Promise.all([
-            app.deleteAppUsers(modify),
-            deleteAllUsersSubscriptions(read, http, app.getAccessors()),
-        ]);
-
+        await deleteAllUsersSubscriptions(options),
+        await app.deleteAppUsers(modify);
     } catch (error) {
         console.error(`Error during app uninstallation: ${error.message}`);
     }

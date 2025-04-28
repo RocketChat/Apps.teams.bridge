@@ -13,8 +13,6 @@ import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
 import { IUser } from '@rocket.chat/apps-engine/definition/users';
 import { randomBytes, createHmac } from 'crypto';
 import * as sha256 from 'crypto-js/sha256';
-import type { TeamsBridgeApp } from '../TeamsBridgeApp';
-import { AppSetting } from '../config/Settings';
 
 export const MiscKeys = {
     ApplicationAccessToken: 'ApplicationAccessToken',
@@ -30,6 +28,7 @@ export const MiscKeys = {
     BridgedMessage: 'BridgedMessage',
     BridgedMessageFootprint: 'BridgedMessageFootprint',
     WebhookSecret: 'webhook-secret',
+    SubscriptionRenewalJobState: 'TeamsBridgeSubscriptionRenewalJobState',
 };
 
 interface ApplicationAccessTokenModel {
@@ -78,6 +77,10 @@ export interface TeamsUserProfileModel {
 export interface OneDriveFileModel {
     fileName: string;
     driveItemId: string;
+}
+
+export interface SubscriptionRenewalJobState {
+    lastStartedJobTimestamp: string | Date;
 }
 
 export const persistApplicationAccessTokenAsync = async (
@@ -553,26 +556,6 @@ export const retrieveUserAccessTokenDataAsync = async (options: {
     return data || null;
 };
 
-export const retrieveAllUsersAccessTokenAsync = async (
-    read: IRead,
-): Promise<Array<string> | null> => {
-    const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.UserRegistration
-        ),
-    ];
-
-    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
-    const results = await persistenceRead.readByAssociations(associations) as Array<UserRegistrationModel>;
-
-    if (results == null || results.length == 0) {
-        return null;
-    }
-
-    return results.map((result) => result.accessToken);
-};
-
 export const retrieveAllUserRegistrationsAsync = async (
     read: IRead
 ): Promise<Array<UserRegistrationModel> | null> => {
@@ -589,14 +572,7 @@ export const retrieveAllUserRegistrationsAsync = async (
     if (results === undefined || results === null || results.length == 0) {
         return null;
     }
-
-    const now = new Date();
-    const epochInSecond = Math.round(now.getTime() / 1000);
-
-    return (results as Array<UserRegistrationModel>).filter((registration) => {
-        return registration.extExpires && epochInSecond <= registration.extExpires;
-    });
-
+    return (results as Array<UserRegistrationModel>);
 };
 
 export const retrieveSubscriptionAsync = async (
@@ -1208,4 +1184,46 @@ export const getSubscriptionStateHashForUser = async (
     );
 
     return hmac.digest("hex");
+};
+
+export const retrieveSubscriptionRenewalJobState = async ({
+    persistenceRead,
+}: {
+    persistenceRead: IPersistenceRead;
+}) => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.SubscriptionRenewalJobState
+        ),
+    ];
+    const [record] = await persistenceRead.readByAssociations(associations);
+    if (!record) {
+        return null;
+    }
+
+    return record as SubscriptionRenewalJobState | null;
+};
+
+
+export const persistSubscriptionRenewalJobState = async ({
+    persistence,
+    lastStartedJobTimestamp,
+}: {
+    persistence: IPersistence;
+} & SubscriptionRenewalJobState) => {
+    const associations = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.SubscriptionRenewalJobState
+        ),
+    ];
+
+    const data: SubscriptionRenewalJobState = {
+        lastStartedJobTimestamp,
+    };
+
+    await persistence.updateByAssociations(associations, data, true);
+
+    return data;
 };

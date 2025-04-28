@@ -83,7 +83,7 @@ import { LogoutTeamsSlashCommand } from './slashcommands/LogoutTeamsSlashCommand
 import { ProvisionTeamsBotUserSlashCommand } from './slashcommands/ProvisionTeamsBotUserSlashCommand';
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
 import { ResubscribeMessages } from './slashcommands/ResubscriptionMessages';
-import { createWebhookSecret, getWebhookSecret } from './lib/PersistHelper';
+import { createWebhookSecret, getWebhookSecret, persistSubscriptionRenewalJobState, retrieveSubscriptionRenewalJobState } from './lib/PersistHelper';
 
 export class TeamsBridgeApp
     extends App
@@ -121,6 +121,19 @@ export class TeamsBridgeApp
                 id: WebhookSecretCreationJobId,
                 when: new Date(),
             });
+
+            await configurationModify.scheduler.scheduleOnce({
+                id: RegistrationAutoRenewSchedulerId,
+                when: new Date(Date.now() + 5000),
+                data: { from: 'ScheduleOnce'}
+            });
+
+            await configurationModify.scheduler.scheduleRecurring({
+                id: RegistrationAutoRenewSchedulerId,
+                interval: RegistrationAutoRenewInterval,
+                data: { from: 'ScheduleRecurring' },
+                skipImmediate: true,
+            });
         } catch (e) {
             this.getLogger().error(e);
         }
@@ -138,7 +151,13 @@ export class TeamsBridgeApp
       persistence: IPersistence,
       modify: IModify,
     ): Promise<void> {
-      return handleUninstallApp(read, http, modify, this)
+        return handleUninstallApp({
+            read,
+            http,
+            modify,
+            app: this,
+            persistence,
+        });
     }
 
     public async executePreMessageSentPrevent(
@@ -420,30 +439,45 @@ export class TeamsBridgeApp
             persistence: IPersistence,
           ) => {
             try {
-              console.log('Start renew registrations!');
-              const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(
-                this.getAccessors(),
-                SubscriberEndpointPath,
-              );
+                console.log(`Start renew registrations! (from: ${jobContext.from})`);
+                let jobState = await retrieveSubscriptionRenewalJobState({ persistenceRead: read.getPersistenceReader() });
 
-              await handleUserRegistrationAutoRenewAsync({
-                subscriberEndpointUrl,
-                read,
-                http,
-                persistence,
-                app: this,
-              });
-              console.log('Finish renew registrations!');
+                if (
+                    jobState &&
+                    jobState.lastStartedJobTimestamp &&
+                    Date.now() -
+                        new Date(jobState.lastStartedJobTimestamp).getTime() <
+                        5 * 60 * 1000
+                ) {
+                    // Job ran less than 5 minutes ago
+                    console.log(`${RegistrationAutoRenewSchedulerId} Job already ran less than 5 minutes ago. Skipping this run.`);
+                    return;
+                }
+
+                await persistSubscriptionRenewalJobState({
+                    persistence,
+                    lastStartedJobTimestamp: new Date(),
+                });
+
+                const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(
+                    this.getAccessors(),
+                    SubscriberEndpointPath,
+                );
+
+                await handleUserRegistrationAutoRenewAsync({
+                    subscriberEndpointUrl,
+                    read,
+                    http,
+                    persistence,
+                    app: this,
+                });
+                console.log('Finish renew registrations!');
             } catch (error) {
-              throw new Error(
-                `Auto renew registration failed with error: ${error}`,
-              );
+                throw new Error(
+                    `Auto renew registration failed with error: ${error}`,
+                );
             }
-          },
-          startupSetting: {
-            type: StartupType.RECURRING,
-            interval: RegistrationAutoRenewInterval,
-          },
+          }
         },
         {
             id: WebhookSecretCreationJobId,

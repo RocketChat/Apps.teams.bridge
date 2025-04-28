@@ -12,6 +12,7 @@
     "dependencies": {
         "@rocket.chat/icons": "^0.32.0",
         "@rocket.chat/ui-kit": "^0.31.22",
-        "crypto-js": "^4.1.1"
+        "crypto-js": "^4.1.1",
+        "ms": "^2.1.3"
     }
 }

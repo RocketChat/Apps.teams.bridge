@@ -129,6 +129,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 teamsUserId: teamsUserProfile.id,
                 userAccessToken,
                 renewIfExists: true,
+                forceRenew: true,
             });
 
             return this.success(this.embeddedLoginSuccessMessage);
