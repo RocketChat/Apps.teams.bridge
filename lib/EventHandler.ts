@@ -81,15 +81,6 @@ export const handlePreMessageSentPreventAsync = async (options: {
 }): Promise<boolean> => {
     const { message, read, persistence, app, http } = options;
     try {
-        const wasSent = await retrieveLoginMessageSentStatus({
-            read,
-            rocketChatUserId: message.sender.id,
-        });
-
-        if (wasSent) {
-            return false;
-        }
-
         const appUser = (await read
             .getUserReader()
             .getByUsername("microsoftteamsbridge.bot")) as IUser;
@@ -224,31 +215,24 @@ export const handlePreMessageSentPreventAsync = async (options: {
                         }
                     } else {
                         // If there's no logged in user in the room, prevent the message
-                        if (isOneOnOneDirectMessage) {
-                            // For 1:1 chat, notify the sender to login
-
-                            await notifyNotLoggedInUserAsync(
+                        // For 1:1 chat, notify the sender to login
+                        // For other type of chat room, notify the message sender there's no available bridge user
+                        // Don't notify if already sent
+                        const wasSent =
+                            await retrieveLoginMessageSentStatus({
                                 read,
-                                message.sender,
-                                message.room,
-                                app,
-                                LoginRequiredHintMessageText
-                            );
-                            await saveLoginMessageSentStatus({
-                                persistence,
                                 rocketChatUserId: message.sender.id,
-                                wasSent: true,
                             });
-                        } else {
-                            // For other type of chat room
-                            // Notify the message sender there's no available bridge user
 
+                        if (!wasSent) {
                             await notifyNotLoggedInUserAsync(
                                 read,
                                 message.sender,
                                 message.room,
                                 app,
-                                LoggedInBridgeUserRequiredHintMessageText
+                                isOneOnOneDirectMessage
+                                    ? LoginRequiredHintMessageText
+                                    : LoggedInBridgeUserRequiredHintMessageText
                             );
                             await saveLoginMessageSentStatus({
                                 persistence,
