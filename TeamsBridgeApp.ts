@@ -122,10 +122,7 @@ export class TeamsBridgeApp
     }
 
     async executePreMessageSentModify(message: IMessage, builder: IMessageBuilder, read: IRead, http: IHttp, persistence: IPersistence) {
-        console.log("Before modification: " + JSON.stringify(message, null, 2));
         let extraInfoData = popExtraInfoAttachment(message);
-        console.log("After popExtraInfoAttachment: " + JSON.stringify(message, null, 2));
-        console.log("Extra info data: " + JSON.stringify(extraInfoData, null, 2));
         if (extraInfoData.source === 'ms-teams') {
            await PreventRegistry.set(
                persistence,
@@ -143,7 +140,6 @@ export class TeamsBridgeApp
                 return false;
             }
             const { originalFilename, present, extraInfo } = getExtraInfoAndOriginalFileName(att.title.value);
-            console.log(`Attachment[${i}] - originalFilename: ${originalFilename}, present: ${present}, extraInfo: ${JSON.stringify(extraInfo)}`);
             if (present) {
                 extraInfoData = extraInfo;
                 pos = i;
@@ -158,7 +154,6 @@ export class TeamsBridgeApp
                 `PreventPostMessageHook/${message.id}`,
                 true
             );
-            console.log(`Extra info found in attachment title: ${JSON.stringify(extraInfoData)}`);
             if (Array.isArray(message["_unmappedProperties_"]?.['files'])) {
                 message["_unmappedProperties_"]['files'] = message["_unmappedProperties_"]['files'].map((file) => {
                     if (file.name === message.attachments![pos].title?.value) {
@@ -183,7 +178,6 @@ export class TeamsBridgeApp
             if (message.file && originalFilenameFound) {
                 message.file = { ...message.file, name: originalFilenameFound };
             }
-            console.log("result from preMessageSentModify:", JSON.stringify({ message }, null, 2));
             return message;
         }
         return message;
