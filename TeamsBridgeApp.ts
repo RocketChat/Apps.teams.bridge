@@ -7,6 +7,7 @@ import {
     IEnvironmentRead,
     IHttp,
     ILogger,
+    IMessageBuilder,
     IModify,
     IPersistence,
     IRead,
@@ -23,6 +24,7 @@ import {
     IPostMessageSent,
     IPostMessageUpdated,
     IPreMessageDeletePrevent,
+    IPreMessageSentModify,
     IPreMessageSentPrevent,
     IPreMessageUpdatedPrevent,
   } from '@rocket.chat/apps-engine/definition/messages';
@@ -84,6 +86,9 @@ import { ProvisionTeamsBotUserSlashCommand } from './slashcommands/ProvisionTeam
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
 import { ResubscribeMessages } from './slashcommands/ResubscriptionMessages';
 import { createWebhookSecret, getWebhookSecret, persistSubscriptionRenewalJobState, retrieveSubscriptionRenewalJobState } from './lib/PersistHelper';
+import { InboundNotificationProcessor } from './jobs/InboundNotificationProcessor';
+import { PreventRegistry } from './lib/PreventRegistry';
+import { getExtraInfoAndOriginalFileName, popExtraInfoAttachment } from './lib/MessageHelper';
 
 export class TeamsBridgeApp
     extends App
@@ -95,6 +100,7 @@ export class TeamsBridgeApp
       IPostMessageDeleted,
       IPreMessageDeletePrevent,
       IPreFileUpload,
+      IPreMessageSentModify,
       IPreRoomUserLeave {
 
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
@@ -115,17 +121,86 @@ export class TeamsBridgeApp
         await createWebhookSecret({ persistence });
     }
 
+    async executePreMessageSentModify(message: IMessage, builder: IMessageBuilder, read: IRead, http: IHttp, persistence: IPersistence) {
+        console.log("Before modification: " + JSON.stringify(message, null, 2));
+        let extraInfoData = popExtraInfoAttachment(message);
+        console.log("After popExtraInfoAttachment: " + JSON.stringify(message, null, 2));
+        console.log("Extra info data: " + JSON.stringify(extraInfoData, null, 2));
+        if (extraInfoData.source === 'ms-teams') {
+           await PreventRegistry.set(
+               persistence,
+               `PreventPostMessageHook/${message.id}`,
+               true
+           );
+           return message;
+        }
+
+        extraInfoData = {}
+        let pos = -1;
+        let originalFilenameFound = '';
+        message.attachments?.forEach((att,i) => {
+            if (!att.title?.value) {
+                return false;
+            }
+            const { originalFilename, present, extraInfo } = getExtraInfoAndOriginalFileName(att.title.value);
+            console.log(`Attachment[${i}] - originalFilename: ${originalFilename}, present: ${present}, extraInfo: ${JSON.stringify(extraInfo)}`);
+            if (present) {
+                extraInfoData = extraInfo;
+                pos = i;
+                originalFilenameFound = originalFilename;
+            }
+            return true;
+        });
+
+        if (pos !== -1) {
+            await PreventRegistry.set(
+                persistence,
+                `PreventPostMessageHook/${message.id}`,
+                true
+            );
+            console.log(`Extra info found in attachment title: ${JSON.stringify(extraInfoData)}`);
+            if (Array.isArray(message["_unmappedProperties_"]?.['files'])) {
+                message["_unmappedProperties_"]['files'] = message["_unmappedProperties_"]['files'].map((file) => {
+                    if (file.name === message.attachments![pos].title?.value) {
+                        return { ...file, name: originalFilenameFound };
+                    }
+                    return file;
+                });
+            }
+
+            // Replace the attachment at position 'pos' with updated title
+            if (message.attachments?.[pos]) {
+                message.attachments[pos] = {
+                    ...message.attachments[pos],
+                    title: {
+                        ...message.attachments[pos].title,
+                        value: originalFilenameFound,
+                    },
+                };
+            }
+
+            // Update the file name if present
+            if (message.file && originalFilenameFound) {
+                message.file = { ...message.file, name: originalFilenameFound };
+            }
+            console.log("result from preMessageSentModify:", JSON.stringify({ message }, null, 2));
+            return message;
+        }
+        return message;
+    }
+
     async onEnable(environment: IEnvironmentRead, configurationModify: IConfigurationModify): Promise<boolean> {
         try {
             await configurationModify.scheduler.scheduleOnce({
                 id: WebhookSecretCreationJobId,
                 when: new Date(),
+                data: { from: "ScheduleOnce/Immediate" },
             });
 
             await configurationModify.scheduler.scheduleOnce({
                 id: RegistrationAutoRenewSchedulerId,
                 when: new Date(Date.now() + 5000),
-                data: { from: 'ScheduleOnce'}
+                data: { from: 'ScheduleOnce/5seconds' },
             });
 
             await configurationModify.scheduler.scheduleRecurring({
@@ -518,7 +593,8 @@ export class TeamsBridgeApp
                     );
                 }
             }
-        }
+        },
+        new InboundNotificationProcessor(this)
       ]);
     }
   }

@@ -10,9 +10,8 @@ import {
     IApiRequest,
     IApiResponse,
 } from "@rocket.chat/apps-engine/definition/api";
-import { SubscriberEndpointPath } from "../lib/Const";
+import { IncomingNotificationProcessorId, SubscriberEndpointPath } from "../lib/Const";
 import {
-    handleInboundNotificationAsync,
     InBoundNotification,
     NotificationChangeType,
     NotificationResourceType,
@@ -113,13 +112,10 @@ export class SubscriberEndpoint extends ApiEndpoint {
                     resourceType: resourceType,
                 };
 
-                await handleInboundNotificationAsync({
-                    inBoundNotification,
-                    read,
-                    modify,
-                    http,
-                    persistence: persis,
-                    app: this.app,
+                await modify.getScheduler().scheduleOnce({
+                    when: new Date(),
+                    data: { inBoundNotification },
+                    id: IncomingNotificationProcessorId,
                 });
             } catch (error) {
                 // If there's an error, print a warning but not block the whole process

@@ -85,10 +85,27 @@ export enum MessageContentType {
 export interface Attachment {
     id: string,
     contentType: string,
-    contentUrl: string,
-    name: string,
+    contentUrl: string | null,
+    name: string | null,
 };
 
+export interface TeamsMessageReaction {
+    reactionType: string; // e.g., "😆"
+    displayName: string; // e.g., "Laugh"
+    reactionContentUrl: string | null;
+    createdDateTime: string; // ISO datetime string
+    user: {
+        application: string | null;
+        device: string | null;
+        user: {
+            "@odata.type": "#microsoft.graph.teamworkUserIdentity";
+            id: string;
+            displayName: string | null;
+            userIdentityType: "aadUser" | string;
+            tenantId: string;
+        };
+    };
+}
 export interface GetMessageResponse {
     threadId: string;
     messageId: string;
@@ -98,6 +115,7 @@ export interface GetMessageResponse {
     messageContent: string;
     attachments?: Attachment[];
     memberIds?: string[];
+    reactions?: TeamsMessageReaction[];
 };
 
 export interface UploadFileResponse {
@@ -782,6 +800,7 @@ export const getMessageWithResourceStringAsync = async (
             messageContent: responseBody.body?.content,
             attachments: attachments,
             memberIds: memberIds,
+            reactions: responseBody.reactions,
         };
 
         return result;
@@ -983,8 +1002,6 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
         const existingSubscriptions = await listSubscriptionsAsync(http, userAccessToken, notificationUrl) || [];
 
         if (existingSubscriptions.length > 0) {
-
-            console.log(`Subscription expires`);
             if (existingSubscriptions.length > 1) {
                 await Promise.all(
                     existingSubscriptions

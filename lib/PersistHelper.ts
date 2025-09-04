@@ -15,20 +15,23 @@ import { randomBytes, createHmac } from 'crypto';
 import * as sha256 from 'crypto-js/sha256';
 
 export const MiscKeys = {
-    ApplicationAccessToken: 'ApplicationAccessToken',
-    UserRegistration: 'UserAccessToken',
-    User: 'User',
-    DummyUser: 'DummyUser',
-    Subscription: 'Subscription',
-    MessageIdMapping: 'MessageIdMapping',
-    Room: 'Room',
-    TeamsUserProfile: 'TeamsUserProfile',
-    OneDriveFile: 'OneDriveFile',
-    LoginMessage: 'LoginMessage',
-    BridgedMessage: 'BridgedMessage',
-    BridgedMessageFootprint: 'BridgedMessageFootprint',
-    WebhookSecret: 'webhook-secret',
-    SubscriptionRenewalJobState: 'TeamsBridgeSubscriptionRenewalJobState',
+    ApplicationAccessToken: "ApplicationAccessToken",
+    UserRegistration: "UserAccessToken",
+    User: "User",
+    DummyUser: "DummyUser",
+    Subscription: "Subscription",
+    MessageIdMapping: "MessageIdMapping",
+    Room: "Room",
+    TeamsUserProfile: "TeamsUserProfile",
+    OneDriveFile: "OneDriveFile",
+    LoginMessage: "LoginMessage",
+    BridgedMessage: "BridgedMessage",
+    BridgedMessageFootprint: "BridgedMessageFootprint",
+    WebhookSecret: "webhook-secret",
+    SubscriptionRenewalJobState: "TeamsBridgeSubscriptionRenewalJobState",
+    AttachmentMapping: "AttachmentMapping",
+    PreventRegistry: "PreventRegistry",
+    MessageExtraInfoDelimiter: "MessageExtraInfoDelimiter"
 };
 
 interface ApplicationAccessTokenModel {
@@ -54,10 +57,16 @@ export interface SubscriptionModel {
     expires: number;
 }
 
-export interface MessageIdModel {
+export interface MessageMappingModel {
     rocketChatMessageId: string;
     teamsMessageId: string;
     teamsThreadId: string;
+}
+export interface UploadMappingModel {
+    rocketchatUploadId: string;
+    teamsMessageId: string;
+    teamsThreadId: string;
+    teamsAttachmentId: string;
 }
 
 export interface RoomModel {
@@ -235,23 +244,27 @@ export const persistSubscriptionAsync = async (
     await persis.updateByAssociations(associations, data, true);
 };
 
-export const persistMessageIdMappingAsync = async (
-    persis: IPersistence,
-    rocketChatMessageId: string,
-    teamsMessageId: string,
-    teamsThreadId: string
-): Promise<void> => {
-    const associationsByRocketChatMessageId: Array<RocketChatAssociationRecord> =
-        [
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                MiscKeys.MessageIdMapping
-            ),
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MESSAGE,
-                rocketChatMessageId
-            ),
-        ];
+export const persistMessageIdMappingAsync = async ({
+    persistence,
+    rocketChatMessageId,
+    teamsMessageId,
+    teamsThreadId
+}: {
+    persistence: IPersistence;
+    rocketChatMessageId: string;
+    teamsMessageId: string;
+    teamsThreadId: string;
+}): Promise<void> => {
+    const associationsByRocketChatMessageId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.MessageIdMapping
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MESSAGE,
+            rocketChatMessageId
+        ),
+    ];
     const associationsByTeamsMessageId: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(
             RocketChatAssociationModel.MISC,
@@ -262,19 +275,68 @@ export const persistMessageIdMappingAsync = async (
             teamsMessageId
         ),
     ];
-    const data: MessageIdModel = {
+    const data: MessageMappingModel = {
         rocketChatMessageId,
         teamsMessageId,
         teamsThreadId,
     };
 
-    await persis.updateByAssociations(
+    await persistence.updateByAssociations(
         associationsByRocketChatMessageId,
         data,
         true
     );
-    await persis.updateByAssociations(associationsByTeamsMessageId, data, true);
+    await persistence.updateByAssociations(associationsByTeamsMessageId, data, true);
 };
+
+export const persistUploadAndTeamsMappingAsync = async ({
+    persistence,
+    rocketchatUploadId,
+    teamsMessageId,
+    teamsThreadId,
+    teamsAttachmentId
+}: {
+    persistence: IPersistence;
+    rocketchatUploadId: string;
+    teamsMessageId: string;
+    teamsThreadId: string;
+    teamsAttachmentId: string;
+}) => {
+    const associationsByRocketChatMessageId: Array<RocketChatAssociationRecord> =
+        [
+            new RocketChatAssociationRecord(
+                RocketChatAssociationModel.MISC,
+                MiscKeys.MessageIdMapping
+            ),
+            new RocketChatAssociationRecord(
+                RocketChatAssociationModel.MISC,
+                rocketchatUploadId
+            ),
+        ];
+    const associationsByTeamsMessageId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.MessageIdMapping
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            teamsMessageId
+        ),
+    ];
+    const data: UploadMappingModel = {
+        rocketchatUploadId,
+        teamsMessageId,
+        teamsThreadId,
+        teamsAttachmentId
+    };
+
+    await persistence.updateByAssociations(
+        associationsByRocketChatMessageId,
+        data,
+        true
+    );
+    await persistence.updateByAssociations(associationsByTeamsMessageId, data, true);
+}
 
 export const persistRoomAsync = async (
     persis: IPersistence,
@@ -618,7 +680,7 @@ export const retrieveSubscriptionAsync = async (
 export const retrieveMessageIdMappingByRocketChatMessageIdAsync = async (
     read: IRead,
     rocketChatMessageId: string
-): Promise<MessageIdModel | null> => {
+): Promise<MessageMappingModel | null> => {
     const associationsByRocketChatMessageId: Array<RocketChatAssociationRecord> =
         [
             new RocketChatAssociationRecord(
@@ -646,7 +708,7 @@ export const retrieveMessageIdMappingByRocketChatMessageIdAsync = async (
         );
     }
 
-    const data: MessageIdModel = results[0] as MessageIdModel;
+    const data: MessageMappingModel = results[0] as MessageMappingModel;
 
     return data;
 };
@@ -654,7 +716,7 @@ export const retrieveMessageIdMappingByRocketChatMessageIdAsync = async (
 export const retrieveMessageIdMappingByTeamsMessageIdAsync = async (
     read: IRead,
     teamsMessageId: string
-): Promise<MessageIdModel | null> => {
+): Promise<MessageMappingModel | null> => {
     const associationsByTeamsMessageId: Array<RocketChatAssociationRecord> = [
         new RocketChatAssociationRecord(
             RocketChatAssociationModel.MISC,
@@ -681,9 +743,52 @@ export const retrieveMessageIdMappingByTeamsMessageIdAsync = async (
         );
     }
 
-    const data: MessageIdModel = results[0] as MessageIdModel;
+    const data: MessageMappingModel = results[0] as MessageMappingModel;
 
     return data;
+};
+
+export const retrieveUploadMappingsByRocketChatUploadIdAsync = async (
+    read: IRead,
+    rocketChatUploadId: string
+) => {
+    const associationsByRocketChatUploadId: Array<RocketChatAssociationRecord> =
+        [
+            new RocketChatAssociationRecord(
+                RocketChatAssociationModel.MISC,
+                MiscKeys.AttachmentMapping
+            ),
+            new RocketChatAssociationRecord(
+                RocketChatAssociationModel.MISC,
+                rocketChatUploadId
+            ),
+        ];
+
+    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
+    return await persistenceRead.readByAssociations(
+        associationsByRocketChatUploadId
+    ) as Array<UploadMappingModel>;
+};
+
+export const retrieveUploadMappingsByTeamsMessageIdAsync = async (
+    read: IRead,
+    teamsMessageId: string
+): Promise<Array<UploadMappingModel> | null> => {
+    const associationsByTeamsMessageId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.AttachmentMapping
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            teamsMessageId
+        ),
+    ];
+
+    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
+    return await persistenceRead.readByAssociations(
+        associationsByTeamsMessageId
+    ) as Array<UploadMappingModel>;
 };
 
 export const retrieveRoomByRocketChatRoomIdAsync = async (

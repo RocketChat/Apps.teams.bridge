@@ -101,7 +101,10 @@ export const MicrosoftFileUrlPrefix = 'https://graph.microsoft.com';
 
 export const SharePointUrl = 'sharepoint.com';
 
-export const FileAttachmentContentType = 'reference';
+export const TeamsAttachmentType = {
+    File: "reference",
+    MessageReference: "messageReference",
+};
 
 export const TeamsAppUserNameSurfix = 'msteams.alias';
 
@@ -110,6 +113,8 @@ export const RegistrationAutoRenewSchedulerId = 'registration.auto.renew.schedul
 export const RegistrationAutoRenewInterval = '1800 seconds';
 
 export const WebhookSecretCreationJobId = 'teamsbridge.secret.creation.job';
+
+export const IncomingNotificationProcessorId = 'teamsbridge.incoming.notification.processor';
 
 export const DefaultThreadName = 'Rocket.Chat interop group';
 

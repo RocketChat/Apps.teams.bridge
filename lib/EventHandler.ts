@@ -28,6 +28,7 @@ import {
 } from "./Const";
 import {
     generateHintMessageWithTeamsLoginButton,
+    getExtraInfoAndOriginalFileName,
     mapRocketChatMessageToTeamsMessage,
     notifyRocketChatUserAsync,
     notifyRocketChatUserInRoomAsync,
@@ -69,6 +70,7 @@ import {
 } from "./PersistHelper";
 import { getLoginUrl, getNotificationEndpointUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
 import { getAllUsersAccessTokensAsync, getUserAccessTokenAsync } from "./AuthHelper";
+import { PreventRegistry } from "./PreventRegistry";
 
 let wasPrevent = false
 
@@ -117,25 +119,37 @@ export const handlePreMessageSentPreventAsync = async (options: {
                 read
             );
 
-            if (messageFootprintInfo?.itDoesMessageFootprintExists) {
-                // This message has already been processed, prevent recursion
-                wasPrevent = true;
+            const messageMapping = await retrieveMessageIdMappingByRocketChatMessageIdAsync(read, message.id as string);
+
+            if (messageMapping?.teamsMessageId) {
+                console.log("Message already sent to Teams, skipping:", messageMapping.teamsMessageId);
                 return true;
-            } else {
-                const messageFootprint = generateMessageFootprint(
-                    message,
-                    message.room,
-                    message.sender
-                );
-
-                await saveLastBridgedMessageFootprint({
-                    messageFootprint,
-                    persistence,
-                    rocketChatUserId: message.sender.id,
-                });
-
-                wasPrevent = false;
             }
+
+            // // Need to visit this again to check if this is needed.
+            // if (messageFootprintInfo?.itDoesMessageFootprintExists) {
+            //     // This message has already been processed, prevent recursion
+            //     console.log("Message footprint already exists, preventing recursion.");
+            //     wasPrevent = true;
+            //     return true;
+            // } else {
+            //     console.log(
+            //         "No existing message footprint, continue processing."
+            //     );
+            //     const messageFootprint = generateMessageFootprint(
+            //         message,
+            //         message.room,
+            //         message.sender
+            //     );
+
+            //     await saveLastBridgedMessageFootprint({
+            //         messageFootprint,
+            //         persistence,
+            //         rocketChatUserId: message.sender.id,
+            //     });
+
+            //     wasPrevent = false;
+            // }
             // If room type is PRIVATE_GROUP or DIRECT_MESSAGE, check if there's any dummy user in the room
             const members = await read
                 .getRoomReader()
@@ -268,12 +282,17 @@ export const handlePostMessageSentAsync = async (options: {
 }): Promise<void> => {
     const { message, read, persistence, app, http } = options;
 
+    if (await PreventRegistry.capture(persistence, `PreventPostMessageHook/${message.id}`)) {
+        // console.log("Message was prevented from being processed.");
+        return;
+    }
+
     const isSenderDummyUser = await checkDummyUserByRocketChatUserIdAsync(
         read,
         message.sender.id
     );
     if (isSenderDummyUser) {
-        console.log("Message sender is a dummy user, stop processing.");
+        // console.log("Message sender is a dummy user, stop processing.");
         return;
     }
 
@@ -462,12 +481,12 @@ export const handlePostMessageSentAsync = async (options: {
             rocketChatMessageId = message.id as string;
         }
 
-        await persistMessageIdMappingAsync(
+        await persistMessageIdMappingAsync({
             persistence,
             rocketChatMessageId,
             teamsMessageId,
-            roomRecord.teamsThreadId
-        );
+            teamsThreadId: roomRecord.teamsThreadId,
+        });
     }
 };
 
@@ -521,6 +540,16 @@ export const handlePostMessageUpdatedAsync = async (options: {
         return;
     }
 
+    if (
+        await PreventRegistry.capture(
+            persistence,
+            `PreventPostMessageUpdateHook/${message.id}`
+        )
+    ) {
+       //  console.log("Message update was prevented from being processed.");
+        return;
+    }
+
     const messageIdMapping =
         await retrieveMessageIdMappingByRocketChatMessageIdAsync(
             read,
@@ -542,6 +571,10 @@ export const handlePostMessageUpdatedAsync = async (options: {
         return;
     }
 
+    await PreventRegistry.set(
+        persistence,
+        `PreventPostMessageUpdateHook/${message.id}`
+    );
     await updateTextMessageInChatThreadAsync(
         http,
         message.text,

@@ -24,6 +24,7 @@
         "IPostMessageDeleted",
         "IPreMessageDeletePrevent",
         "IPreFileUpload",
+        "IPreMessageSentModify",
         "IPreRoomUserLeave"
     ],
     "permissions": [
