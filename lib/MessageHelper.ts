@@ -1,6 +1,5 @@
 import {
     IHttp,
-    IHttpRequest,
     IMessageBuilder,
     IModify,
     IModifyCreator,
@@ -13,8 +12,11 @@ import { IRoom, RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUploadDescriptor } from "@rocket.chat/apps-engine/definition/uploads/IUploadDescriptor";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { shortnameToUnicode } from "emojione";
-import { FileAttachmentContentType, LoginButtonText, MicrosoftFileUrlPrefix, SharePointUrl } from "./Const";
+import { LoginButtonText, TeamsAttachmentType } from "./Const";
 import { downloadOneDriveFileAsync, GetMessageResponse, MessageContentType } from "./MicrosoftGraphApi";
+import { buildRocketChatMessageText, extractMainTextNodesFromBridgedMessageNodes, Node, parseHTML, ParseResult } from "./TeamsMessageParser";
+import { attachAttachments, createTeamsHTMLMessage } from "./RocketChatMessageParser";
+import { retrieveUploadMappingsByTeamsMessageIdAsync, UploadMappingModel } from "./PersistHelper";
 
 export const sendRocketChatOneOnOneMessageAsync = async (
     message: string,
@@ -54,7 +56,8 @@ export const sendRocketChatMessageInRoomAsync = async (
     const message : IMessage = {
         text: messageText,
         sender,
-        room
+        room,
+        attachments: [await buildExtraInfoAttachment({ source: 'ms-teams' })],
     }
 
     const messageBuilder: IMessageBuilder = creator.startMessage(message as IMessage);
@@ -112,72 +115,84 @@ export const generateHintMessageWithTeamsLoginButton = (
     return message;
 };
 
-export const mapTeamsMessageToRocketChatMessage = (
+export const mapTeamsMessageToRocketChatMessage = async ({
+    getMessageResponse,
+    read,
+    accessToken,
+    modify,
+    room,
+    sender,
+    http,
+    uploadFiles,
+}: {
     getMessageResponse: GetMessageResponse,
-    accessToken: string,
+    read: IRead,
+    accessToken: string
     room: IRoom,
     sender: IUser,
+    modify: IModify,
     http: IHttp,
-    modify: IModify) : string => {
-    const teamsMessage = getMessageResponse.messageContent;
-    const contentType = getMessageResponse.messageContentType;
-
-    console.log("Mapping Teams message format to Rocket.Chat message format.");
-
-    let rocketChatMessage = teamsMessage;
-    if (contentType && contentType === MessageContentType.Html) {
-        // TODO: find a better way to trim html tag from html messages
-        const nbspPattern = /&nbsp;/g;
-        const htmpTagPattern = /<\/?[^>]+>/g;
-
-        rocketChatMessage = rocketChatMessage.replace(nbspPattern, ' ');
-        rocketChatMessage = rocketChatMessage.replace(htmpTagPattern, match => {
-            if (match.indexOf('itemtype="http://schema.skype.com/Emoji"') > 0) {
-                const index = match.indexOf('alt="');
-                return match.substring(index + 5, index + 7);
-            }
-
-            if (match.indexOf('img') > 0) {
-                const urlStartIndex = match.indexOf('src="');
-                const urlPrefixString = match.substring(urlStartIndex + 5);
-                const urlEndIndex = urlPrefixString.indexOf('"');
-                const url = urlPrefixString.substring(0, urlEndIndex);
-
-                const fileNameStartIndex = match.indexOf('alt="');
-                const fileNamePrefixString = match.substring(fileNameStartIndex + 5);
-                const fileNameEndIndex = fileNamePrefixString.indexOf('"');
-                const fileName = fileNamePrefixString.substring(0, fileNameEndIndex);
-
-                downloadInlineImgFromExternalAndUploadToRocketChatAsync(url, fileName, accessToken, room, sender, http, modify);
-
-                return '';
-            }
-
-            if (match.indexOf('attachment') > 0) {
-                const attachmentIdStartIndex = match.indexOf('id="');
-                const attachmentIdPrefixString = match.substring(attachmentIdStartIndex + 4);
-                const attachmentIdEndIndex = attachmentIdPrefixString.indexOf('"');
-                const attachmentId = attachmentIdPrefixString.substring(0, attachmentIdEndIndex);
-
-                if (getMessageResponse.attachments) {
-                    for (const attachment of getMessageResponse.attachments) {
-                        if (attachment.id === attachmentId && attachment.contentType === FileAttachmentContentType) {
-                            const fileName = attachment.name;
-                            const url = attachment.contentUrl;
-
-                            downloadAttachmentFileFromExternalAndUploadToRocketChatAsync(url, fileName, accessToken, room, sender, http, modify);
-
-                            return '';
+    uploadFiles: boolean,
+}): Promise<{
+    text: string;
+    uploadIds: {
+        rocketChat: string;
+        teams: string;
+    }[];
+}> => {
+    const { messageContent, messageContentType, attachments } = getMessageResponse;
+    let uploadIds: { rocketChat: string; teams: string }[] = [];
+    let text = messageContent;
+    if (attachments && attachments.length > 0) {
+        if (uploadFiles) {
+            const attachmentsToUpload = attachments.filter(
+                (a) => a.contentType === TeamsAttachmentType.File
+            );
+           (
+                await Promise.all(
+                    attachmentsToUpload.map(async (attachment) => {
+                        const { contentUrl, name, id } = attachment;
+                        if (contentUrl && name) {
+                            try {
+                                const upload = await downloadAttachmentFileFromExternalAndUploadToRocketChatAsync(
+                                    {
+                                        url: contentUrl,
+                                        fileName: name,
+                                        accessToken,
+                                        room,
+                                        sender,
+                                        http,
+                                        modify,
+                                    }
+                                );
+                                return upload;
+                            } catch (error) {
+                                console.error(
+                                    `Error downloading attachment: ${error.message}`
+                                );
+                                return Promise.resolve(null);
+                            }
                         }
-                    }
+                        return Promise.resolve(null);
+                    })
+                )
+            ).forEach((upload, index) => {
+                if (upload) {
+                    uploadIds.push({ rocketChat: upload.id, teams: attachments[index].id });
                 }
-            }
-
-            return '';
-        });
+            })
+        }
+    }
+    if (messageContentType && messageContentType === MessageContentType.Html) {
+        const isBridged = isBridgedMessageFormat(messageContent);
+        const parsedNodes = parseHTML(messageContent);
+        text = await buildRocketChatMessageText({ nodes: isBridged ? extractMainTextNodesFromBridgedMessageNodes(parsedNodes) : parsedNodes, attachments, read });
     }
 
-    return rocketChatMessage;
+    return {
+        text,
+        uploadIds,
+    }
 };
 
 export const mapRocketChatMessageToTeamsMessage = (rocketChatMessage: string, originalSenderName?: string) : string => {
@@ -196,84 +211,247 @@ export const mapRocketChatMessageToTeamsMessage = (rocketChatMessage: string, or
     });
 
     if (originalSenderName) {
-        teamsMessage = getBridgedMessageFormat(originalSenderName, teamsMessage);
+        teamsMessage = getBridgedMessageFormatV2(originalSenderName, teamsMessage);
     }
 
     return teamsMessage;
 };
 
-const downloadAttachmentFileFromExternalAndUploadToRocketChatAsync = async (
+export const isBridgedMessageFormat = (message: string): boolean => {
+    return message.includes('[Bridged Message]');
+};
+
+export const getBridgedMessageFormatV2 = (
+    originalSenderName: string,
+    message: string
+): string => {
+    return (
+        // Opening [Bridged Message] paragraph
+        '<p style="font-size:14px; font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
+            '<strong>[Bridged Message]</strong>' +
+        '</p>' +
+        // Opening blockquote for ms-teams
+        '<blockquote style="font-size:14px; font-style:inherit; font-weight:inherit; margin:0.7rem 0">' +
+            // Sender name paragraph
+            '<p style="font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
+                `<strong>${originalSenderName}:</strong>` +
+                '<hr/>' +
+            `</p>` +
+            // Message paragraph
+            '<p style="font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
+                message +
+            '</p>' +
+        // Closing blockquote
+        '</blockquote>'
+    );
+};
+
+export const mapRocketChatMessageToTeamsMessageV2 = async ({
+    message,
+    originalSenderName,
+    read,
+    forceBridgedMessage,
+    siteUrl
+}: {
+    message: IMessage,
+    originalSenderName?: string,
+    read: IRead,
+    forceBridgedMessage?: boolean,
+    siteUrl?: string,
+}) => {
+    // Handle emoji in text
+    const text = message.text ?? "";
+    const md = message[`_unmappedProperties_`]?.['md'] ?? [];
+    if (md.length === 0 && text) {
+        return mapRocketChatMessageToTeamsMessage(text, originalSenderName);
+    }
+    const _siteUrl = siteUrl ?? await read.getEnvironmentReader().getServerSettings().getValueById("Site_Url") ?? "";
+    let teamsMessage = createTeamsHTMLMessage(md, _siteUrl);
+
+    if (originalSenderName || forceBridgedMessage) {
+        teamsMessage = getBridgedMessageFormatV2(
+            originalSenderName || 'Rocket.Chat User',
+            teamsMessage
+        );
+    }
+
+    return teamsMessage;
+};
+
+const downloadAttachmentFileFromExternalAndUploadToRocketChatAsync = async ({
+    url,
+    fileName,
+    accessToken,
+    room,
+    sender,
+    http,
+    modify,
+}: {
     url: string,
     fileName: string,
     accessToken: string,
     room: IRoom,
     sender: IUser,
     http: IHttp,
-    modify: IModify) : Promise<void> => {
-    const encodedUrl = `u!${base64Encode(url).replace(/=+$/, '').replace('/','_').replace('+','-')}`;
+    modify: IModify,
+}) => {
+    const encodedUrl = `u!${base64Encode(url).replace(/=+$/, '').replace('/', '_').replace('+', '-')}`;
 
     const buff = await downloadOneDriveFileAsync(http, encodedUrl, accessToken);
     const uploadCreator = modify.getCreator().getUploadCreator();
     const fileInfo: IUploadDescriptor = {
-        filename: fileName,
+        filename: buildExtraInfoFileName(fileName, { source: 'ms-teams' }),
         room: room,
         user: sender
     };
 
-    await uploadCreator.uploadBuffer(buff, fileInfo);
-};
-
-const downloadInlineImgFromExternalAndUploadToRocketChatAsync = async (
-    url: string,
-    fileName: string,
-    accessToken: string,
-    room: IRoom,
-    sender: IUser,
-    http: IHttp,
-    modify: IModify) : Promise<void> => {
-    const httpRequest: IHttpRequest = {
-        encoding: null
-    };
-
-    if (url.startsWith(MicrosoftFileUrlPrefix) || url.indexOf(SharePointUrl)) {
-        // Auth Required
-        httpRequest.headers = {
-            'Authorization': `Bearer ${accessToken}`,
-        };
-    }
-
-    const response = await http.get(url, httpRequest);
-    let fileMIMEType = '';
-    if (response.headers) {
-        fileMIMEType = response.headers['content-type'];
-    }
-    const imgStr = response.content as string;
-    const buff = Buffer.from(imgStr, 'binary');
-
-    const uploadCreator = modify.getCreator().getUploadCreator();
-    const imgInfo: IUploadDescriptor = {
-        filename: `${fileName}.${fileMIMEType.split('/')[1]}`,
-        room: room,
-        user: sender
-    };
-
-    await uploadCreator.uploadBuffer(buff, imgInfo);
+    return uploadCreator.uploadBuffer(buff, fileInfo);
 };
 
 const getTeamsMessageUrl = (url: string): string => {
     return `<a href=\"${url}\" title=\"${url}\" target=\"_blank\" rel=\"noreferrer noopener\">${url}</a>`;
 };
 
-const getBridgedMessageFormat = (originalSenderName: string, message: string): string => {
-    return '<p style=\"font-size:14px; font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0\">'
-    + '<strong>[Bridged Message]</strong></p>'
-    + '<blockquote style=\"font-size:14px; font-style:inherit; font-weight:inherit; margin:0.7rem 0\">'
-    + '<p style=\"font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0\">'
-    + `<strong>${originalSenderName}:</strong></p>`
-    + '<p style=\"font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0\">'
-    + message
-    + '</p></blockquote>';
-}
-
 const base64Encode = (str: string):string => Buffer.from(str, 'binary').toString('base64');
 
+export const buildExtraInfoAttachment = (data: any) => {
+    const attachment: IMessageAttachment = {
+        imageUrl: `data:image/svg+xml,<?xml version="1.0" encoding="UTF-8"?><svg viewBox="0 0 120 12" xmlns="http://www.w3.org/2000/svg"><text dominant-baseline="hanging" fill="currentColor" font-family="Arial, sans-serif" font-size="12">by MS Teams Bridge</text><metadata>${JSON.stringify({ extraInfo: data })}</metadata></svg>`,
+        type: 'image/svg+xml',
+        collapsed: true,
+    };
+    return attachment;
+};
+
+export const popExtraInfoAttachment = (message: IMessage) => {
+    const data = {} as any;
+    const extraInfoAttachment = message.attachments?.find((att) => {
+        const match = att.imageUrl?.match(/<metadata>([\s\S]*?)<\/metadata>/);
+        if (match) {
+            try {
+                const parsedData = JSON.parse(match[1]);
+                if ('extraInfo' in parsedData) {
+                    Object.assign(data, parsedData.extraInfo);
+                    return true;
+                }
+                return false;
+            } catch {
+                return false;
+            }
+        }
+        return false;
+    });
+    if (extraInfoAttachment) {
+        message.attachments = message.attachments?.filter(att => att !== extraInfoAttachment);
+    }
+    return data;
+};
+
+
+export const buildExtraInfoFileName = (
+    originalFilename: string,
+    data: any
+): string => {
+    // Encode metadata as base64
+    const encoded = Buffer.from(
+        JSON.stringify({ extraInfo: data }),
+        "utf8"
+    ).toString("base64");
+
+    // Insert before extension
+    const lastDot = originalFilename.lastIndexOf(".");
+    if (lastDot !== -1) {
+        const name = originalFilename.slice(0, lastDot);
+        const ext = originalFilename.slice(lastDot); // includes the dot
+        return `${name}__extradata_${encoded}${ext}`;
+    }
+
+    // No extension case
+    return `${originalFilename}__extradata_${encoded}`;
+};
+export const getExtraInfoAndOriginalFileName = (filename: string): { originalFilename: string; extraInfo: any; present: boolean } => {
+    if (!filename) {
+        return { originalFilename: '', extraInfo: {}, present: false };
+    }
+
+    // Match: <name>__extradata_<base64>[.<ext>]
+    const match = filename.match(/^(.*)__extradata_([^.]*)/);
+    if (!match) {
+        return { originalFilename: filename, extraInfo: {}, present: false };
+    }
+
+    const [ , baseName, encoded ] = match;
+    const ext = filename.slice((baseName + `__extradata_${encoded}`).length);
+
+    try {
+        const decoded = Buffer.from(encoded, "base64").toString("utf8");
+        const { extraInfo } = JSON.parse(decoded);
+        return {
+            originalFilename: baseName + ext,
+            extraInfo: extraInfo ?? {},
+            present: true,
+        };
+    } catch {
+        return { originalFilename: filename, extraInfo: {}, present: false };
+    }
+};
+
+export const combineRocketChatMessagesToTeamsMessage = async ({
+    read,
+    uploadMappings,
+    messages,
+    deletedMessages,
+    deletedUploads,
+    forceBridgedMessage,
+    originalSenderName,
+    teamsMessageId,
+}: {
+    read: IRead;
+    teamsMessageId: string;
+    messages: IMessage[];
+    uploadMappings?: UploadMappingModel[];
+    deletedMessages?: Set<string>;
+    deletedUploads?: Set<string>;
+    originalSenderName?: string;
+    forceBridgedMessage?: boolean;
+}) => {
+
+    const targetMessages = messages.filter(
+        (message) => message.id && !deletedMessages?.has(message.id)
+    );
+
+    const text = (
+        await Promise.all(
+            targetMessages.map((message) =>
+                mapRocketChatMessageToTeamsMessageV2({
+                    read,
+                    message,
+                    originalSenderName,
+                    forceBridgedMessage,
+                })
+            )
+        )
+    ).join("<br/>");
+
+    let targetUploadMappings: UploadMappingModel[];
+    if (uploadMappings) {
+        targetUploadMappings = uploadMappings.filter(
+            (uploadMap) => !deletedUploads?.has(uploadMap.rocketchatUploadId)
+        );
+    } else {
+        targetUploadMappings = (await retrieveUploadMappingsByTeamsMessageIdAsync(
+            read,
+            teamsMessageId
+        )).filter(
+            (uploadMap) => !deletedUploads?.has(uploadMap.rocketchatUploadId)
+        );
+    }
+
+    const teamsAttachmentIds = targetUploadMappings.map(um => um.teamsAttachmentId);
+
+    return {
+        text: attachAttachments(text, teamsAttachmentIds),
+        shouldDeleteTeamsMessage:
+            targetMessages.length === 0 && targetUploadMappings.length === 0,
+    };
+}

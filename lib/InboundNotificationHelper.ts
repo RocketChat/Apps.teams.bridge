@@ -22,6 +22,7 @@ import {
     UserModel,
     persistMessageIdMappingAsync,
     persistRoomAsync,
+    persistUploadAndTeamsMappingAsync,
     retrieveDummyUserByTeamsUserIdAsync,
     retrieveMessageIdMappingByTeamsMessageIdAsync,
     retrieveRoomByTeamsThreadIdAsync,
@@ -127,7 +128,7 @@ const handleInboundMessageCreatedAsync = async (
     modify: IModify,
     http: IHttp,
     persis: IPersistence,
-    appId: string
+    appId: string,
 ): Promise<void> => {
     const receiverRocketChatUserId = inBoundNotification.receiverRocketChatUserId;
     const resourceString = inBoundNotification.resourceString;
@@ -141,6 +142,7 @@ const handleInboundMessageCreatedAsync = async (
         const storedMessageMap = await retrieveMessageIdMappingByTeamsMessageIdAsync(read, getMessageResponse.messageId);
 
         if (storedMessageMap?.rocketChatMessageId) {
+            // IMPORTANT!!!!!
             // An echo message. Should skip. Else this will create a loop.
             return;
         }
@@ -299,34 +301,57 @@ const handleInboundMessageCreatedAsync = async (
                 throw new Error('No user found to send the message');
             }
 
-            const messageText = mapTeamsMessageToRocketChatMessage(
+            const message = await mapTeamsMessageToRocketChatMessage({
                 getMessageResponse,
-                userAccessToken,
+                accessToken: userAccessToken,
                 room,
-                senderUser,
+                sender: senderUser,
                 http,
-                modify
-            );
+                modify,
+                read,
+                uploadFiles: true,
+            });
 
-            if (messageText === "") {
+            if (message.text === "") {
                 // File message, no text content
+                await Promise.all(
+                    message.uploadIds.map((uploadIdMap) => {
+                        return persistUploadAndTeamsMappingAsync({
+                            persistence: persis,
+                            rocketchatUploadId: uploadIdMap.rocketChat,
+                            teamsAttachmentId: uploadIdMap.teams,
+                            teamsMessageId: getMessageResponse.messageId,
+                            teamsThreadId: getMessageResponse.threadId,
+                        });
+                    }),
+                );
                 return;
             }
 
             const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(
-                messageText,
+                message.text,
                 senderUser,
                 room,
                 modify
             );
 
-            await persistMessageIdMappingAsync(
-                persis,
-                rocketChatMessageId,
-                getMessageResponse.messageId,
-                getMessageResponse.threadId
-            );
-
+            await Promise.all([
+                persistMessageIdMappingAsync({
+                    persistence: persis,
+                    rocketChatMessageId,
+                    teamsMessageId: getMessageResponse.messageId,
+                    teamsThreadId: getMessageResponse.threadId,
+                }),
+                ...message.uploadIds.map((uploadIdMap) => {
+                    return persistUploadAndTeamsMappingAsync({
+                        persistence: persis,
+                        rocketchatUploadId: uploadIdMap.rocketChat,
+                        teamsAttachmentId: uploadIdMap.teams,
+                        teamsMessageId: getMessageResponse.messageId,
+                        teamsThreadId: getMessageResponse.threadId,
+                    });
+                }),
+            ]);
         } else if (
             getMessageResponse.messageType === MessageType.SystemAddMembers
         ) {
@@ -482,17 +507,6 @@ const handleInboundMessageUpdatedAsync = async (
         return;
     }
 
-    const fromUser = await retrieveUserByTeamsUserIdAsync(
-        read,
-        fromUserTeamsId
-    );
-    if (fromUser && fromUser.rocketChatUserId === receiverRocketChatUserId) {
-        console.log(
-            "This is a notification for message sent by sender himself, skip!"
-        );
-        return;
-    }
-
     const message = await read
         .getMessageReader()
         .getById(messageIdMapping.rocketChatMessageId);
@@ -502,14 +516,16 @@ const handleInboundMessageUpdatedAsync = async (
     }
 
     const sender: IUser = message.sender;
-    const updatedMessageText = mapTeamsMessageToRocketChatMessage(
+    const updatedMessage = await mapTeamsMessageToRocketChatMessage({
         getMessageResponse,
-        userAccessToken,
-        message.room,
+        accessToken: userAccessToken,
+        room: message.room,
         sender,
         http,
-        modify
-    );
+        modify,
+        read,
+        uploadFiles: false,
+    });
 
     const updator = modify.getUpdater();
     let messageBuilder = await updator.message(
@@ -517,8 +533,8 @@ const handleInboundMessageUpdatedAsync = async (
         sender
     );
     messageBuilder = messageBuilder
-        .setText(updatedMessageText)
-        .setEditor(sender);
+        .setText(updatedMessage.text)
+        .setEditor(sender)
     await updator.finish(messageBuilder);
 };
 

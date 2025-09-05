@@ -54,9 +54,9 @@ export const LoginRequiredHintMessageText: string =
 export const LoginNoNeedHintMessageText: string = 'You have already login Microsoft Teams to start cross platform collaboration for your account. '
     + 'No need to login again.';
 export const LoggedInBridgeUserRequiredHintMessageText: string =
-    'The Rocket.Chat room you are messaging includes at least one Teams Bot user that represents a colleague in your organization using Microsoft Teams. '
-    + 'The message can NOT be delivered to Microsoft Teams before there is at least one user in this room start cross platform collaboration. '
-    + 'To start cross platform collaboration for your account, please click this button to login Teams:';
+    "This Rocket.Chat room includes at least one Teams Bot user representing a colleague from Microsoft Teams. " +
+    "Your message cannot be delivered to Microsoft Teams until at least one user in this room has started cross-platform collaboration. " +
+    "To enable cross-platform collaboration for your account, please click the button below to log in to Microsoft Teams:";
 export const UnsupportedScenarioHintMessageText = (scenario: string) =>
     `${scenario} is not supported by TeamsBridge app for cross platform collaboration.`
     + ' This message won\'t be delivered to target user on Teams.';
@@ -101,7 +101,10 @@ export const MicrosoftFileUrlPrefix = 'https://graph.microsoft.com';
 
 export const SharePointUrl = 'sharepoint.com';
 
-export const FileAttachmentContentType = 'reference';
+export const TeamsAttachmentType = {
+    File: "reference",
+    MessageReference: "messageReference",
+};
 
 export const TeamsAppUserNameSurfix = 'msteams.alias';
 
@@ -110,6 +113,8 @@ export const RegistrationAutoRenewSchedulerId = 'registration.auto.renew.schedul
 export const RegistrationAutoRenewInterval = '1800 seconds';
 
 export const WebhookSecretCreationJobId = 'teamsbridge.secret.creation.job';
+
+export const IncomingNotificationProcessorId = 'teamsbridge.incoming.notification.processor';
 
 export const DefaultThreadName = 'Rocket.Chat interop group';
 

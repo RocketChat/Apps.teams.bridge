@@ -1,4 +1,4 @@
-import { IAppAccessors } from "@rocket.chat/apps-engine/definition/accessors";
+import { IAppAccessors, IRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { IApiEndpointMetadata } from "@rocket.chat/apps-engine/definition/api";
 import {
     AuthenticationScopes,
@@ -7,6 +7,7 @@ import {
 } from "./Const";
 
 import { AppSetting } from "../config/Settings";
+import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 
 export const getRocketChatAppEndpointUrl = async (
     appAccessors: IAppAccessors,
@@ -76,3 +77,21 @@ export const getLoginUrl = (
 
     return url;
 };
+
+
+export const getRocketChatMessageUrl = async (read: IRead, msgId: string, room: IRoom) => {
+    const siteUrl = await read.getEnvironmentReader().getServerSettings().getValueById("Site_Url");
+    let roomType = 'channel';
+    switch (room.type) {
+        case 'p':
+            roomType = 'group';
+            break;
+        case 'd':
+            roomType = 'direct';
+            break;
+        case 'c':
+        default:
+            roomType = 'channel';
+    }
+    return `${siteUrl}/${roomType}/${room.id}?msg=${msgId}`;
+}
