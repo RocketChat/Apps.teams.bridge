@@ -206,3 +206,63 @@ export async function buildRocketChatMessageText({
     );
     return results.join("");
 }
+
+function findTagAtPosition(nodes: ParseResult, tag: string, pos: number): Node | undefined {
+    let count = 0;
+    function traverse(nodes: ParseResult): Node | undefined {
+        for (const node of nodes) {
+            if (node.type === "element" && node.tagName === tag) {
+                if (count === pos) {
+                    return node;
+                }
+                count++;
+            }
+            if ("children" in node && node.children.length > 0) {
+                const found = traverse(node.children);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+        return undefined;
+    }
+    return traverse(nodes);
+}
+
+export const extractMainTextNodesFromBridgedMessageNodes = (
+    nodes: ParseResult
+): ParseResult => {
+    const firstBlockQuote = findTagAtPosition(nodes, "blockquote", 0);
+    if (!firstBlockQuote || !("children" in firstBlockQuote)) {
+        return nodes;
+    }
+
+    let foundHr = false;
+    let newChildren: Node[] = [];
+    let start = false;
+
+    for (const child of firstBlockQuote.children) {
+        if (child.type === "element" && child.tagName === "hr") {
+            foundHr = true;
+            continue;
+        }
+        if (
+            foundHr &&
+            child.type === "element" &&
+            child.tagName === "p" &&
+            child.children.length > 0 &&
+            !child.children.every(c => c.type === "text" && c.content == "\n")
+        ) {
+            start = true;
+        }
+        if (start && child.type === "element" && child.tagName === "p") {
+            newChildren.push(child);
+        }
+    }
+
+    if (newChildren.length > 0) {
+       return newChildren;
+    } else {
+        return nodes;
+    }
+};

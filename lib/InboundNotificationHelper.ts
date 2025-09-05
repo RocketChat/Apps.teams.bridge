@@ -1,5 +1,4 @@
 import {
-    IAppAccessors,
     IHttp,
     IModify,
     IPersistence,
@@ -315,6 +314,17 @@ const handleInboundMessageCreatedAsync = async (
 
             if (message.text === "") {
                 // File message, no text content
+                await Promise.all(
+                    message.uploadIds.map((uploadIdMap) => {
+                        return persistUploadAndTeamsMappingAsync({
+                            persistence: persis,
+                            rocketchatUploadId: uploadIdMap.rocketChat,
+                            teamsAttachmentId: uploadIdMap.teams,
+                            teamsMessageId: getMessageResponse.messageId,
+                            teamsThreadId: getMessageResponse.threadId,
+                        });
+                    }),
+                );
                 return;
             }
 

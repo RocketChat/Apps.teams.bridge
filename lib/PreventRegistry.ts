@@ -27,13 +27,10 @@ export class PreventRegistry {
             ),
         ];
 
-        console.log(`PreventRegistry set: ${key}`);
-
         await persistence.updateByAssociations(associations, { ...(value && { value }) }, true);
     }
 
     public static async capture(persistence: IPersistence, key: string) {
-        console.log(`PreventRegistry capture started: ${key}`);
         const associations = [
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,
@@ -50,11 +47,7 @@ export class PreventRegistry {
         if (!data) {
             return null;
         }
-        if (data.length > 0) {
-            console.log(`PreventRegistry captured: ${data.join(", ").toString()}`);
-        } else {
-            console.log(`PreventRegistry capture failed: ${key}`);
-        }
+
         return data.shift() ?? null;
     }
 

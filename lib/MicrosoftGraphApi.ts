@@ -693,6 +693,7 @@ export const sendFileMessageToChatThreadAsync = async (
 export const updateTextMessageInChatThreadAsync = async (
     http: IHttp,
     textMessage: string,
+    messageType: 'text' | 'html',
     messageId: string,
     threadId: string,
     userAccessToken: string) : Promise<void> => {
@@ -700,8 +701,9 @@ export const updateTextMessageInChatThreadAsync = async (
 
     const body = {
         'body' : {
-            'content': textMessage
-        }
+            'content': textMessage,
+            'contentType': messageType
+        },
     }
 
     const httpRequest: IHttpRequest = {
@@ -740,7 +742,8 @@ export const deleteTextMessageInChatThreadAsync = async (
     if (response.statusCode === HttpStatusCode.NO_CONTENT) {
         return;
     } else {
-        throw new Error(`Delete message in chat thread failed with http status code ${response.statusCode}.`);
+        console.log(`Response Error: ${response.content}`)
+        // throw new Error(`Delete message in chat thread failed with http status code ${response.statusCode}.`);
     }
 };
 
