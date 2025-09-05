@@ -742,8 +742,8 @@ export const deleteTextMessageInChatThreadAsync = async (
     if (response.statusCode === HttpStatusCode.NO_CONTENT) {
         return;
     } else {
-        console.log(`Response Error: ${response.content}`)
-        // throw new Error(`Delete message in chat thread failed with http status code ${response.statusCode}.`);
+        //  console.log(`Response Error: ${response.content}`)
+        throw new Error(`Delete message in chat thread failed with http status code ${response.statusCode}.`);
     }
 };
 
