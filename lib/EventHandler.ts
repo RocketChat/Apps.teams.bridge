@@ -522,17 +522,6 @@ export const handlePreMessageOperationPreventAsync = async (options: {
         return false;
     }
 
-    const senderUserAccessToken = await getUserAccessTokenAsync({
-        read,
-        persistence,
-        rocketChatUserId: senderId,
-        app,
-        http,
-    });
-    if (!senderUserAccessToken) {
-        return true;
-    }
-
     return false;
 };
 
