@@ -748,12 +748,6 @@ export const handlePostMessageDeletedAsync = async (options: {
             uploadMappings,
         });
 
-    console.log("[Bridge] Combined Teams Message:", text);
-    console.log(
-        "[Bridge] Should delete Teams message?",
-        shouldDeleteTeamsMessage
-    );
-
     // --- Step 5: Execute Teams update/delete ---
     if (shouldDeleteTeamsMessage) {
         await deleteTextMessageInChatThreadAsync(
