@@ -281,7 +281,15 @@ const esc = (s: string) =>
             }[c]!)
     );
 
-const stripHtml = (s: string) => s.replace(/<[^>]*>/g, "");
+// Note: For robust HTML sanitization, consider using a library like 'sanitize-html'
+const stripHtml = (s: string) => {
+    let prev;
+    do {
+        prev = s;
+        s = s.replace(/<[^>]*>/g, "");
+    } while (s !== prev);
+    return s;
+};
 
 export const createTeamsHTMLMessage = (root: Root, siteUrl: string) => {
     const renderChildren = (arr: AnyNode[] | undefined) =>
