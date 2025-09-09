@@ -460,9 +460,7 @@ export const combineRocketChatMessagesToTeamsMessage = async ({
         )
     );
 
-    const text = results.map(r => {
-        return r.text
-    }).join('\n');
+    const text = results.map(r => r.text).join('\n');
 
     const parsedAttachments = results.map(r => r.attachments).reduce((acc, curr) => {
         acc.push(...curr);
