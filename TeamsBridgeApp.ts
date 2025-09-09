@@ -148,12 +148,15 @@ export class TeamsBridgeApp
             return true;
         });
 
-        if (pos !== -1) {
+        if (extraInfoData.source === 'ms-teams') {
             await PreventRegistry.set(
                 persistence,
                 `PreventPostMessageHook/${message.id}`,
                 true
             );
+        }
+
+        if (pos !== -1) {
             if (Array.isArray(message["_unmappedProperties_"]?.['files'])) {
                 message["_unmappedProperties_"]['files'] = message["_unmappedProperties_"]['files'].map((file) => {
                     if (file.name === message.attachments![pos].title?.value) {
@@ -508,7 +511,7 @@ export class TeamsBridgeApp
             persistence: IPersistence,
           ) => {
             try {
-                console.log(`Start renew registrations! (from: ${jobContext.from})`);
+                console.log(`[Teams Bridge] Start renew registrations! (from: ${jobContext.from})`);
                 let jobState = await retrieveSubscriptionRenewalJobState({ persistenceRead: read.getPersistenceReader() });
 
                 if (
@@ -519,7 +522,7 @@ export class TeamsBridgeApp
                         5 * 60 * 1000
                 ) {
                     // Job ran less than 5 minutes ago
-                    console.log(`${RegistrationAutoRenewSchedulerId} Job already ran less than 5 minutes ago. Skipping this run.`);
+                    console.log(`[Teams Bridge] ${RegistrationAutoRenewSchedulerId} Job already ran less than 5 minutes ago. Skipping this run.`);
                     return;
                 }
 
@@ -540,10 +543,10 @@ export class TeamsBridgeApp
                     persistence,
                     app: this,
                 });
-                console.log('Finish renew registrations!');
+                console.log('[Teams Bridge] Finish renew registrations!');
             } catch (error) {
                 throw new Error(
-                    `Auto renew registration failed with error: ${error}`,
+                    `[Teams Bridge] Auto renew registration failed with error: ${error}`,
                 );
             }
           }

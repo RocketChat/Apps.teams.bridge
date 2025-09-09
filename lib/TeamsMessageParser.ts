@@ -187,7 +187,7 @@ export async function buildRocketChatMessageText({
                             if (mapping?.rocketChatMessageId) {
                                 const msg = await read.getMessageReader().getById(mapping.rocketChatMessageId);
                                 if (msg?.id) {
-                                    msgUrl = await getRocketChatMessageUrl(read, msg.id, msg.room);
+                                    msgUrl = `[ ](${await getRocketChatMessageUrl(read, msg.id, msg.room)})`;
                                 }
                             }
                             return msgUrl;
@@ -204,7 +204,7 @@ export async function buildRocketChatMessageText({
     const results = await Promise.all(
         nodes.map((node) => parseNode(node))
     );
-    return results.join("");
+    return results.join("").trim();
 }
 
 function findTagAtPosition(nodes: ParseResult, tag: string, pos: number): Node | undefined {

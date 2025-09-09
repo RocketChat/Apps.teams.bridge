@@ -1,5 +1,4 @@
 import {
-    IAppAccessors,
     IHttp,
     IModify,
     IPersistence,
@@ -29,9 +28,7 @@ import {
 import {
     combineRocketChatMessagesToTeamsMessage,
     generateHintMessageWithTeamsLoginButton,
-    getExtraInfoAndOriginalFileName,
     isBridgedMessageFormat,
-    mapRocketChatMessageToTeamsMessage,
     mapRocketChatMessageToTeamsMessageV2,
     notifyRocketChatUserAsync,
     notifyRocketChatUserInRoomAsync,
@@ -471,19 +468,28 @@ export const handlePostMessageSentAsync = async (options: {
             teamsMessageId = response.messageId;
             rocketChatMessageId = message.id as string;
         } else {
-            messageText = await mapRocketChatMessageToTeamsMessageV2({
+            const { text, attachments } = await mapRocketChatMessageToTeamsMessageV2({
                 message,
                 originalSenderName,
                 read,
+                http,
+                accessToken: userAccessToken,
+                messageIdMapping: {
+                    rocketChatMessageId,
+                    teamsMessageId,
+                    teamsThreadId: roomRecord.teamsThreadId,
+                }
             });
+            messageText = text;
 
             // Send the message to the chat thread
-            const response = await sendTextMessageToChatThreadAsync(
+            const response = await sendTextMessageToChatThreadAsync({
                 http,
-                messageText,
-                roomRecord.teamsThreadId,
-                userAccessToken
-            );
+                textMessage: messageText,
+                threadId: roomRecord.teamsThreadId,
+                userAccessToken,
+                attachments,
+            });
 
             teamsMessageId = response.messageId;
             rocketChatMessageId = message.id as string;
@@ -543,7 +549,6 @@ export const handlePostMessageUpdatedAsync = async (options: {
             `PreventPostMessageUpdateHook/${message.id}`
         )
     ) {
-       //  console.log("Message update was prevented from being processed.");
         return;
     }
 
@@ -570,17 +575,22 @@ export const handlePostMessageUpdatedAsync = async (options: {
             persistence,
             `PreventPostMessageUpdateHook/${message.id}`
         );
-        await updateTextMessageInChatThreadAsync(
+        const { text, attachments } =  await mapRocketChatMessageToTeamsMessageV2({
+            message,
+            read,
             http,
-            await mapRocketChatMessageToTeamsMessageV2({
-                message,
-                read,
-            }),
-            'html',
-            messageIdMapping.teamsMessageId,
-            messageIdMapping.teamsThreadId,
-            senderUserAccessToken
-        );
+            accessToken: senderUserAccessToken,
+            messageIdMapping,
+        })
+        await updateTextMessageInChatThreadAsync({
+            http,
+            textMessage: text,
+            messageType: 'html',
+            messageId: messageIdMapping.teamsMessageId,
+            threadId: messageIdMapping.teamsThreadId,
+            userAccessToken: senderUserAccessToken,
+            attachments,
+        });
     } else {
         const bridgeRoom = await retrieveRoomByTeamsThreadIdAsync(
             read,
@@ -615,19 +625,24 @@ export const handlePostMessageUpdatedAsync = async (options: {
                 persistence,
                 `PreventPostMessageUpdateHook/${message.id}`
             );
-            await updateTextMessageInChatThreadAsync(
+            const { text, attachments } = await mapRocketChatMessageToTeamsMessageV2({
+                message,
+                read,
+                originalSenderName: message.sender.name || message.sender.username,
+                forceBridgedMessage: true,
                 http,
-                await mapRocketChatMessageToTeamsMessageV2({
-                    message,
-                    read,
-                    originalSenderName: message.sender.name || message.sender.username,
-                    forceBridgedMessage: true
-                }),
-                'html',
-                messageIdMapping.teamsMessageId,
-                messageIdMapping.teamsThreadId,
-                bridgeUserAccessToken
-            );
+                accessToken: bridgeUserAccessToken,
+                messageIdMapping,
+            });
+            await updateTextMessageInChatThreadAsync({
+                http,
+                textMessage: text,
+                messageType: 'html',
+                messageId: messageIdMapping.teamsMessageId,
+                threadId: messageIdMapping.teamsThreadId,
+                userAccessToken: bridgeUserAccessToken,
+                attachments,
+            });
 
         } else {
             notifyNotLoggedInUserAsync(
@@ -650,11 +665,18 @@ export const handlePostMessageDeletedAsync = async (options: {
     http: IHttp;
 }): Promise<void> => {
     const { message, read, persistence, app, http } = options;
-    console.log("[Bridge] HandleDelete for message", message?.id);
+    if (
+        await PreventRegistry.capture(
+            persistence,
+            `PreventPostMessageDeleteHook/${message.id}`
+        )
+    ) {
+        // Prevent duplicate processing
+        return;
+    }
 
     const msgId = message.id;
     if (!msgId) {
-        console.log("[Bridge] Invalid message: missing id");
         return;
     }
 
@@ -671,7 +693,6 @@ export const handlePostMessageDeletedAsync = async (options: {
         !currentUploadMapping &&
         uploadMappings.length === 0
     ) {
-        console.log("[Bridge] No message or upload mapping found, skipping");
         return;
     }
 
@@ -685,7 +706,6 @@ export const handlePostMessageDeletedAsync = async (options: {
     });
 
     if (!senderUser || !accessToken) {
-        console.log("[Bridge] Missing sender info, skipping");
         return;
     }
 
@@ -713,7 +733,6 @@ export const handlePostMessageDeletedAsync = async (options: {
     };
 
     if (!teamsIds.messageId || !teamsIds.threadId) {
-        console.log("[Bridge] Missing Teams ids", teamsIds);
         return;
     }
 
@@ -723,11 +742,15 @@ export const handlePostMessageDeletedAsync = async (options: {
     };
 
     const isBridge = isBridgedMessageFormat(mainMessage?.text || "");
-    const { text, shouldDeleteTeamsMessage } =
+    const { text, shouldDeleteTeamsMessage, attachments } =
         await combineRocketChatMessagesToTeamsMessage({
             read,
             messages: mainMessage ? [mainMessage] : [],
-            teamsMessageId: teamsIds.messageId,
+            messageIdMapping: {
+                rocketChatMessageId: msgId,
+                teamsMessageId: teamsIds.messageId,
+                teamsThreadId: teamsIds.threadId,
+            },
             deletedMessages: deletedIds.messages,
             deletedUploads: deletedIds.uploads,
             forceBridgedMessage: isBridge,
@@ -735,10 +758,16 @@ export const handlePostMessageDeletedAsync = async (options: {
                 ? message.sender.name || message.sender.username
                 : undefined,
             uploadMappings,
+            http,
+            accessToken,
         });
 
     // --- Step 5: Execute Teams update/delete ---
     if (shouldDeleteTeamsMessage) {
+        await PreventRegistry.set(
+            persistence,
+            `PreventPostMessageDeleteHook/${message.id}`
+        );
         await deleteTextMessageInChatThreadAsync(
             http,
             senderUser.teamsUserId,
@@ -747,14 +776,19 @@ export const handlePostMessageDeletedAsync = async (options: {
             accessToken
         );
     } else {
-        await updateTextMessageInChatThreadAsync(
-            http,
-            text,
-            "html",
-            teamsIds.messageId,
-            teamsIds.threadId,
-            accessToken
+        await PreventRegistry.set(
+            persistence,
+            `PreventPostMessageUpdateHook/${message.id}`
         );
+        await updateTextMessageInChatThreadAsync({
+            http,
+            textMessage: text,
+            messageType: "html",
+            messageId: teamsIds.messageId,
+            threadId: teamsIds.threadId,
+            userAccessToken: accessToken,
+            attachments,
+        });
     }
 };
 
