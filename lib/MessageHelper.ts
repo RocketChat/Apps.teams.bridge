@@ -13,10 +13,10 @@ import { IUploadDescriptor } from "@rocket.chat/apps-engine/definition/uploads/I
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { shortnameToUnicode } from "emojione";
 import { LoginButtonText, TeamsAttachmentType } from "./Const";
-import { downloadOneDriveFileAsync, GetMessageResponse, MessageContentType } from "./MicrosoftGraphApi";
-import { buildRocketChatMessageText, extractMainTextNodesFromBridgedMessageNodes, Node, parseHTML, ParseResult } from "./TeamsMessageParser";
-import { attachAttachments, createTeamsHTMLMessage } from "./RocketChatMessageParser";
-import { retrieveUploadMappingsByTeamsMessageIdAsync, UploadMappingModel } from "./PersistHelper";
+import { downloadOneDriveFileAsync, getMessageAttachments, GetMessageResponse, MessageContentType } from "./MicrosoftGraphApi";
+import { buildRocketChatMessageText, extractMainTextNodesFromBridgedMessageNodes, parseHTML } from "./TeamsMessageParser";
+import { attachAttachments, attachMessageReferences, createTeamsHTMLMessage } from "./RocketChatMessageParser";
+import { MessageMappingModel, retrieveUploadMappingsByTeamsMessageIdAsync, UploadMappingModel } from "./PersistHelper";
 
 export const sendRocketChatOneOnOneMessageAsync = async (
     message: string,
@@ -165,7 +165,7 @@ export const mapTeamsMessageToRocketChatMessage = async ({
                                         modify,
                                     }
                                 );
-                                return upload;
+                                return { rocketChat: upload.id, teams: id };
                             } catch (error) {
                                 console.error(
                                     `Error downloading attachment: ${error.message}`
@@ -176,9 +176,9 @@ export const mapTeamsMessageToRocketChatMessage = async ({
                         return Promise.resolve(null);
                     })
                 )
-            ).forEach((upload, index) => {
-                if (upload) {
-                    uploadIds.push({ rocketChat: upload.id, teams: attachments[index].id });
+            ).forEach((uploadData) => {
+                if (uploadData) {
+                    uploadIds.push(uploadData);
                 }
             })
         }
@@ -223,13 +223,13 @@ export const isBridgedMessageFormat = (message: string): boolean => {
 
 export const getBridgedMessageFormatV2 = (
     originalSenderName: string,
-    message: string
+    message: string,
 ): string => {
     return (
         // Opening [Bridged Message] paragraph
         '<p style="font-size:14px; font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
-            '<strong>[Bridged Message]</strong>' +
-        '</p>' +
+        "<strong>[Bridged Message]</strong>" +
+        "</p>" +
         // Opening blockquote for ms-teams
         '<blockquote style="font-size:14px; font-style:inherit; font-weight:inherit; margin:0.7rem 0">' +
             // Sender name paragraph
@@ -251,31 +251,51 @@ export const mapRocketChatMessageToTeamsMessageV2 = async ({
     originalSenderName,
     read,
     forceBridgedMessage,
-    siteUrl
+    siteUrl,
+    http,
+    accessToken,
+    messageIdMapping,
 }: {
     message: IMessage,
     originalSenderName?: string,
     read: IRead,
     forceBridgedMessage?: boolean,
     siteUrl?: string,
+    http: IHttp,
+    accessToken: string,
+    messageIdMapping: MessageMappingModel,
 }) => {
     // Handle emoji in text
     const text = message.text ?? "";
     const md = message[`_unmappedProperties_`]?.['md'] ?? [];
     if (md.length === 0 && text) {
-        return mapRocketChatMessageToTeamsMessage(text, originalSenderName);
+        return {
+            text: mapRocketChatMessageToTeamsMessage(text, originalSenderName),
+            attachments: []
+        };
     }
+
     const _siteUrl = siteUrl ?? await read.getEnvironmentReader().getServerSettings().getValueById("Site_Url") ?? "";
     let teamsMessage = createTeamsHTMLMessage(md, _siteUrl);
+    const { html: teamsMessageWithReferences, attachments: messageAttachments } = await attachMessageReferences(read, http, teamsMessage, accessToken);
+    const attachmentsFromTeams = await getMessageAttachments({
+        http,
+        messageId: messageIdMapping.teamsMessageId,
+        threadId: messageIdMapping.teamsThreadId,
+        userAccessToken: accessToken,
+    });
+    const attachmentsWithoutMessageAttachment = attachmentsFromTeams.filter(att => !messageAttachments.find(a => a?.id === att?.id));
+    const finalAttachments = [...messageAttachments, ...attachmentsWithoutMessageAttachment];
+    teamsMessage = attachAttachments({ html: teamsMessageWithReferences, attachmentIds: attachmentsWithoutMessageAttachment.map(a => a.id) });
 
     if (originalSenderName || forceBridgedMessage) {
         teamsMessage = getBridgedMessageFormatV2(
             originalSenderName || 'Rocket.Chat User',
-            teamsMessage
+            teamsMessage,
         );
     }
 
-    return teamsMessage;
+    return { text: teamsMessage, attachments: finalAttachments };
 };
 
 const downloadAttachmentFileFromExternalAndUploadToRocketChatAsync = async ({
@@ -404,23 +424,27 @@ export const combineRocketChatMessagesToTeamsMessage = async ({
     deletedUploads,
     forceBridgedMessage,
     originalSenderName,
-    teamsMessageId,
+    messageIdMapping,
+    http,
+    accessToken,
 }: {
     read: IRead;
-    teamsMessageId: string;
+    messageIdMapping: MessageMappingModel;
     messages: IMessage[];
     uploadMappings?: UploadMappingModel[];
     deletedMessages?: Set<string>;
     deletedUploads?: Set<string>;
     originalSenderName?: string;
     forceBridgedMessage?: boolean;
+    http: IHttp;
+    accessToken: string;
 }) => {
 
     const targetMessages = messages.filter(
         (message) => message.id && !deletedMessages?.has(message.id)
     );
 
-    const text = (
+    const results = (
         await Promise.all(
             targetMessages.map((message) =>
                 mapRocketChatMessageToTeamsMessageV2({
@@ -428,10 +452,20 @@ export const combineRocketChatMessagesToTeamsMessage = async ({
                     message,
                     originalSenderName,
                     forceBridgedMessage,
+                    http,
+                    accessToken,
+                    messageIdMapping,
                 })
             )
         )
-    ).join("<br/>");
+    );
+
+    const text = results.map(r => r.text).join('\n');
+
+    const parsedAttachments = results.map(r => r.attachments).reduce((acc, curr) => {
+        acc.push(...curr);
+        return acc;
+    }, []);
 
     let targetUploadMappings: UploadMappingModel[];
     if (uploadMappings) {
@@ -441,17 +475,39 @@ export const combineRocketChatMessagesToTeamsMessage = async ({
     } else {
         targetUploadMappings = (await retrieveUploadMappingsByTeamsMessageIdAsync(
             read,
-            teamsMessageId
+            messageIdMapping.teamsMessageId
         )).filter(
             (uploadMap) => !deletedUploads?.has(uploadMap.rocketchatUploadId)
         );
     }
 
     const teamsAttachmentIds = targetUploadMappings.map(um => um.teamsAttachmentId);
+    const attachmentsFromTeams = await getMessageAttachments({
+        http,
+        messageId: messageIdMapping.teamsMessageId,
+        threadId: messageIdMapping.teamsThreadId,
+        userAccessToken: accessToken,
+    })
+
+    // Remove duplicate attachments by id
+    const allAttachments = [...parsedAttachments, ...attachmentsFromTeams];
+    const uniqueAttachmentsMap = new Map<string, any>();
+    for (const att of allAttachments) {
+        if (att && att.id && !uniqueAttachmentsMap.has(att.id)) {
+            uniqueAttachmentsMap.set(att.id, att);
+        }
+    }
+    const uniqueAttachments = Array.from(uniqueAttachmentsMap.values());
+    const finalAttachments = filterTeamsAttachments(uniqueAttachments, teamsAttachmentIds);
 
     return {
-        text: attachAttachments(text, teamsAttachmentIds),
+        text: attachAttachments({ html: text, attachmentIds: teamsAttachmentIds}),
         shouldDeleteTeamsMessage:
-            targetMessages.length === 0 && targetUploadMappings.length === 0,
+            targetMessages.length === 0 && teamsAttachmentIds.length === 0,
+        attachments: finalAttachments,
     };
 }
+
+export const filterTeamsAttachments = (attachments: any[], toKeepIds: string[]): any[] => {
+    return attachments.filter(att => toKeepIds.includes(att.id));
+};

@@ -1,4 +1,8 @@
+import { IHttp, IRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { shortnameToUnicode } from "emojione";
+import { MessageMappingModel, retrieveMessageIdMappingByRocketChatMessageIdAsync } from "./PersistHelper";
+import { getRocketChatMessageUrl } from "./UrlHelper";
+import { getReplyAttachment } from "./MicrosoftGraphApi";
 
 export type Blockquote = {
     type: "BLOCKQUOTE";
@@ -291,7 +295,7 @@ const stripHtml = (s: string) => {
     return s;
 };
 
-export const createTeamsHTMLMessage = (root: Root, siteUrl: string) => {
+export const createTeamsHTMLMessage = (root: Root, siteUrl?: string) => {
     const renderChildren = (arr: AnyNode[] | undefined) =>
         (arr ?? []).map(render).join("");
     const renderInlineArray = (
@@ -387,6 +391,17 @@ export const createTeamsHTMLMessage = (root: Root, siteUrl: string) => {
             }
             case "LINK": {
                 const href = esc(n.value.src.value);
+                if (siteUrl && href.includes(siteUrl)) {
+                    try {
+                        const url = new URL(href);
+                        const msgId = url.searchParams.get("msg");
+                        if (msgId) {
+                           return `<msg id="${msgId}"></msg>`;
+                        }
+                    } catch (e) {
+                        console.error("Invalid URL in LINK node:", href);
+                    }
+                }
                 const label = Array.isArray(n.value.label)
                     ? n.value.label.map(render).join("")
                     : render(n.value.label as any);
@@ -440,6 +455,104 @@ export const createTeamsHTMLMessage = (root: Root, siteUrl: string) => {
 };
 
 
-export const attachAttachments = (html: string, attachmentIds: string[]) => {
+export const attachAttachments = ({
+    html,
+    attachmentIds = [],
+}: {
+    html: string,
+    attachmentIds?: string[],
+}) => {
     return (html + `<p>${attachmentIds.map(id => `<attachment id="${id}"></attachment>`).join("")}</p>`);
 }
+/**
+ * Replace <msg id="..."></msg> tokens in HTML with Teams-friendly attachments or links.
+ * Returns the transformed html and any teams attachment ids found.
+ */
+export const attachMessageReferences = async (
+    read: IRead,
+    http: IHttp,
+    html: string,
+    accessToken: string,
+) => {
+    if (!html) {
+        return { html: '', attachments: [] };
+    }
+
+    const matches = html.match(/<msg id="([^"]+)"><\/msg>/g) || [];
+    if (matches.length === 0) {
+        return { html, attachments: [] };
+    }
+
+    const referencedIds = matches
+        .map((m) => {
+            const mm = m.match(/id="([^"]+)"/);
+            return mm?.[1];
+        })
+        .filter(Boolean) as string[];
+
+    const messageIdMappings: MessageMappingModel[] = [];
+    let transformed = html;
+
+    for (const rcMsgId of referencedIds) {
+        try {
+            // Try to find existing mapping (Rocket.Chat message -> Teams message)
+            const mapping = await retrieveMessageIdMappingByRocketChatMessageIdAsync(read, rcMsgId);
+
+
+            if (mapping?.teamsMessageId) {
+                // Replace token with a Teams attachment reference to the teams message id
+                const attachmentTag = `<attachment id="${mapping.teamsMessageId}"></attachment>`;
+                transformed = transformed.replace(
+                    new RegExp(`<msg id="${rcMsgId}"><\\/msg>`, 'g'),
+                    attachmentTag
+                );
+                messageIdMappings.push(mapping);
+                continue;
+            }
+
+            // If no mapping found, attempt to resolve Rocket.Chat message and produce a public link
+            const msg = await read.getMessageReader().getById(rcMsgId);
+            if (msg && msg.id && msg.room) {
+                try {
+                    const url = await getRocketChatMessageUrl(read, msg.id, msg.room);
+                    const link = `<a href="${url}" title="${url}" target="_blank" rel="noreferrer noopener">${url}</a>`;
+                    transformed = transformed.replace(
+                        new RegExp(`<msg id="${rcMsgId}"><\\/msg>`, 'g'),
+                        link
+                    );
+                    continue;
+                } catch {
+                    // fallback handled below
+                }
+            }
+
+            // Final fallback: remove token or replace with placeholder text
+            transformed = transformed.replace(
+                new RegExp(`<msg id="${rcMsgId}"><\\/msg>`, 'g'),
+                '[referenced message not available]'
+            );
+        } catch (err) {
+            // On unexpected error, leave a placeholder and continue
+            transformed = transformed.replace(
+                new RegExp(`<msg id="${rcMsgId}"><\\/msg>`, 'g'),
+                '[referenced message not available]'
+            );
+            console.error('[attachMessageReferences] error resolving reference', rcMsgId, err);
+        }
+    }
+
+    const attachments = (await Promise.all(
+        messageIdMappings.map(async (mp) => {
+            const teamsMessage = await getReplyAttachment({
+                http,
+                parentMessageId: mp.teamsMessageId,
+                threadId: mp.teamsThreadId,
+                userAccessToken: accessToken,
+            });
+            return teamsMessage;
+        })
+    )).filter((m) => !!m);
+
+
+    return { html: transformed, attachments };
+};

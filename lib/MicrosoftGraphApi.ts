@@ -606,19 +606,28 @@ export const removeMemberFromChatThreadAsync = async (
     }
 };
 
-export const sendTextMessageToChatThreadAsync = async (
-    http: IHttp,
-    textMessage: string,
-    threadId: string,
-    userAccessToken: string) : Promise<SendMessageResponse> => {
+export const sendTextMessageToChatThreadAsync = async ({
+    http,
+    textMessage,
+    threadId,
+    userAccessToken,
+    attachments,
+}: {
+    http: IHttp;
+    textMessage: string;
+    threadId: string;
+    userAccessToken: string;
+    attachments?: any[];
+}): Promise<SendMessageResponse> => {
     const url = getGraphApiMessageUrl(threadId);
 
     const body = {
-        'body' : {
+        'body': {
             'content': textMessage,
             'contentType': 'html'
-        }
-    }
+        },
+        ...(attachments && { attachments })
+    };
 
     const httpRequest: IHttpRequest = {
         headers: {
@@ -636,8 +645,7 @@ export const sendTextMessageToChatThreadAsync = async (
             throw new Error('Send message to chat thread failed!');
         }
 
-
-        const result : SendMessageResponse = {
+        const result: SendMessageResponse = {
             messageId: responseBody.id,
         };
 
@@ -690,20 +698,34 @@ export const sendFileMessageToChatThreadAsync = async (
     }
 };
 
-export const updateTextMessageInChatThreadAsync = async (
-    http: IHttp,
-    textMessage: string,
-    messageType: 'text' | 'html',
-    messageId: string,
-    threadId: string,
-    userAccessToken: string) : Promise<void> => {
+export const updateTextMessageInChatThreadAsync = async ({
+    http,
+    textMessage,
+    messageType,
+    messageId,
+    threadId,
+    userAccessToken,
+    attachments,
+}: {
+    http: IHttp;
+    textMessage: string;
+    messageType: 'text' | 'html';
+    messageId: string;
+    threadId: string;
+    userAccessToken: string;
+    attachments?: any[];
+}): Promise<void> => {
     const url = getGraphApiMessageUrl(threadId, messageId, true);
 
-    const body = {
-        'body' : {
+    const body: any = {
+        'body': {
             'content': textMessage,
             'contentType': messageType
         },
+    };
+
+    if (attachments && attachments.length > 0) {
+        body.attachments = attachments;
     }
 
     const httpRequest: IHttpRequest = {
@@ -809,6 +831,84 @@ export const getMessageWithResourceStringAsync = async (
         return result;
     } else {
         throw new Error(`Get message with resource string failed with http status code ${response.statusCode}.`);
+    }
+}
+
+export const getReplyAttachment = async ({
+    http,
+    parentMessageId,
+    threadId,
+    userAccessToken
+}: {
+    http: IHttp;
+    userAccessToken: string;
+    parentMessageId: string;
+    threadId: string;
+}) => {
+    const url = getGraphApiMessageUrl(threadId, parentMessageId, false);
+
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+    };
+
+    const response = await http.get(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.OK) {
+        const responseBody = response.data || {};
+        const { id, from, body } = responseBody;
+
+        if (!id || !from || !from.user || !body || !body.content) {
+            return;
+        }
+        return {
+            id,
+            contentType: 'messageReference',
+            content: JSON.stringify({
+                messageId: id,
+                messagePreview: body.content,
+                messageSender: {
+                    user: from.user,
+                }
+            })
+        }
+    } else {
+        console.error(`Get Teams message by ID failed with http status code ${response.statusCode}.`);
+        return;
+    }
+};
+
+export const getMessageAttachments = async ({
+    http,
+    messageId,
+    threadId,
+    userAccessToken
+}: {
+    http: IHttp;
+    userAccessToken: string;
+    messageId: string;
+    threadId: string;
+}) => {
+    const url = getGraphApiMessageUrl(threadId, messageId, false);
+
+    const httpRequest: IHttpRequest = {
+        headers: {
+            Authorization: `Bearer ${userAccessToken}`,
+        },
+    };
+
+    const response = await http.get(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.OK) {
+        const { attachments = [] } = response.data || {};
+
+        return attachments as any[];
+    } else {
+        console.error(
+            `Get Teams message by ID failed with http status code ${response.statusCode}.`
+        );
+        return [];
     }
 }
 

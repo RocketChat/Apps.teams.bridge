@@ -30,6 +30,7 @@ import {
 } from "./PersistHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "./AuthHelper";
+import { PreventRegistry } from "./PreventRegistry";
 
 export enum NotificationChangeType {
     Created = "created",
@@ -501,6 +502,14 @@ const handleInboundMessageUpdatedAsync = async (
         return;
     }
 
+    if (
+        await PreventRegistry.capture(
+            persis,
+            `PreventPostMessageUpdateHook/${messageIdMapping.rocketChatMessageId}`
+        )
+    ) {
+        return;
+    }
     const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
     if (!fromUserTeamsId) {
         // If there's not a sender, stop processing
@@ -552,8 +561,19 @@ const handleInboundMessageDeletedAsync = async (
             read,
             resourceString
         );
+
     if (!messageIdMapping) {
         // If there's not an existing rocket chat message, stop processing
+        return;
+    }
+
+    if (
+        await PreventRegistry.capture(
+            persis,
+            `PreventPostMessageDeleteHook/${messageIdMapping.rocketChatMessageId}`
+        )
+    ) {
+        // Prevent duplicate processing
         return;
     }
 
@@ -571,6 +591,11 @@ const handleInboundMessageDeletedAsync = async (
     let messageBuilder = await updator.message(
         messageIdMapping.rocketChatMessageId,
         sender
+    );
+
+    await PreventRegistry.set(
+        persis,
+        `PreventPostMessageUpdateHook/${messageIdMapping.rocketChatMessageId}`
     );
     messageBuilder = messageBuilder
         .setText("~This message has been deleted.~")
