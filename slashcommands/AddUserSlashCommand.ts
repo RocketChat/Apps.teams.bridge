@@ -1,11 +1,9 @@
 import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/definition/accessors";
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
-import { retrieveDummyUserByRocketChatUserIdAsync } from "../lib/PersistHelper";
 import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
 import {
     AddUserRoomTypeInvalidHintMessageText,
-    AddUserNameInvalidHintMessageText
 } from "../lib/Const";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { openAddTeamsUserContextualBarBlocksAsync } from "../lib/UserInterfaceHelper";
@@ -44,22 +42,9 @@ export class AddUserSlashCommand implements ISlashCommand {
             return;
         }
 
-        const updater = modify.getUpdater();
-        const roomBuilder = await updater.room(currentRoom.id, commandSender);
-
-        const userToAdd = await read.getUserReader().getByUsername(subcommand);
-        if (!userToAdd) {
-            await notifyRocketChatUserInRoomAsync(AddUserNameInvalidHintMessageText, appUser, commandSender, currentRoom, read.getNotifier());
-            return;
-        }
-
-        const dummyUser = await retrieveDummyUserByRocketChatUserIdAsync(read, userToAdd.id);
-        if (!dummyUser) {
-            await notifyRocketChatUserInRoomAsync(AddUserNameInvalidHintMessageText, appUser, commandSender, currentRoom, read.getNotifier());
-            return;
-        }
-
-        roomBuilder.addMemberToBeAddedByUsername(userToAdd.username);
-        await updater.finish(roomBuilder);
+        // Under single-bot arch there are no dummy users to add via username.
+        // Direct the user to use the contextual bar instead.
+        const triggerId = context.getTriggerId() as string;
+        await openAddTeamsUserContextualBarBlocksAsync(triggerId, currentRoom, commandSender, appUser, read, modify);
     }
 }

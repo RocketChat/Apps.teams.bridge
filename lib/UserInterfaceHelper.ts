@@ -2,10 +2,9 @@ import { IModify, IRead, IUIKitSurfaceViewParam } from "@rocket.chat/apps-engine
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { InputElementDispatchAction, IOptionObject, TextObjectType, UIKitSurfaceType } from "@rocket.chat/apps-engine/definition/uikit";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { findAllDummyUsersInRocketChatUserListAsync } from "./AppUserHelper";
 import { AddUserNoExistingUsersHintMessageText, UIActionId, UIElementId, UIElementText } from "./Const";
 import { notifyRocketChatUserInRoomAsync } from "./MessageHelper";
-import { retrieveAllTeamsUserProfilesAsync, TeamsUserProfileModel, UserModel } from "./PersistHelper";
+import { retrieveAllTeamsUserProfilesAsync, retrieveUserByRocketChatUserIdAsync, TeamsUserProfileModel, UserModel } from "./PersistHelper";
 
 export const openAddTeamsUserContextualBarBlocksAsync = async (
     triggerId: string,
@@ -22,8 +21,19 @@ export const openAddTeamsUserContextualBarBlocksAsync = async (
     }
 
     const members = await read.getRoomReader().getMembers(currentRoom.id);
-    const dummyUsers = await findAllDummyUsersInRocketChatUserListAsync(read, members);
-    const userProfilesNotInRoom = allTeamsUserProfiles.filter(au => !dummyUsers.find(du => du.teamsUserId == au.teamsUserId));
+    // Under single-bot arch there are no dummy users. Build a set of Teams user IDs
+    // whose registered RC user is already in this room, so they are excluded from the picker.
+    const memberTeamsUserIdModels = await Promise.all(
+        members.map((m) => retrieveUserByRocketChatUserIdAsync(read, m.id))
+    );
+    const memberTeamsUserIdSet = new Set(
+        memberTeamsUserIdModels
+            .filter((u): u is UserModel => u !== null)
+            .map((u) => u.teamsUserId)
+    );
+    const userProfilesNotInRoom = allTeamsUserProfiles.filter(
+        (au) => !memberTeamsUserIdSet.has(au.teamsUserId)
+    );
 
     const contextualbarBlocks = createContextualBarBlocks(modify, userProfilesNotInRoom, currentRoom.id);
     await modify.getUiController().openSurfaceView(contextualbarBlocks, { triggerId }, operator);

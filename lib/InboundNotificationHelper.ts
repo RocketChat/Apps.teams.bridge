@@ -6,7 +6,6 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { syncAllTeamsBotUsersAsync } from "./AppUserHelper";
 import { DefaultTeamName } from "./Const";
 import {
     mapTeamsMessageToRocketChatMessage,
@@ -23,7 +22,6 @@ import {
     persistMessageIdMappingAsync,
     persistRoomAsync,
     persistUploadAndTeamsMappingAsync,
-    retrieveDummyUserByTeamsUserIdAsync,
     retrieveMessageIdMappingByTeamsMessageIdAsync,
     retrieveRoomByTeamsThreadIdAsync,
     retrieveUserByTeamsUserIdAsync,
@@ -212,22 +210,11 @@ const handleInboundMessageCreatedAsync = async (
                         );
                         roomBuilder.addMemberToBeAddedByUsername(user.username);
                     } else {
-                        const dummyUser =
-                            await retrieveDummyUserByTeamsUserIdAsync(
-                                read,
-                                teamsMemberId
-                            );
-                        if (!dummyUser) {
-                            console.error(
-                                `No dummy user found for Teams user ${teamsMemberId}, skip.`
-                            );
-                            continue;
-                        }
-
-                        const user = await userReader.getById(
-                            dummyUser.rocketChatUserId
+                        // Under single-bot arch there are no dummy users. Teams-only members
+                        // who have no RC registration are not added to the RC room.
+                        console.log(
+                            `No RC user found for Teams member ${teamsMemberId}, skipping room membership.`
                         );
-                        roomBuilder.addMemberToBeAddedByUsername(user.username);
                     }
                 }
             } else {
@@ -291,11 +278,8 @@ const handleInboundMessageCreatedAsync = async (
                 roomRecord,
                 fromUserRocketChatUser,
                 read,
-                persis,
-                modify,
                 appId,
                 fromUserTeamsId,
-                http
             });
 
             if (!senderUser) {
@@ -375,40 +359,12 @@ const handleInboundMessageCreatedAsync = async (
                         .getUserReader()
                         .getById(rocketChatUser.rocketChatUserId);
                 } else {
-                    // If there's not, try find the Teams bot user and add to the Rocket.Chat room
-                    let dummyUser = await retrieveDummyUserByTeamsUserIdAsync(
-                        read,
-                        memberToAddTeamsId
+                    // Under single-bot arch there are no dummy users. Teams members without
+                    // a registered RC account are not added to the RC room.
+                    console.log(
+                        `No RC user found for Teams member ${memberToAddTeamsId}, skipping room membership.`
                     );
-                    if (!dummyUser) {
-                        // There could be dummy user out of sync issue.
-                        // If the dummy user has not been created for a recently added Teams user, we need to create dummy user on demand.
-                        // Sync all Teams bot user
-                        await syncAllTeamsBotUsersAsync(
-                            http,
-                            read,
-                            modify,
-                            persis,
-                            appId
-                        );
-                        dummyUser = await retrieveDummyUserByTeamsUserIdAsync(
-                            read,
-                            memberToAddTeamsId
-                        );
-                        if (!dummyUser) {
-                            console.error(
-                                "Could not add Teams bot user to room!"
-                            );
-                            console.error(
-                                `Dummy user with Teams ID ${memberToAddTeamsId} not found after try sync all Teams bot users!`
-                            );
-                            continue;
-                        }
-                    }
-
-                    userToAdd = await read
-                        .getUserReader()
-                        .getById(dummyUser.rocketChatUserId);
+                    continue;
                 }
 
                 const updater = modify.getUpdater();
@@ -437,20 +393,14 @@ const getSenderUser = async ({
         roomRecord,
         fromUserRocketChatUser,
         read,
-        persis,
-        modify,
         appId,
         fromUserTeamsId,
-        http
     }: {
         roomRecord: any,
         fromUserRocketChatUser: UserModel | null,
         read: IRead,
-        persis: IPersistence,
-        modify: IModify,
         appId: string,
         fromUserTeamsId: string,
-        http: IHttp
 }) => {
     if (fromUserRocketChatUser) {
         const roomMembers = await read.getRoomReader().getMembers(roomRecord.rocketChatRoomId);
@@ -459,19 +409,12 @@ const getSenderUser = async ({
         }
     }
 
-    let fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
-    if (!fromDummyUser) {
-        // There could be a dummy user out of sync issue.
-        // If the dummy user has not been created for a recently added Teams user, we need to create the dummy user on demand.
-        // Sync all Teams bot users
-        await syncAllTeamsBotUsersAsync(http, read, modify, persis, appId);
-        fromDummyUser = await retrieveDummyUserByTeamsUserIdAsync(read, fromUserTeamsId);
-        if (!fromDummyUser) {
-            throw new Error(`Dummy user with Teams ID ${fromUserTeamsId} not found after trying to sync all Teams bot users!`);
-        }
-    }
-    return read.getUserReader().getById(fromDummyUser.rocketChatUserId);
-
+    // Under single-bot arch there are no dummy users. Fall back to the app bot
+    // so the message is still relayed to RC under the bridge bot identity.
+    console.log(
+        `No RC user found for Teams sender ${fromUserTeamsId}, falling back to app bot.`
+    );
+    return read.getUserReader().getAppUser(appId);
 }
 
 const handleInboundMessageUpdatedAsync = async (
