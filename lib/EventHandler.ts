@@ -49,7 +49,6 @@ import {
     uploadFileToOneDriveAsync,
 } from "./MicrosoftGraphApi";
 import {
-    checkDummyUserByRocketChatUserIdAsync,
     deleteMessageIdMappingAsync,
     deleteUploadAndTeamsMappingAsync,
     isBridgeRoomAsync,
@@ -59,7 +58,6 @@ import {
     setBridgeRoomActiveAsync,
     retrieveAllUploadMappingsByRocketChatUploadIdAsync,
     retrieveAllUserRegistrationsAsync,
-    retrieveDummyUserByRocketChatUserIdAsync,
     retrieveLoginMessageSentStatus,
     retrieveMessageIdMappingByRocketChatMessageIdAsync,
     retrieveMessageIdMappingByTeamsMessageIdAsync,
@@ -405,30 +403,16 @@ export const handlePostMessageSentAsync = async (options: {
     });
 };
 
-export const handlePreMessageOperationPreventAsync = async (options: {
+export const handlePreMessageOperationPreventAsync = async (_options: {
     message: IMessage,
     read: IRead,
     persistence: IPersistence,
     app: TeamsBridgeApp,
     http: IHttp,
 }): Promise<boolean> => {
-    const { message, read, persistence, app, http } = options;
-    const isTeamsMessage = await isTeamsMessageAsync(message.id, read);
-    if (!isTeamsMessage) {
-        return false;
-    }
-
-    // If the user that operate the Teams message has not logged in to Teams
-    // Send a notification to let the sender know he need to logged in to Teams to apply the operation
-    const senderId = message.sender.id;
-    const dummyUser = await retrieveDummyUserByRocketChatUserIdAsync(
-        read,
-        senderId
-    );
-    if (dummyUser) {
-        return false;
-    }
-
+    // Single-bot architecture: no per-user Teams identity to check.
+    // Edit/delete operations on bridged messages are controlled by the
+    // message-ID mapping check in the update/delete handlers themselves.
     return false;
 };
 
@@ -790,11 +774,9 @@ export const handlePreFileUploadAsync = async (options: {
         return;
     }
 
-    const isSenderDummerUser = await checkDummyUserByRocketChatUserIdAsync(
-        read,
-        senderRocketChatUserId
-    );
-    if (isSenderDummerUser) {
+    // Skip uploads made by the app bot itself (e.g. inbound relayed files)
+    const appUser = await read.getUserReader().getAppUser(app.getID());
+    if (appUser && senderRocketChatUserId === appUser.id) {
         return;
     }
 
