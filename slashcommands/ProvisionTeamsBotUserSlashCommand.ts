@@ -14,7 +14,7 @@ import {
     ProvisionTeamsBotUserFailedMessageText,
     ProvisionTeamsBotUserSucceedMessageText,
 } from "../lib/Const";
-import { syncAllTeamsBotUsersAsync } from "../lib/AppUserHelper";
+import { syncTeamsUserProfilesAsync } from "../lib/AppUserHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export class ProvisionTeamsBotUserSlashCommand implements ISlashCommand {
@@ -27,11 +27,7 @@ export class ProvisionTeamsBotUserSlashCommand implements ISlashCommand {
     public permission?: string | undefined = "manage-apps";
     public providesPreview: boolean = false;
 
-    private appId: string;
-
-    constructor(private readonly app: TeamsBridgeApp) {
-        this.appId = app.getID();
-    }
+    constructor(_app: TeamsBridgeApp) {}
 
     public async executor(
         context: SlashCommandContext,
@@ -45,12 +41,10 @@ export class ProvisionTeamsBotUserSlashCommand implements ISlashCommand {
         const room = context.getRoom();
 
         try {
-            await syncAllTeamsBotUsersAsync(
+            await syncTeamsUserProfilesAsync(
                 http,
                 read,
-                modify,
                 persis,
-                this.appId
             );
 
             await notifyRocketChatUserInRoomAsync(
