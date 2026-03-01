@@ -456,7 +456,6 @@ export class TeamsBridgeApp
                 room: currentRoom,
                 teamsUserIdsToSave,
                 read,
-                modify,
                 persistence,
                 http,
                 app: this,
