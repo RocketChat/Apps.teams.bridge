@@ -73,6 +73,7 @@ export interface RoomModel {
     rocketChatRoomId: string;
     teamsThreadId?: string;
     bridgeUserRocketChatUserId?: string;
+    isBridged?: boolean;
 }
 
 export interface TeamsUserProfileModel {
@@ -960,6 +961,64 @@ export const retrieveRoomByTeamsThreadIdAsync = async (
     const data: RoomModel = results[0] as RoomModel;
 
     return data;
+};
+
+export const isBridgeRoomAsync = async (
+    read: IRead,
+    rocketChatRoomId: string
+): Promise<boolean> => {
+    const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, rocketChatRoomId);
+    return roomRecord?.isBridged === true;
+};
+
+export const setBridgeRoomActiveAsync = async (
+    persistence: IPersistence,
+    read: IRead,
+    rocketChatRoomId: string,
+    active: boolean
+): Promise<void> => {
+    const existing = await retrieveRoomByRocketChatRoomIdAsync(read, rocketChatRoomId);
+
+    const data: RoomModel = {
+        ...(existing ?? { rocketChatRoomId }),
+        isBridged: active,
+    };
+
+    const associationsByRocketChatRoomId: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.Room
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MESSAGE,
+            rocketChatRoomId
+        ),
+    ];
+
+    await persistence.updateByAssociations(
+        associationsByRocketChatRoomId,
+        data,
+        true
+    );
+
+    if (data.teamsThreadId) {
+        const associationsByTeamsThreadId: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(
+                RocketChatAssociationModel.MISC,
+                MiscKeys.Room
+            ),
+            new RocketChatAssociationRecord(
+                RocketChatAssociationModel.MESSAGE,
+                data.teamsThreadId
+            ),
+        ];
+
+        await persistence.updateByAssociations(
+            associationsByTeamsThreadId,
+            data,
+            true
+        );
+    }
 };
 
 export const retrieveAllTeamsUserProfilesAsync = async (
