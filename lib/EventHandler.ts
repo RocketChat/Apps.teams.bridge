@@ -8,6 +8,7 @@ import { UserNotAllowedException } from "@rocket.chat/apps-engine/definition/exc
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 import {
     IRoom,
+    IRoomUserJoinedContext,
     IRoomUserLeaveContext,
     RoomType,
 } from "@rocket.chat/apps-engine/definition/rooms";
@@ -53,9 +54,11 @@ import {
     deleteMessageIdMappingAsync,
     deleteUploadAndTeamsMappingAsync,
     getMessageFootPrintExistenceInfo,
+    isBridgeRoomAsync,
     persistMessageIdMappingAsync,
     persistOneDriveFileAsync,
     persistRoomAsync,
+    setBridgeRoomActiveAsync,
     retrieveAllUploadMappingsByRocketChatUploadIdAsync,
     retrieveAllUserRegistrationsAsync,
     retrieveDummyUserByRocketChatUserIdAsync,
@@ -1078,6 +1081,31 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
     await updater.finish(roomBuilder);
 };
 
+export const handlePostRoomUserJoinedAsync = async (options: {
+    context: IRoomUserJoinedContext;
+    read: IRead;
+    http: IHttp;
+    persistence: IPersistence;
+    app: TeamsBridgeApp;
+}): Promise<void> => {
+    const { context, read, persistence, app } = options;
+    const { joiningUser, room } = context;
+
+    const appUser = await read.getUserReader().getAppUser(app.getID());
+    if (!appUser || joiningUser.id !== appUser.id) {
+        return;
+    }
+
+    // setBridgeRoomActiveAsync preserves any existing teamsThreadId /
+    // bridgeUserRocketChatUserId, so re-adding the bot reuses the same thread
+    await setBridgeRoomActiveAsync(persistence, read, room.id, true);
+
+    app.getLogger().info(
+        `[TeamsBridge] Room "${room.displayName || room.id}" is now an active bridge room ` +
+        `(app user added by ${context.inviter?.username ?? 'unknown'}).`
+    );
+};
+
 export const handlePreRoomUserLeaveAsync = async (options: {
     context: IRoomUserLeaveContext;
     read: IRead;
@@ -1087,24 +1115,28 @@ export const handlePreRoomUserLeaveAsync = async (options: {
 }): Promise<void> => {
     const { app, context, http, persistence, read} = options;
     const roomId = context.room.id;
+    const leavingRocketChatUserId = context.leavingUser.id;
+
+    // When the app bot is removed, pause bridging without touching the Teams thread.
+    // Re-adding the bot later will reactivate the same thread.
+    const appUser = await read.getUserReader().getAppUser(app.getID());
+    if (appUser && leavingRocketChatUserId === appUser.id) {
+        await setBridgeRoomActiveAsync(persistence, read, roomId, false);
+        app.getLogger().info(`[TeamsBridge] Room "${context.room.displayName || roomId}" bridging paused (app user removed).`);
+        return;
+    }
 
     const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, roomId);
     if (!roomRecord || !roomRecord.teamsThreadId) {
         return;
     }
 
-    const leavingRocketChatUserId = context.leavingUser.id;
     const embeddedLoginUser = await retrieveUserByRocketChatUserIdAsync(
         read,
         leavingRocketChatUserId
     );
-    const dummyUser = await retrieveDummyUserByRocketChatUserIdAsync(
-        read,
-        leavingRocketChatUserId
-    );
 
-    if (!embeddedLoginUser && !dummyUser) {
-        console.error("Not logged in user or dummy user.");
+    if (!embeddedLoginUser) {
         return;
     }
 
@@ -1113,7 +1145,6 @@ export const handlePreRoomUserLeaveAsync = async (options: {
         throw new UserNotAllowedException();
     }
 
-    // If there's a thread created in Teams side, need to update the participant there as well
     const accessToken = await getUserAccessTokenAsync({
         read,
         persistence,
@@ -1132,8 +1163,7 @@ export const handlePreRoomUserLeaveAsync = async (options: {
         throw new UserNotAllowedException();
     }
 
-    const teamsUserId =
-        embeddedLoginUser?.teamsUserId ?? dummyUser?.teamsUserId;
+    const teamsUserId = embeddedLoginUser.teamsUserId;
     if (!teamsUserId) {
         return;
     }
@@ -1153,7 +1183,6 @@ export const handlePreRoomUserLeaveAsync = async (options: {
     }
 
     if (
-        embeddedLoginUser &&
         embeddedLoginUser.teamsUserId === roomRecord.bridgeUserRocketChatUserId
     ) {
         // Clear bridge user if it's been removed

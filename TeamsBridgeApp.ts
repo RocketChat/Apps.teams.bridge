@@ -30,8 +30,10 @@ import {
   } from '@rocket.chat/apps-engine/definition/messages';
 import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
 import {
+    IPostRoomUserJoined,
     IPreRoomUserLeave,
     IRoom,
+    IRoomUserJoinedContext,
     IRoomUserLeaveContext,
   } from '@rocket.chat/apps-engine/definition/rooms';
 import {
@@ -69,6 +71,7 @@ import {
     handlePostMessageDeletedAsync,
     handlePostMessageSentAsync,
     handlePostMessageUpdatedAsync,
+    handlePostRoomUserJoinedAsync,
     handlePreFileUploadAsync,
     handlePreMessageOperationPreventAsync,
     handlePreMessageSentPreventAsync,
@@ -101,7 +104,8 @@ export class TeamsBridgeApp
       IPreMessageDeletePrevent,
       IPreFileUpload,
       IPreMessageSentModify,
-      IPreRoomUserLeave {
+      IPreRoomUserLeave,
+      IPostRoomUserJoined {
 
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
       super(info, logger, accessors);
@@ -349,6 +353,21 @@ export class TeamsBridgeApp
       persistence: IPersistence,
     ): Promise<void> {
         await handlePreRoomUserLeaveAsync({
+            app: this,
+            context,
+            read,
+            persistence,
+            http,
+        });
+    }
+
+    public async executePostRoomUserJoined(
+      context: IRoomUserJoinedContext,
+      read: IRead,
+      http: IHttp,
+      persistence: IPersistence,
+    ): Promise<void> {
+        await handlePostRoomUserJoinedAsync({
             app: this,
             context,
             read,

@@ -1001,6 +1001,8 @@ export const setBridgeRoomActiveAsync = async (
         true
     );
 
+    // The same record is stored under the teamsThreadId key so that
+    // retrieveRoomByTeamsThreadIdAsync can find it without a full scan.
     if (data.teamsThreadId) {
         const associationsByTeamsThreadId: Array<RocketChatAssociationRecord> = [
             new RocketChatAssociationRecord(
