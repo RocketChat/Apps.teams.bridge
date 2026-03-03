@@ -16,7 +16,8 @@ import { LoginButtonText, TeamsAttachmentType } from "./Const";
 import { downloadOneDriveFileAsync, getMessageAttachments, GetMessageResponse, MessageContentType } from "./MicrosoftGraphApi";
 import { buildRocketChatMessageText, extractMainTextNodesFromBridgedMessageNodes, parseHTML } from "./TeamsMessageParser";
 import { attachAttachments, attachMessageReferences, createTeamsHTMLMessage } from "./RocketChatMessageParser";
-import { MessageMappingModel, retrieveUploadMappingsByTeamsMessageIdAsync, UploadMappingModel } from "./PersistHelper";
+import { UploadMapping } from "./PersistHelper";
+import type { MessageMappingModel, UploadMappingModel } from "./PersistHelper";
 
 export const sendRocketChatOneOnOneMessageAsync = async (
     message: string,
@@ -473,7 +474,7 @@ export const combineRocketChatMessagesToTeamsMessage = async ({
             (uploadMap) => !deletedUploads?.has(uploadMap.rocketchatUploadId)
         );
     } else {
-        targetUploadMappings = (await retrieveUploadMappingsByTeamsMessageIdAsync(
+        targetUploadMappings = (await UploadMapping.findByTeamsMessageId(
             read,
             messageIdMapping.teamsMessageId
         )).filter(

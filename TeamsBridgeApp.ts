@@ -88,10 +88,11 @@ import { LogoutTeamsSlashCommand } from './slashcommands/LogoutTeamsSlashCommand
 import { ProvisionTeamsBotUserSlashCommand } from './slashcommands/ProvisionTeamsBotUserSlashCommand';
 import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
 import { ResubscribeMessages } from './slashcommands/ResubscriptionMessages';
-import { createWebhookSecret, getWebhookSecret, persistSubscriptionRenewalJobState, retrieveSubscriptionRenewalJobState } from './lib/PersistHelper';
+import { SubscriptionRenewalJob, WebhookSecret } from './lib/PersistHelper';
 import { InboundNotificationProcessor } from './jobs/InboundNotificationProcessor';
 import { PreventRegistry } from './lib/PreventRegistry';
 import { getExtraInfoAndOriginalFileName, popExtraInfoAttachment } from './lib/MessageHelper';
+import { ExternalComponentLocation } from '@rocket.chat/apps-engine/definition/externalComponent/IExternalComponent';
 
 export class TeamsBridgeApp
     extends App
@@ -122,7 +123,7 @@ export class TeamsBridgeApp
         persistence: IPersistence,
         modify: IModify
     ): Promise<void> {
-        await createWebhookSecret({ persistence });
+        await WebhookSecret.create({ persistence });
     }
 
     async executePreMessageSentModify(message: IMessage, builder: IMessageBuilder, read: IRead, http: IHttp, persistence: IPersistence) {
@@ -530,7 +531,7 @@ export class TeamsBridgeApp
           ) => {
             try {
                 console.log(`[Teams Bridge] Start renew registrations! (from: ${jobContext.from})`);
-                let jobState = await retrieveSubscriptionRenewalJobState({ persistenceRead: read.getPersistenceReader() });
+                let jobState = await SubscriptionRenewalJob.find({ persistenceRead: read.getPersistenceReader() });
 
                 if (
                     jobState &&
@@ -544,7 +545,7 @@ export class TeamsBridgeApp
                     return;
                 }
 
-                await persistSubscriptionRenewalJobState({
+                await SubscriptionRenewalJob.persist({
                     persistence,
                     lastStartedJobTimestamp: new Date(),
                 });
@@ -579,10 +580,10 @@ export class TeamsBridgeApp
                 persistence: IPersistence,
             ) => {
                 try {
-                    const webhookSecret = await getWebhookSecret({ persistenceRead: read.getPersistenceReader() });
+                    const webhookSecret = await WebhookSecret.get({ persistenceRead: read.getPersistenceReader() });
                     if (!webhookSecret) {
                         this.getLogger().info('Webhook secret is not created. Creating it now.')
-                        await createWebhookSecret({ persistence });
+                        await WebhookSecret.create({ persistence });
                         const subscriberEndpointUrl =
                             await getRocketChatAppEndpointUrl(
                                 this.getAccessors(),

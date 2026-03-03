@@ -9,7 +9,7 @@ import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { getApplicationAccessTokenAsync } from "../lib/MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
 import { AppSetting } from "../config/Settings";
-import { persistApplicationAccessTokenAsync } from "../lib/PersistHelper";
+import { AppToken } from "../lib/PersistHelper";
 import { AppSetupVerificationFailMessageText, AppSetupVerificationPassMessageText } from "../lib/Const";
 
 export class SetupVerificationSlashCommand implements ISlashCommand {
@@ -37,7 +37,7 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
             const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
 
             const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
-            await persistApplicationAccessTokenAsync(persis, response.accessToken);
+            await AppToken.persist(persis, response.accessToken);
 
             await notifyRocketChatUserInRoomAsync(AppSetupVerificationPassMessageText, appUser, messageReceiver, room, modify.getNotifier());
         } catch (error) {

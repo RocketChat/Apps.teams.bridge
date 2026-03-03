@@ -23,11 +23,7 @@ import {
     getUserProfileAsync,
     subscribeToAllMessagesForOneUserAsync,
 } from "../lib/MicrosoftGraphApi";
-import {
-    persistUserAccessTokenAsync,
-    persistUserAsync,
-    saveLoginMessageSentStatus,
-} from "../lib/PersistHelper";
+import { LoginMessage, UserMapping, UserRegistration } from "../lib/PersistHelper";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 
 export class AuthenticationEndpoint extends ApiEndpoint {
@@ -99,7 +95,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
             );
 
             await Promise.all([
-                persistUserAccessTokenAsync(
+                UserRegistration.persist(
                     persis,
                     rocketChatUserId,
                     userAccessToken,
@@ -107,8 +103,8 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                     response.expiresIn,
                     response.extExpiresIn
                 ),
-                persistUserAsync(persis, rocketChatUserId, teamsUserProfile.id),
-                saveLoginMessageSentStatus({
+                UserMapping.persist(persis, rocketChatUserId, teamsUserProfile.id),
+                LoginMessage.save({
                     persistence: persis,
                     rocketChatUserId,
                     wasSent: false,

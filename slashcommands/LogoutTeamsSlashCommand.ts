@@ -18,12 +18,7 @@ import {
     deleteAllSubscriptions,
     revokeUserRefreshTokenAsync,
 } from '../lib/MicrosoftGraphApi';
-import {
-    deleteUserAccessTokenAsync,
-    deleteUserAsync,
-    retrieveLoginMessageSentStatus,
-    saveLoginMessageSentStatus,
-} from '../lib/PersistHelper';
+import { LoginMessage, UserMapping, UserRegistration } from '../lib/PersistHelper';
 import { getNotificationEndpointUrl } from '../lib/UrlHelper';
 import { TeamsBridgeApp } from '../TeamsBridgeApp';
 import { getUserAccessTokenAsync } from '../lib/AuthHelper';
@@ -60,7 +55,7 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
             http,
         });
 
-        const wasSent = await retrieveLoginMessageSentStatus({
+        const wasSent = await LoginMessage.get({
             read,
             rocketChatUserId,
         });
@@ -78,7 +73,7 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
                 notifier
             );
 
-            await saveLoginMessageSentStatus({
+            await LoginMessage.save({
                 persistence,
                 rocketChatUserId,
                 wasSent: false,
@@ -107,10 +102,10 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         }
 
         await Promise.all([
-            deleteUserAccessTokenAsync(persistence, rocketChatUserId),
+            UserRegistration.delete(persistence, rocketChatUserId),
 
             // Delete user record
-            deleteUserAsync(read, persistence, rocketChatUserId),
+            UserMapping.delete(read, persistence, rocketChatUserId),
 
             // Notify the user
             notifyRocketChatUserInRoomAsync(
@@ -122,7 +117,7 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
             ),
 
             // Set the login message status to false
-            saveLoginMessageSentStatus({
+            LoginMessage.save({
                 persistence,
                 rocketChatUserId,
                 wasSent: false,

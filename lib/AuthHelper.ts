@@ -6,13 +6,8 @@ import {
 import type { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { AppSetting } from "../config/Settings";
 import { renewUserAccessTokenAsync } from "./MicrosoftGraphApi";
-import {
-    persistUserAccessTokenAsync,
-    retrieveAllUserRegistrationsAsync,
-    retrieveUserAccessTokenDataAsync,
-    saveLoginMessageSentStatus,
-    UserRegistrationModel,
-} from "./PersistHelper";
+import { LoginMessage, UserRegistration } from "./PersistHelper";
+import type { UserRegistrationModel } from "./PersistHelper";
 
 export const getAccessTokenForRegistration = async (options: {
     persistence: IPersistence;
@@ -54,7 +49,7 @@ export const getAccessTokenForRegistration = async (options: {
                     aadClientId,
                     aadClientSecret
                 );
-                await persistUserAccessTokenAsync(
+                await UserRegistration.persist(
                     persistence,
                     registration.rocketChatUserId,
                     response.accessToken,
@@ -70,7 +65,7 @@ export const getAccessTokenForRegistration = async (options: {
                 );
             }
         }
-        await saveLoginMessageSentStatus({
+        await LoginMessage.save({
             persistence,
             rocketChatUserId: registration.rocketChatUserId,
             wasSent: false,
@@ -91,7 +86,7 @@ export const getUserAccessTokenAsync = async (options: {
 }): Promise<string | null> => {
     const { read, rocketChatUserId } = options;
 
-    const registration = await retrieveUserAccessTokenDataAsync({
+    const registration = await UserRegistration.findByRCUserId({
         rocketChatUserId,
         read,
     });
@@ -115,7 +110,7 @@ export const getAllUsersAccessTokensAsync = async (options: {
 }) => {
     const { read } = options;
 
-    const registrations = await retrieveAllUserRegistrationsAsync(read);
+    const registrations = await UserRegistration.findAll(read);
 
     if (!registrations) {
         return null;

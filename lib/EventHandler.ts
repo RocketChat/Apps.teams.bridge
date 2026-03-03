@@ -48,28 +48,8 @@ import {
     updateTextMessageInChatThreadAsync,
     uploadFileToOneDriveAsync,
 } from "./MicrosoftGraphApi";
-import {
-    deleteMessageIdMappingAsync,
-    deleteUploadAndTeamsMappingAsync,
-    isBridgeRoomAsync,
-    persistMessageIdMappingAsync,
-    persistOneDriveFileAsync,
-    persistRoomAsync,
-    setBridgeRoomActiveAsync,
-    retrieveAllUploadMappingsByRocketChatUploadIdAsync,
-    retrieveAllUserRegistrationsAsync,
-    retrieveLoginMessageSentStatus,
-    retrieveMessageIdMappingByRocketChatMessageIdAsync,
-    retrieveMessageIdMappingByTeamsMessageIdAsync,
-    retrieveOneDriveFileAsync,
-    retrieveRoomByRocketChatRoomIdAsync,
-    retrieveRoomByTeamsThreadIdAsync,
-    retrieveUploadMappingsByTeamsMessageIdAsync,
-    retrieveUserByRocketChatUserIdAsync,
-    saveLoginMessageSentStatus,
-    UploadMappingModel,
-    UserModel,
-} from "./PersistHelper";
+import { LoginMessage, MessageMapping, OneDriveFile, Room, UploadMapping, UserMapping, UserRegistration } from "./PersistHelper";
+import type { UploadMappingModel, UserModel } from "./PersistHelper";
 import { getLoginUrl, getNotificationEndpointUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
 import { getAllUsersAccessTokensAsync, getUserAccessTokenAsync } from "./AuthHelper";
 import { PreventRegistry } from "./PreventRegistry";
@@ -109,17 +89,17 @@ export const handlePreMessageSentPreventAsync = async (options: {
             roomType === RoomType.PRIVATE_GROUP ||
             roomType === RoomType.DIRECT_MESSAGE
         ) {
-            const messageMapping = await retrieveMessageIdMappingByRocketChatMessageIdAsync(read, message.id as string);
+            const messageMapping = await MessageMapping.findByRCMessageId(read, message.id as string);
             if (messageMapping?.teamsMessageId) {
                 return true;
             }
 
-            if (!await isBridgeRoomAsync(read, message.room.id)) {
+            if (!await Room.isBridged(read, message.room.id)) {
                 return false;
             }
 
             const members = await read.getRoomReader().getMembers(message.room.id);
-            let roomRecord = await retrieveRoomByRocketChatRoomIdAsync(
+let roomRecord = await Room.findByRCRoomId(
                 read,
                 message.room.id
             );
@@ -166,7 +146,7 @@ export const handlePreMessageSentPreventAsync = async (options: {
                         );
                     }
                 } else {
-                    const wasSent = await retrieveLoginMessageSentStatus({
+                    const wasSent = await LoginMessage.get({
                         read,
                         rocketChatUserId: message.sender.id,
                     });
@@ -180,7 +160,7 @@ export const handlePreMessageSentPreventAsync = async (options: {
                                 ? LoginRequiredHintMessageText
                                 : LoggedInBridgeUserRequiredHintMessageText
                         );
-                        await saveLoginMessageSentStatus({
+                        await LoginMessage.save({
                             persistence,
                             rocketChatUserId: message.sender.id,
                             wasSent: true,
@@ -189,7 +169,7 @@ export const handlePreMessageSentPreventAsync = async (options: {
                 }
             }
 
-            await persistRoomAsync(
+            await Room.persist(
                 persistence,
                 roomRecord.rocketChatRoomId,
                 roomRecord.teamsThreadId,
@@ -223,11 +203,11 @@ export const handlePostMessageSentAsync = async (options: {
     }
 
     const roomId = message.room.id;
-    if (!await isBridgeRoomAsync(read, roomId)) {
+    if (!await Room.isBridged(read, roomId)) {
         return;
     }
 
-    const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, roomId);
+    const roomRecord = await Room.findByRCRoomId(read, roomId);
     if (!roomRecord) {
         throw new Error("No room record found for Teams interop room!");
     }
@@ -236,7 +216,7 @@ export const handlePostMessageSentAsync = async (options: {
         throw new Error("No bridge user assigned to Teams interop room!");
     }
 
-    const bridgeUser = await retrieveUserByRocketChatUserIdAsync(
+    const bridgeUser = await UserMapping.findByRCUserId(
         read,
         roomRecord.bridgeUserRocketChatUserId
     );
@@ -248,7 +228,7 @@ export const handlePostMessageSentAsync = async (options: {
         http,
     });
     if (!userAccessToken || !bridgeUser) {
-        await persistRoomAsync(
+        await Room.persist(
             persistence,
             roomRecord.rocketChatRoomId,
             roomRecord.teamsThreadId,
@@ -269,7 +249,7 @@ export const handlePostMessageSentAsync = async (options: {
                 console.log("Bridge user is sending a message to self, stop processing.");
                 return;
             }
-            const otherUser = await retrieveUserByRocketChatUserIdAsync(read, otherMember.id);
+            const otherUser = await UserMapping.findByRCUserId(read, otherMember.id);
             if (!otherUser) {
                 console.log("Other member has no Teams mapping, stop processing.");
                 return;
@@ -284,7 +264,7 @@ export const handlePostMessageSentAsync = async (options: {
         } else {
             const teamsIds: string[] = [];
             for (const member of members) {
-                const user = await retrieveUserByRocketChatUserIdAsync(read, member.id);
+                const user = await UserMapping.findByRCUserId(read, member.id);
                 if (user) {
                     teamsIds.push(user.teamsUserId);
                 }
@@ -300,7 +280,7 @@ export const handlePostMessageSentAsync = async (options: {
             roomRecord.teamsThreadId = response.threadId;
         }
 
-        await persistRoomAsync(
+        await Room.persist(
             persistence,
             roomRecord.rocketChatRoomId,
             roomRecord.teamsThreadId,
@@ -341,7 +321,7 @@ export const handlePostMessageSentAsync = async (options: {
             textMessage = message.attachments[0].description;
         }
 
-        const oneDriveFile = await retrieveOneDriveFileAsync(
+        const oneDriveFile = await OneDriveFile.find(
             read,
             message.file.name
         );
@@ -395,7 +375,7 @@ export const handlePostMessageSentAsync = async (options: {
         rocketChatMessageId = message.id as string;
     }
 
-    await persistMessageIdMappingAsync({
+    await MessageMapping.persist({
         persistence,
         rocketChatMessageId,
         teamsMessageId,
@@ -438,7 +418,7 @@ export const handlePostMessageUpdatedAsync = async (options: {
     }
 
     const messageIdMapping =
-        await retrieveMessageIdMappingByRocketChatMessageIdAsync(
+        await MessageMapping.findByRCMessageId(
             read,
             message.id
         );
@@ -477,7 +457,7 @@ export const handlePostMessageUpdatedAsync = async (options: {
             attachments,
         });
     } else {
-        const bridgeRoom = await retrieveRoomByTeamsThreadIdAsync(
+        const bridgeRoom = await Room.findByTeamsThreadId(
             read,
             messageIdMapping.teamsThreadId
         );
@@ -596,7 +576,7 @@ export const handlePostMessageDeletedAsync = async (options: {
 
     // --- Step 3: Clean up mappings in persistence ---
     if (currentUploadMapping) {
-        await deleteUploadAndTeamsMappingAsync({
+        await UploadMapping.delete({
             persistence,
             rocketchatUploadId: currentUploadMapping.rocketchatUploadId,
             teamsMessageId: currentUploadMapping.teamsMessageId,
@@ -604,7 +584,7 @@ export const handlePostMessageDeletedAsync = async (options: {
     }
 
     if (messageIdMapping?.rocketChatMessageId === msgId) {
-        await deleteMessageIdMappingAsync({ persistence, ...messageIdMapping });
+        await MessageMapping.delete({ persistence, ...messageIdMapping });
     }
 
     // --- Step 4: Prepare Teams update ---
@@ -682,7 +662,7 @@ export const handlePostMessageDeletedAsync = async (options: {
 async function resolveMappings(read: IRead, message: IMessage & { id: string }) {
     let mainMessage: IMessage | null = null;
     let messageIdMapping =
-        await retrieveMessageIdMappingByRocketChatMessageIdAsync(
+        await MessageMapping.findByRCMessageId(
             read,
             message.id
         );
@@ -690,7 +670,7 @@ async function resolveMappings(read: IRead, message: IMessage & { id: string }) 
     let uploadMappings: UploadMappingModel[] = [];
     if (message.file?._id) {
         uploadMappings =
-            await retrieveAllUploadMappingsByRocketChatUploadIdAsync(
+            await UploadMapping.findAllByRCUploadId(
                 read,
                 message.file._id
             );
@@ -701,7 +681,7 @@ async function resolveMappings(read: IRead, message: IMessage & { id: string }) 
     );
 
     if (currentUploadMapping && !messageIdMapping) {
-        messageIdMapping = await retrieveMessageIdMappingByTeamsMessageIdAsync(
+        messageIdMapping = await MessageMapping.findByTeamsMessageId(
             read,
             currentUploadMapping.teamsMessageId
         );
@@ -712,7 +692,7 @@ async function resolveMappings(read: IRead, message: IMessage & { id: string }) 
                     .getById(messageIdMapping.rocketChatMessageId)) || null;
         }
     } else if (!currentUploadMapping && messageIdMapping) {
-        uploadMappings = await retrieveUploadMappingsByTeamsMessageIdAsync(
+        uploadMappings = await UploadMapping.findByTeamsMessageId(
             read,
             messageIdMapping.teamsMessageId
         );
@@ -748,7 +728,7 @@ async function ensureSenderInfo({
             app,
             http,
         }),
-        retrieveUserByRocketChatUserIdAsync(read, senderId),
+        UserMapping.findByRCUserId(read, senderId),
     ]);
 
     return { senderUser, accessToken };
@@ -780,12 +760,12 @@ export const handlePreFileUploadAsync = async (options: {
         return;
     }
 
-    if (!await isBridgeRoomAsync(read, roomId)) {
+    if (!await Room.isBridged(read, roomId)) {
         return;
     }
 
     // There should be a room record in persist with a bridge user assigned
-    const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, roomId);
+    const roomRecord = await Room.findByRCRoomId(read, roomId);
     if (!roomRecord) {
         throw new Error("No room record find for Teams interop room!");
     }
@@ -794,7 +774,7 @@ export const handlePreFileUploadAsync = async (options: {
         throw new Error("No bridge user assigned to Teams interop room!");
     }
 
-    const bridgeUser = await retrieveUserByRocketChatUserIdAsync(
+    const bridgeUser = await UserMapping.findByRCUserId(
         read,
         roomRecord.bridgeUserRocketChatUserId
     );
@@ -806,7 +786,7 @@ export const handlePreFileUploadAsync = async (options: {
         http,
     });
     if (!userAccessToken || !bridgeUser) {
-        await persistRoomAsync(
+        await Room.persist(
             persistence,
             roomRecord.rocketChatRoomId,
             roomRecord.teamsThreadId,
@@ -839,7 +819,7 @@ export const handlePreFileUploadAsync = async (options: {
 
     // Persist file upload record
     if (uploadFileResponse) {
-        await persistOneDriveFileAsync(
+        await OneDriveFile.persist(
             persistence,
             uploadFileResponse.fileName,
             uploadFileResponse.driveItemId,
@@ -866,7 +846,7 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
         teamsUserIdsToSave,
     } = options;
 
-    const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, room.id);
+    const roomRecord = await Room.findByRCRoomId(read, room.id);
     if (!roomRecord?.teamsThreadId) {
         return;
     }
@@ -892,7 +872,7 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
     });
 
     if (!accessToken) {
-        const wasSent = await retrieveLoginMessageSentStatus({
+        const wasSent = await LoginMessage.get({
             read,
             rocketChatUserId: operator.id,
         });
@@ -904,7 +884,7 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
                 app,
                 AddUserLoginRequiredHintMessageText
             );
-            await saveLoginMessageSentStatus({
+            await LoginMessage.save({
                 persistence,
                 rocketChatUserId: operator.id,
                 wasSent: true,
@@ -942,7 +922,7 @@ export const handlePostRoomUserJoinedAsync = async (options: {
 
     // setBridgeRoomActiveAsync preserves any existing teamsThreadId /
     // bridgeUserRocketChatUserId, so re-adding the bot reuses the same thread
-    await setBridgeRoomActiveAsync(persistence, read, room.id, true);
+    await Room.setBridgeActive(persistence, read, room.id, true);
 
     app.getLogger().info(
         `[TeamsBridge] Room "${room.displayName || room.id}" is now an active bridge room ` +
@@ -965,17 +945,17 @@ export const handlePreRoomUserLeaveAsync = async (options: {
     // Re-adding the bot later will reactivate the same thread.
     const appUser = await read.getUserReader().getAppUser(app.getID());
     if (appUser && leavingRocketChatUserId === appUser.id) {
-        await setBridgeRoomActiveAsync(persistence, read, roomId, false);
+        await Room.setBridgeActive(persistence, read, roomId, false);
         app.getLogger().info(`[TeamsBridge] Room "${context.room.displayName || roomId}" bridging paused (app user removed).`);
         return;
     }
 
-    const roomRecord = await retrieveRoomByRocketChatRoomIdAsync(read, roomId);
+    const roomRecord = await Room.findByRCRoomId(read, roomId);
     if (!roomRecord || !roomRecord.teamsThreadId) {
         return;
     }
 
-    const embeddedLoginUser = await retrieveUserByRocketChatUserIdAsync(
+    const embeddedLoginUser = await UserMapping.findByRCUserId(
         read,
         leavingRocketChatUserId
     );
@@ -998,7 +978,7 @@ export const handlePreRoomUserLeaveAsync = async (options: {
     });
     if (!accessToken) {
         console.error("No bridge user.");
-        await persistRoomAsync(
+        await Room.persist(
             persistence,
             roomRecord.rocketChatRoomId,
             roomRecord.teamsThreadId,
@@ -1030,7 +1010,7 @@ export const handlePreRoomUserLeaveAsync = async (options: {
         embeddedLoginUser.teamsUserId === roomRecord.bridgeUserRocketChatUserId
     ) {
         // Clear bridge user if it's been removed
-        await persistRoomAsync(
+        await Room.persist(
             persistence,
             roomRecord.rocketChatRoomId,
             roomRecord.teamsThreadId,
@@ -1048,7 +1028,7 @@ export const handleUserRegistrationAutoRenewAsync = async (options: {
 }): Promise<void> => {
     const { http, persistence, read, subscriberEndpointUrl, app } = options;
 
-    const allRegistrations = await retrieveAllUserRegistrationsAsync(read);
+    const allRegistrations = await UserRegistration.findAll(read);
 
     if (allRegistrations) {
         const errorUserIds: string[] = [];
@@ -1067,7 +1047,7 @@ export const handleUserRegistrationAutoRenewAsync = async (options: {
                     continue;
                 }
 
-                const user = await retrieveUserByRocketChatUserIdAsync(
+                const user = await UserMapping.findByRCUserId(
                     read,
                     registration.rocketChatUserId
                 );
@@ -1110,7 +1090,7 @@ const isTeamsMessageAsync = async (
     }
 
     const messageIdMapping =
-        await retrieveMessageIdMappingByRocketChatMessageIdAsync(
+        await MessageMapping.findByRCMessageId(
             read,
             messageId
         );
@@ -1138,7 +1118,7 @@ const findOneTeamsLoggedInUsersAsync = async (options: {
             http,
         });
         if (accessToken) {
-            const userModel = await retrieveUserByRocketChatUserIdAsync(
+            const userModel = await UserMapping.findByRCUserId(
                 read,
                 user.id
             );

@@ -4,7 +4,8 @@ import { InputElementDispatchAction, IOptionObject, TextObjectType, UIKitSurface
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AddUserNoExistingUsersHintMessageText, UIActionId, UIElementId, UIElementText } from "./Const";
 import { notifyRocketChatUserInRoomAsync } from "./MessageHelper";
-import { retrieveAllTeamsUserProfilesAsync, retrieveUserByRocketChatUserIdAsync, TeamsUserProfileModel, UserModel } from "./PersistHelper";
+import { TeamsUserProfile, UserMapping } from "./PersistHelper";
+import type { TeamsUserProfileModel, UserModel } from "./PersistHelper";
 
 export const openAddTeamsUserContextualBarBlocksAsync = async (
     triggerId: string,
@@ -14,7 +15,7 @@ export const openAddTeamsUserContextualBarBlocksAsync = async (
     read: IRead,
     modify: IModify
 ) : Promise<void> => {
-    const allTeamsUserProfiles = await retrieveAllTeamsUserProfilesAsync(read);
+    const allTeamsUserProfiles = await TeamsUserProfile.findAll(read);
     if (!allTeamsUserProfiles) {
         await notifyRocketChatUserInRoomAsync(AddUserNoExistingUsersHintMessageText, appUser, operator, currentRoom, read.getNotifier());
         return;
@@ -24,7 +25,7 @@ export const openAddTeamsUserContextualBarBlocksAsync = async (
     // Under single-bot arch there are no dummy users. Build a set of Teams user IDs
     // whose registered RC user is already in this room, so they are excluded from the picker.
     const memberTeamsUserIdModels = await Promise.all(
-        members.map((m) => retrieveUserByRocketChatUserIdAsync(read, m.id))
+        members.map((m) => UserMapping.findByRCUserId(read, m.id))
     );
     const memberTeamsUserIdSet = new Set(
         memberTeamsUserIdModels

@@ -17,16 +17,8 @@ import {
     MessageType,
     ThreadType,
 } from "./MicrosoftGraphApi";
-import {
-    UserModel,
-    persistMessageIdMappingAsync,
-    persistRoomAsync,
-    persistUploadAndTeamsMappingAsync,
-    retrieveMessageIdMappingByTeamsMessageIdAsync,
-    retrieveRoomByTeamsThreadIdAsync,
-    retrieveTeamsUserProfileByTeamsUserIdAsync,
-    retrieveUserByTeamsUserIdAsync,
-} from "./PersistHelper";
+import { MessageMapping, Room, TeamsUserProfile, UploadMapping, UserMapping } from "./PersistHelper";
+import type { UserModel } from "./PersistHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "./AuthHelper";
 import { PreventRegistry } from "./PreventRegistry";
@@ -139,7 +131,7 @@ const handleInboundMessageCreatedAsync = async (
     );
 
     if (getMessageResponse.messageType) {
-        const storedMessageMap = await retrieveMessageIdMappingByTeamsMessageIdAsync(read, getMessageResponse.messageId);
+        const storedMessageMap = await MessageMapping.findByTeamsMessageId(read, getMessageResponse.messageId);
 
         if (storedMessageMap?.rocketChatMessageId) {
             // IMPORTANT!!!!!
@@ -147,7 +139,7 @@ const handleInboundMessageCreatedAsync = async (
             return;
         }
 
-        let roomRecord = await retrieveRoomByTeamsThreadIdAsync(
+        let roomRecord = await Room.findByTeamsThreadId(
             read,
             getMessageResponse.threadId
         );
@@ -201,7 +193,7 @@ const handleInboundMessageCreatedAsync = async (
 
                 // Add thread members to the room
                 for (const teamsMemberId of teamsMemberIds) {
-                    const rocketChatUser = await retrieveUserByTeamsUserIdAsync(
+                    const rocketChatUser = await UserMapping.findByTeamsUserId(
                         read,
                         teamsMemberId
                     );
@@ -228,14 +220,14 @@ const handleInboundMessageCreatedAsync = async (
             console.log(`Room ${roomId} created for incoming message!`);
 
             // Set notification receiver as bridge user and persist room record
-            await persistRoomAsync(
+            await Room.persist(
                 persis,
                 roomId,
                 threadInfo.threadId,
                 receiverRocketChatUserId
             );
 
-            roomRecord = await retrieveRoomByTeamsThreadIdAsync(
+            roomRecord = await Room.findByTeamsThreadId(
                 read,
                 getMessageResponse.threadId
             );
@@ -270,7 +262,7 @@ const handleInboundMessageCreatedAsync = async (
                 return;
             }
 
-            const fromUserRocketChatUser = await retrieveUserByTeamsUserIdAsync(
+            const fromUserRocketChatUser = await UserMapping.findByTeamsUserId(
                 read,
                 fromUserTeamsId
             );
@@ -304,7 +296,7 @@ const handleInboundMessageCreatedAsync = async (
             });
 
             if (usesBotFallback && message.text !== "") {
-                const senderProfile = await retrieveTeamsUserProfileByTeamsUserIdAsync(read, fromUserTeamsId);
+                const senderProfile = await TeamsUserProfile.findByTeamsUserId(read, fromUserTeamsId);
                 const displayName = senderProfile?.displayName ?? fromUserTeamsId;
                 message.text = `**${displayName}:** ${message.text}`;
             }
@@ -313,7 +305,7 @@ const handleInboundMessageCreatedAsync = async (
                 // File message, no text content
                 await Promise.all(
                     message.uploadIds.map((uploadIdMap) => {
-                        return persistUploadAndTeamsMappingAsync({
+                        return UploadMapping.persist({
                             persistence: persis,
                             rocketchatUploadId: uploadIdMap.rocketChat,
                             teamsAttachmentId: uploadIdMap.teams,
@@ -333,14 +325,14 @@ const handleInboundMessageCreatedAsync = async (
             );
 
             await Promise.all([
-                persistMessageIdMappingAsync({
+                MessageMapping.persist({
                     persistence: persis,
                     rocketChatMessageId,
                     teamsMessageId: getMessageResponse.messageId,
                     teamsThreadId: getMessageResponse.threadId,
                 }),
                 ...message.uploadIds.map((uploadIdMap) => {
-                    return persistUploadAndTeamsMappingAsync({
+                    return UploadMapping.persist({
                         persistence: persis,
                         rocketchatUploadId: uploadIdMap.rocketChat,
                         teamsAttachmentId: uploadIdMap.teams,
@@ -362,7 +354,7 @@ const handleInboundMessageCreatedAsync = async (
                 let userToAdd: IUser | undefined = undefined;
 
                 // First, try find whether there's a real Rocket.Chat user for this Teams user to add
-                const rocketChatUser = await retrieveUserByTeamsUserIdAsync(
+                const rocketChatUser = await UserMapping.findByTeamsUserId(
                     read,
                     memberToAddTeamsId
                 );
@@ -448,7 +440,7 @@ const handleInboundMessageUpdatedAsync = async (
     );
 
     const messageIdMapping =
-        await retrieveMessageIdMappingByTeamsMessageIdAsync(
+        await MessageMapping.findByTeamsMessageId(
             read,
             getMessageResponse.messageId
         );
@@ -512,7 +504,7 @@ const handleInboundMessageDeletedAsync = async (
     const resourceString = inBoundNotification.resourceId;
 
     const messageIdMapping =
-        await retrieveMessageIdMappingByTeamsMessageIdAsync(
+        await MessageMapping.findByTeamsMessageId(
             read,
             resourceString
         );

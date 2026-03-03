@@ -3,7 +3,7 @@ import {
     RocketChatAssociationModel,
     RocketChatAssociationRecord,
 } from "@rocket.chat/apps-engine/definition/metadata";
-import { MiscKeys } from "./PersistHelper";
+const PREVENT_REGISTRY_KEY = 'PreventRegistry';
 
 /**
  * This class will help preventing a task from being executed multiple times.
@@ -19,7 +19,7 @@ export class PreventRegistry {
         const associations = [
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,
-                MiscKeys.PreventRegistry
+                PREVENT_REGISTRY_KEY
             ),
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,
@@ -34,7 +34,7 @@ export class PreventRegistry {
         const associations = [
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,
-                MiscKeys.PreventRegistry
+                PREVENT_REGISTRY_KEY
             ),
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,
@@ -63,7 +63,7 @@ export class PreventRegistry {
         const associations = [
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,
-                MiscKeys.PreventRegistry
+                PREVENT_REGISTRY_KEY
             ),
         ];
 
@@ -74,7 +74,7 @@ export class PreventRegistry {
         const associations = [
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,
-                MiscKeys.PreventRegistry
+                PREVENT_REGISTRY_KEY
             ),
             new RocketChatAssociationRecord(
                 RocketChatAssociationModel.MISC,

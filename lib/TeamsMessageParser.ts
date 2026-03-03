@@ -1,7 +1,7 @@
 import { parse } from 'himalaya';
 import { decode } from "he";
 import { Attachment } from './MicrosoftGraphApi';
-import { retrieveMessageIdMappingByTeamsMessageIdAsync } from './PersistHelper';
+import { MessageMapping } from './PersistHelper';
 import { IRead } from '@rocket.chat/apps-engine/definition/accessors';
 import { getRocketChatMessageUrl } from './UrlHelper';
 import { TeamsAttachmentType } from './Const';
@@ -180,7 +180,7 @@ export async function buildRocketChatMessageText({
                         case TeamsAttachmentType.MessageReference:
                             let msgUrl = "";
                             const mapping =
-                                await retrieveMessageIdMappingByTeamsMessageIdAsync(
+                                await MessageMapping.findByTeamsMessageId(
                                     read,
                                     attachment.id
                                 );

@@ -16,7 +16,7 @@ import {
     NotificationChangeType,
     NotificationResourceType,
 } from "../lib/InboundNotificationHelper";
-import { getSubscriptionStateHashForUser } from "../lib/PersistHelper";
+import { WebhookSecret } from "../lib/PersistHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export class SubscriberEndpoint extends ApiEndpoint {
@@ -87,7 +87,7 @@ export class SubscriberEndpoint extends ApiEndpoint {
 
                 if (
                     clientState !==
-                    (await getSubscriptionStateHashForUser(
+                    (await WebhookSecret.getSubscriptionStateHash(
                         read.getPersistenceReader(),
                         persis,
                         {

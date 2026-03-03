@@ -30,7 +30,7 @@ import {
     RegistrationAutoRenewInterval,
 } from "./Const";
 import { getNotificationEndpointUrl } from "./UrlHelper";
-import { getSubscriptionStateHashForUser } from "./PersistHelper";
+import { WebhookSecret } from "./PersistHelper";
 
 export interface TokenResponse {
     tokenType: string;
@@ -1087,7 +1087,7 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
         rocketChatUserId,
     });
 
-    const clientState = await getSubscriptionStateHashForUser(
+    const clientState = await WebhookSecret.getSubscriptionStateHash(
         read.getPersistenceReader(),
         persis,
         { rocketChatUserId }

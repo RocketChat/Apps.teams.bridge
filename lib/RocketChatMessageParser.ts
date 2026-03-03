@@ -1,6 +1,7 @@
 import { IHttp, IRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { shortnameToUnicode } from "emojione";
-import { MessageMappingModel, retrieveMessageIdMappingByRocketChatMessageIdAsync } from "./PersistHelper";
+import { MessageMapping } from "./PersistHelper";
+import type { MessageMappingModel } from "./PersistHelper";
 import { getRocketChatMessageUrl } from "./UrlHelper";
 import { getReplyAttachment } from "./MicrosoftGraphApi";
 
@@ -496,7 +497,7 @@ export const attachMessageReferences = async (
     for (const rcMsgId of referencedIds) {
         try {
             // Try to find existing mapping (Rocket.Chat message -> Teams message)
-            const mapping = await retrieveMessageIdMappingByRocketChatMessageIdAsync(read, rcMsgId);
+            const mapping = await MessageMapping.findByRCMessageId(read, rcMsgId);
 
 
             if (mapping?.teamsMessageId) {

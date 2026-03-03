@@ -8,9 +8,7 @@ import {
     getApplicationAccessTokenAsync,
     listTeamsUserProfilesAsync,
 } from "./MicrosoftGraphApi";
-import {
-    persistTeamsUserProfileAsync,
-} from "./PersistHelper";
+import { TeamsUserProfile } from "./PersistHelper";
 
 /**
  * Fetches all Teams user profiles from the directory and persists them for use
@@ -56,7 +54,7 @@ export const syncTeamsUserProfilesAsync = async (
     );
 
     for (const profile of teamsUserProfiles) {
-        await persistTeamsUserProfileAsync(
+        await TeamsUserProfile.persist(
             persis,
             profile.displayName,
             profile.givenName,

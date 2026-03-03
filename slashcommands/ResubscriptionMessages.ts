@@ -22,7 +22,7 @@ import {
 } from "../lib/Const";
 import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
-import { retrieveUserByRocketChatUserIdAsync } from "../lib/PersistHelper";
+import { UserMapping } from "../lib/PersistHelper";
 import { subscribeToAllMessagesForOneUserAsync } from "../lib/MicrosoftGraphApi";
 import { getUserAccessTokenAsync } from "../lib/AuthHelper";
 
@@ -99,7 +99,7 @@ export class ResubscribeMessages implements ISlashCommand {
                 this.app.getAccessors(),
                 SubscriberEndpointPath
             );
-            const user = await retrieveUserByRocketChatUserIdAsync(
+            const user = await UserMapping.findByRCUserId(
                 read,
                 commandSender.id
             );
