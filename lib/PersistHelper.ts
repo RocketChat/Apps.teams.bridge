@@ -18,7 +18,6 @@ export const MiscKeys = {
     ApplicationAccessToken: "ApplicationAccessToken",
     UserRegistration: "UserAccessToken",
     User: "User",
-    DummyUser: "DummyUser",
     Subscription: "Subscription",
     MessageIdMapping: "MessageIdMapping",
     Room: "Room",
@@ -141,45 +140,6 @@ export const persistUserAccessTokenAsync = async (
     };
 
     await persis.updateByAssociations(associations, data, true);
-};
-
-export const persistDummyUserAsync = async (
-    persis: IPersistence,
-    rocketChatUserId: string,
-    teamsUserId: string
-): Promise<void> => {
-    const associationsByRocketChatUserId: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.DummyUser
-        ),
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.USER,
-            rocketChatUserId
-        ),
-    ];
-    const associationsByTeamsUserId: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.DummyUser
-        ),
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.USER,
-            teamsUserId
-        ),
-    ];
-
-    const data: UserModel = {
-        rocketChatUserId,
-        teamsUserId,
-    };
-
-    await persis.updateByAssociations(
-        associationsByRocketChatUserId,
-        data,
-        true
-    );
-    await persis.updateByAssociations(associationsByTeamsUserId, data, true);
 };
 
 export const persistUserAsync = async (
@@ -513,86 +473,6 @@ export const persistOneDriveFileAsync = async (
     };
 
     await persis.updateByAssociations(associations, data, true);
-};
-
-export const checkDummyUserByRocketChatUserIdAsync = async (
-    read: IRead,
-    rocketChatUserId: string
-): Promise<boolean> => {
-    const data = await retrieveDummyUserByRocketChatUserIdAsync(
-        read,
-        rocketChatUserId
-    );
-
-    if (data === undefined || data === null) {
-        return false;
-    }
-
-    return true;
-};
-
-export const retrieveDummyUserByRocketChatUserIdAsync = async (
-    read: IRead,
-    rocketChatUserId: string
-): Promise<UserModel | null> => {
-    const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.DummyUser
-        ),
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.USER,
-            rocketChatUserId
-        ),
-    ];
-
-    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
-    const results = await persistenceRead.readByAssociations(associations);
-
-    if (results === undefined || results === null || results.length == 0) {
-        return null;
-    }
-
-    if (results.length > 1) {
-        throw new Error(
-            `More than one DummyUser record for Rocket.Chat user ${rocketChatUserId}`
-        );
-    }
-
-    const data: UserModel = results[0] as UserModel;
-    return data;
-};
-
-export const retrieveDummyUserByTeamsUserIdAsync = async (
-    read: IRead,
-    teamsUserId: string
-): Promise<UserModel | null> => {
-    const associations: Array<RocketChatAssociationRecord> = [
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.MISC,
-            MiscKeys.DummyUser
-        ),
-        new RocketChatAssociationRecord(
-            RocketChatAssociationModel.USER,
-            teamsUserId
-        ),
-    ];
-
-    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
-    const results = await persistenceRead.readByAssociations(associations);
-
-    if (results === undefined || results === null || results.length == 0) {
-        return null;
-    }
-
-    if (results.length > 1) {
-        throw new Error(
-            `More than one DummyUser record for Teams user ${teamsUserId}`
-        );
-    }
-
-    const data: UserModel = results[0] as UserModel;
-    return data;
 };
 
 export const retrieveUserByRocketChatUserIdAsync = async (
@@ -1042,6 +922,31 @@ export const retrieveAllTeamsUserProfilesAsync = async (
         results as Array<TeamsUserProfileModel>;
 
     return data;
+};
+
+export const retrieveTeamsUserProfileByTeamsUserIdAsync = async (
+    read: IRead,
+    teamsUserId: string
+): Promise<TeamsUserProfileModel | null> => {
+    const associations: Array<RocketChatAssociationRecord> = [
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.MISC,
+            MiscKeys.TeamsUserProfile
+        ),
+        new RocketChatAssociationRecord(
+            RocketChatAssociationModel.USER,
+            teamsUserId
+        ),
+    ];
+
+    const persistenceRead: IPersistenceRead = read.getPersistenceReader();
+    const results = await persistenceRead.readByAssociations(associations);
+
+    if (!results || results.length === 0) {
+        return null;
+    }
+
+    return results[0] as TeamsUserProfileModel;
 };
 
 export const retrieveOneDriveFileAsync = async (

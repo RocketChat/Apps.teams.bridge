@@ -24,6 +24,7 @@ import {
     persistUploadAndTeamsMappingAsync,
     retrieveMessageIdMappingByTeamsMessageIdAsync,
     retrieveRoomByTeamsThreadIdAsync,
+    retrieveTeamsUserProfileByTeamsUserIdAsync,
     retrieveUserByTeamsUserIdAsync,
 } from "./PersistHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
@@ -286,6 +287,11 @@ const handleInboundMessageCreatedAsync = async (
                 throw new Error('No user found to send the message');
             }
 
+            // When the sender has no RC registration the app bot relays the message.
+            // Prefix the message text with the Teams sender's display name so RC
+            // users can see who originally sent it.
+            const usesBotFallback = !fromUserRocketChatUser;
+
             const message = await mapTeamsMessageToRocketChatMessage({
                 getMessageResponse,
                 accessToken: userAccessToken,
@@ -296,6 +302,12 @@ const handleInboundMessageCreatedAsync = async (
                 read,
                 uploadFiles: true,
             });
+
+            if (usesBotFallback && message.text !== "") {
+                const senderProfile = await retrieveTeamsUserProfileByTeamsUserIdAsync(read, fromUserTeamsId);
+                const displayName = senderProfile?.displayName ?? fromUserTeamsId;
+                message.text = `**${displayName}:** ${message.text}`;
+            }
 
             if (message.text === "") {
                 // File message, no text content
