@@ -7,7 +7,7 @@ import {
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { getApplicationAccessTokenAsync } from "../lib/MicrosoftGraphApi";
-import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
+import { notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
 import { AppSetting } from "../config/Settings";
 import { AppToken } from "../lib/PersistHelper";
 import { AppSetupVerificationFailMessageText, AppSetupVerificationPassMessageText } from "../lib/Const";

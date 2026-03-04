@@ -3,16 +3,15 @@ import {
     IMessageBuilder,
     IModify,
     IModifyCreator,
-    INotifier,
     IRead,
     IRoomBuilder,
 } from "@rocket.chat/apps-engine/definition/accessors";
-import { IMessage, IMessageAction, IMessageAttachment, MessageActionType } from "@rocket.chat/apps-engine/definition/messages";
+import { IMessage, IMessageAttachment } from "@rocket.chat/apps-engine/definition/messages";
 import { IRoom, RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUploadDescriptor } from "@rocket.chat/apps-engine/definition/uploads/IUploadDescriptor";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { shortnameToUnicode } from "emojione";
-import { LoginButtonText, TeamsAttachmentType } from "./Const";
+import { TeamsAttachmentType } from "./Const";
 import { downloadOneDriveFileAsync, getMessageAttachments, GetMessageResponse, MessageContentType } from "./MicrosoftGraphApi";
 import { buildRocketChatMessageText, extractMainTextNodesFromBridgedMessageNodes, parseHTML } from "./TeamsMessageParser";
 import { attachAttachments, attachMessageReferences, createTeamsHTMLMessage } from "./RocketChatMessageParser";
@@ -63,57 +62,6 @@ export const sendRocketChatMessageInRoomAsync = async (
 
     const messageBuilder: IMessageBuilder = creator.startMessage(message as IMessage);
     return creator.finish(messageBuilder);
-};
-
-export const notifyRocketChatUserInRoomAsync = async (
-    message: string,
-    appUser: IUser,
-    user: IUser,
-    room: IRoom,
-    notifier: INotifier) : Promise<void> => {
-    const messageTemplate: IMessage = {
-        text: message,
-        sender: appUser,
-        room
-    };
-
-    await notifyRocketChatUserAsync(messageTemplate, user, notifier);
-};
-
-export const notifyRocketChatUserAsync = async (
-    message: IMessage,
-    user: IUser,
-    notifier: INotifier) : Promise<void> => {
-    await notifier.notifyUser(user, message);
-};
-
-export const generateHintMessageWithTeamsLoginButton = (
-    loginUrl: string,
-    sender: IUser,
-    room: IRoom,
-    hintMessageText: string) : IMessage  =>{
-    const buttonAction: IMessageAction = {
-        type: MessageActionType.BUTTON,
-        text: LoginButtonText,
-        url: loginUrl,
-    };
-
-    const buttonAttachment: IMessageAttachment = {
-        actions: [
-            buttonAction
-        ]
-    };
-
-    const message: IMessage = {
-        text: hintMessageText,
-        sender: sender,
-        room,
-        attachments: [
-            buttonAttachment
-        ]
-    };
-
-    return message;
 };
 
 export const mapTeamsMessageToRocketChatMessage = async ({

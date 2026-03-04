@@ -3,7 +3,7 @@ import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { InputElementDispatchAction, IOptionObject, TextObjectType, UIKitSurfaceType } from "@rocket.chat/apps-engine/definition/uikit";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AddUserNoExistingUsersHintMessageText, UIActionId, UIElementId, UIElementText } from "./Const";
-import { notifyRocketChatUserInRoomAsync } from "./MessageHelper";
+import { notifyRocketChatUserInRoomAsync } from "./Notifier";
 import { TeamsUserProfile, UserMapping } from "./PersistHelper";
 import type { TeamsUserProfileModel, UserModel } from "./PersistHelper";
 

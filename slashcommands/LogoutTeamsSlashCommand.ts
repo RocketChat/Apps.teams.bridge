@@ -13,7 +13,7 @@ import {
     LogoutNoNeedHintMessageText,
     LogoutSuccessHintMessageText,
 } from '../lib/Const';
-import { notifyRocketChatUserInRoomAsync } from '../lib/MessageHelper';
+import { notifyRocketChatUserInRoomAsync } from '../lib/Notifier';
 import {
     deleteAllSubscriptions,
     revokeUserRefreshTokenAsync,

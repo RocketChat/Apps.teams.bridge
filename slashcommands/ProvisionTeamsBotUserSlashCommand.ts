@@ -9,7 +9,7 @@ import {
     SlashCommandContext,
 } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
+import { notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
 import {
     ProvisionTeamsBotUserFailedMessageText,
     ProvisionTeamsBotUserSucceedMessageText,

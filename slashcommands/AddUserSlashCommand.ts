@@ -1,7 +1,7 @@
 import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/definition/accessors";
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
-import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
+import { notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
 import {
     AddUserRoomTypeInvalidHintMessageText,
 } from "../lib/Const";

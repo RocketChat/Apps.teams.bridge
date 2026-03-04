@@ -13,7 +13,7 @@ import {
     DeleteTeamsBotUserFailedMessageText,
     DeleteTeamsBotUserSucceedMessageText,
 } from "../lib/Const";
-import { notifyRocketChatUserInRoomAsync } from "../lib/MessageHelper";
+import { notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export class DeleteTeamsBotUserSlashCommand implements ISlashCommand {

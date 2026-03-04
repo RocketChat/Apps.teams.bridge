@@ -14,7 +14,7 @@ import {
     generateHintMessageWithTeamsLoginButton,
     notifyRocketChatUserAsync,
     notifyRocketChatUserInRoomAsync,
-} from "../lib/MessageHelper";
+} from "../lib/Notifier";
 import {
     AuthenticationEndpointPath,
     LoginMessageText,
