@@ -1,0 +1,35 @@
+import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
+import { getGraphApiChatMemberUrl } from "../Const";
+
+export const listMembersInChatThreadAsync = async (
+    http: IHttp,
+    threadId: string,
+    userAccessToken: string): Promise<string[]> => {
+    const url = getGraphApiChatMemberUrl(threadId);
+    const httpRequest: IHttpRequest = {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userAccessToken}`,
+        },
+    };
+
+    const response = await http.get(url, httpRequest);
+
+    if (response.statusCode === HttpStatusCode.OK) {
+        const responseBody = response.data;
+        if (responseBody === undefined) {
+            throw new Error('List members in chat thread failed!');
+        }
+
+        const userList = responseBody.value as any[];
+        const result: string[] = [];
+
+        for (const user of userList) {
+            result.push(user.userId);
+        }
+
+        return result;
+    } else {
+        throw new Error(`List members in chat thread failed with http status code ${response.statusCode}.`);
+    }
+};

@@ -19,7 +19,7 @@ import {
 } from "./MicrosoftGraphApi";
 import { MessageMapping, Room, TeamsUserProfile, UploadMapping, UserMapping } from "./PersistHelper";
 import type { UserModel } from "./PersistHelper";
-import { TeamsBridgeApp } from "../TeamsBridgeApp";
+import type { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "./AuthHelper";
 import { PreventRegistry } from "./PreventRegistry";
 

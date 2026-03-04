@@ -201,7 +201,7 @@ export const handlePostMessageSentAsync = async (options: {
         // Send the message to the chat thread
         const response = await sendTextMessageToChatThreadAsync({
             http,
-            textMessage: messageText,
+            textMessage: messageText ?? '',
             threadId: roomRecord.teamsThreadId,
             userAccessToken,
             attachments,
