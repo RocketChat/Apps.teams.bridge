@@ -1,20 +1,24 @@
 import {
     IHttp,
+    IModify,
     IPersistence,
     IRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IRoomUserJoinedContext } from "@rocket.chat/apps-engine/definition/rooms";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import { Room } from "../PersistHelper";
+import { getUserAccessTokenAsync } from "../AuthHelper";
+import { notifyRoomMembersAppUserNotLoggedInAsync } from "../Notifier";
+import { AppUserLoginNotified, Room } from "../PersistHelper";
 
 export const handlePostRoomUserJoinedAsync = async (options: {
     context: IRoomUserJoinedContext;
     read: IRead;
     http: IHttp;
     persistence: IPersistence;
+    modify: IModify;
     app: TeamsBridgeApp;
 }): Promise<void> => {
-    const { context, read, persistence, app } = options;
+    const { context, read, persistence, modify, app, http } = options;
     const { joiningUser, room } = context;
 
     const appUser = await read.getUserReader().getAppUser(app.getID());
@@ -30,4 +34,27 @@ export const handlePostRoomUserJoinedAsync = async (options: {
         `[TeamsBridge] Room "${room.displayName || room.id}" is now an active bridge room ` +
         `(app user added by ${context.inviter?.username ?? 'unknown'}).`
     );
+
+    // Check whether the app user has a delegated Teams token. If not, notify
+    // room members so an admin knows to run /teamsbridge-login-app-user.
+    const alreadyNotified = await AppUserLoginNotified.isSet(read.getPersistenceReader(), room.id);
+    if (!alreadyNotified) {
+        const appUserToken = await getUserAccessTokenAsync({
+            read,
+            persistence,
+            rocketChatUserId: appUser.id,
+            app,
+            http,
+        });
+        if (!appUserToken) {
+            await notifyRoomMembersAppUserNotLoggedInAsync({
+                read,
+                modify,
+                http,
+                persistence,
+                app,
+                roomId: room.id,
+            });
+        }
+    }
 };

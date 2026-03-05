@@ -6,13 +6,13 @@ export const sendTextMessageToChatThreadAsync = async ({
     http,
     textMessage,
     threadId,
-    userAccessToken,
+    accessToken,
     attachments,
 }: {
     http: IHttp;
     textMessage: string;
     threadId: string;
-    userAccessToken: string;
+    accessToken: string;
     attachments?: any[];
 }): Promise<SendMessageResponse> => {
     const url = getGraphApiMessageUrl(threadId);
@@ -28,7 +28,7 @@ export const sendTextMessageToChatThreadAsync = async ({
     const httpRequest: IHttpRequest = {
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
+            'Authorization': `Bearer ${accessToken}`,
         },
         content: JSON.stringify(body)
     };

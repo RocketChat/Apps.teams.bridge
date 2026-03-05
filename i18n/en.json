@@ -9,5 +9,6 @@
     "add_user_slash_command_description": "Add a Teams Bot user to current group chat",
     "provision_teams_bot_user_slash_command_description": "Create a Teams Bot user in Rocket.Chat for each Teams user in your organization",
     "action_button_label_add_teams_user": "Add Teams user",
-    "teamsbridge-resubscribe-messages_command_description": "Resubscribe to Teams messages if you are not receiving them"
+    "teamsbridge-resubscribe-messages_command_description": "Resubscribe to Teams messages if you are not receiving them",
+    "login_app_user_slash_command_description": "Log in the app user to Microsoft Teams to enable message relaying"
 }

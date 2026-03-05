@@ -23,7 +23,7 @@ import {
     getUserProfileAsync,
     subscribeToAllMessagesForOneUserAsync,
 } from "../lib/MicrosoftGraphApi";
-import { LoginMessage, UserMapping, UserRegistration } from "../lib/PersistHelper";
+import { LoginMessage, UserMapping, UserRegistration, AppUserLoginNotified } from "../lib/PersistHelper";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 
 export class AuthenticationEndpoint extends ApiEndpoint {
@@ -110,6 +110,13 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                     wasSent: false,
                 }),
             ]);
+
+            // If the app user just logged in, reset the per-room notification
+            // flags so rooms won't show stale "app user not logged in" warnings.
+            const appUser = await read.getUserReader().getAppUser(this.app.getID());
+            if (appUser && rocketChatUserId === appUser.id) {
+                await AppUserLoginNotified.clearAll(persis);
+            }
 
             const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(
                 this.app.getAccessors(),

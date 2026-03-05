@@ -1,4 +1,5 @@
 export { AppToken } from './AppToken';
+export { AppUserLoginNotified } from './AppUserLoginNotified';
 export { UserRegistration } from './UserRegistration';
 export { UserMapping } from './UserMapping';
 export { Subscription } from './Subscription';

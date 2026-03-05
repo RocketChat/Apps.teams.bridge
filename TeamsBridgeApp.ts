@@ -91,6 +91,7 @@ import { LoginTeamsSlashCommand } from "./slashcommands/LoginTeamsSlashCommand";
 import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand";
 import { ProvisionTeamsBotUserSlashCommand } from "./slashcommands/ProvisionTeamsBotUserSlashCommand";
 import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
+import { LoginAppUserSlashCommand } from "./slashcommands/LoginAppUserSlashCommand";
 import { ResubscribeMessages } from "./slashcommands/ResubscriptionMessages";
 import { SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
 import { PreventRegistry } from "./lib/PreventRegistry";
@@ -286,6 +287,7 @@ export class TeamsBridgeApp
             read,
             persistence,
             http,
+            modify,
         });
     }
 
@@ -388,6 +390,7 @@ export class TeamsBridgeApp
         read: IRead,
         http: IHttp,
         persistence: IPersistence,
+        modify: IModify,
     ): Promise<void> {
         await handlePostRoomUserJoinedAsync({
             app: this,
@@ -395,6 +398,7 @@ export class TeamsBridgeApp
             read,
             persistence,
             http,
+            modify,
         });
     }
 
@@ -620,6 +624,9 @@ export class TeamsBridgeApp
             ),
             configuration.slashCommands.provideSlashCommand(
                 new ResubscribeMessages(this),
+            ),
+            configuration.slashCommands.provideSlashCommand(
+                new LoginAppUserSlashCommand(this),
             ),
         ]);
 

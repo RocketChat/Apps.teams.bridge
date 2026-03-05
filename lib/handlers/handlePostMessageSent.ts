@@ -6,7 +6,7 @@ import {
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { DefaultThreadName, UnsupportedScenarioHintMessageText } from "../Const";
-import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "../AuthHelper";
+import { getUserAccessTokenAsync } from "../AuthHelper";
 import { mapRocketChatMessageToTeamsMessageV2 } from "../MessageHelper";
 import {
     createChatThreadAsync,
@@ -14,19 +14,21 @@ import {
     sendTextMessageToChatThreadAsync,
     shareOneDriveFileAsync,
 } from "../MicrosoftGraphApi";
-import { MessageMapping, OneDriveFile, Room, UserMapping } from "../PersistHelper";
+import { MessageMapping, OneDriveFile, Room, UserMapping, AppUserLoginNotified } from "../PersistHelper";
 import { PreventRegistry } from "../PreventRegistry";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { notifyRocketChatUserInRoomAsync } from "../Notifier";
+import { IModify } from "@rocket.chat/apps-engine/definition/accessors";
+import { notifyRocketChatUserInRoomAsync, notifyRoomMembersAppUserNotLoggedInAsync } from "../Notifier";
 
 export const handlePostMessageSentAsync = async (options: {
     message: IMessage;
     read: IRead;
     http: IHttp;
     persistence: IPersistence;
+    modify: IModify;
     app: TeamsBridgeApp;
 }): Promise<void> => {
-    const { message, read, persistence, app, http } = options;
+    const { message, read, persistence, app, http, modify } = options;
 
     if (await PreventRegistry.capture(persistence, `PreventPostMessageHook/${message.id}`)) {
         return;
@@ -39,32 +41,56 @@ export const handlePostMessageSentAsync = async (options: {
     }
 
     const roomId = message.room.id;
-    if (!await Room.isBridged(read, roomId)) {
+    const roomRecord = await Room.findByRCRoomId(read, roomId);
+    if (!roomRecord?.isBridged) {
+        app.getLogger().debug(`Room ${roomId} is not bridged, skipping message processing.`);
         return;
     }
 
-    const roomRecord = await Room.findByRCRoomId(read, roomId);
-    if (!roomRecord) {
-        throw new Error("No room record found for Teams interop room!");
-    }
-
-    // Determine the access token to use: prefer the sender's own token (logged-in),
-    // fall back to the app-level token for non-logged-in users.
-    let userAccessToken = await getUserAccessTokenAsync({
+    let accessToken = await getUserAccessTokenAsync({
         read,
         persistence,
         rocketChatUserId: message.sender.id,
         app,
         http,
     });
-    let originalSenderName: string | undefined;
 
-    if (!userAccessToken) {
-        userAccessToken = await getAppAccessTokenAsync({ http, app });
-        originalSenderName = message.sender.name;
+    const userHasAccessToken = typeof accessToken === "string" && accessToken.length > 0;
+
+    if (!userHasAccessToken) {
+        const appUserToken = await getUserAccessTokenAsync({
+            read,
+            persistence,
+            rocketChatUserId: appUser.id,
+            app,
+            http,
+        });
+
+        if (typeof appUserToken === "string" && appUserToken.length > 0) {
+            accessToken = appUserToken;
+        } else {
+            const alreadyNotified = await AppUserLoginNotified.isSetToday(
+                read.getPersistenceReader(),
+                roomId,
+            );
+
+            if (alreadyNotified) {
+                return;
+            }
+
+            await notifyRoomMembersAppUserNotLoggedInAsync({
+                read,
+                modify,
+                http,
+                persistence,
+                app,
+                roomId,
+            });
+            return;
+        }
     }
 
-    if (!userAccessToken) {
+    if (!accessToken) {
         const notifier = read.getNotifier();
         await notifyRocketChatUserInRoomAsync(
             UnsupportedScenarioHintMessageText("No valid access token available"),
@@ -92,7 +118,7 @@ export const handlePostMessageSentAsync = async (options: {
             http,
             teamsIds,
             roomName,
-            userAccessToken
+            accessToken
         );
         roomRecord.teamsThreadId = response.threadId;
 
@@ -128,7 +154,7 @@ export const handlePostMessageSentAsync = async (options: {
         const shareRecord = await shareOneDriveFileAsync(
             http,
             oneDriveFile?.driveItemId,
-            userAccessToken
+            accessToken
         );
 
         // Send the message to the chat thread
@@ -138,7 +164,7 @@ export const handlePostMessageSentAsync = async (options: {
             oneDriveFile.fileName,
             shareRecord.shareLink,
             roomRecord.teamsThreadId,
-            userAccessToken
+            accessToken
         );
 
         teamsMessageId = response.messageId;
@@ -146,15 +172,16 @@ export const handlePostMessageSentAsync = async (options: {
     } else {
         const { text, attachments } = await mapRocketChatMessageToTeamsMessageV2({
             message,
-            originalSenderName,
+            originalSenderName: message.sender.username,
             read,
             http,
-            accessToken: userAccessToken,
+            accessToken,
             messageIdMapping: {
                 rocketChatMessageId,
                 teamsMessageId,
                 teamsThreadId: roomRecord.teamsThreadId,
-            }
+            },
+            forceBridgedMessage: !userHasAccessToken,
         });
         messageText = text;
 
@@ -163,7 +190,7 @@ export const handlePostMessageSentAsync = async (options: {
             http,
             textMessage: messageText ?? '',
             threadId: roomRecord.teamsThreadId,
-            userAccessToken,
+            accessToken,
             attachments,
         });
 

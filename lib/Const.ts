@@ -76,6 +76,20 @@ export const AddUserLoginRequiredHintMessageText: string =
 export const LogoutNoNeedHintMessageText: string = 'You have NOT logged in to Microsoft yet. No need to logout.';
 export const LogoutSuccessHintMessageText: string = 'You have successfully logged out Microsoft Teams.';
 
+export const LoginAppUserMessageText: string =
+    'The app user has not yet logged in to Microsoft Teams. '
+    + 'Please click this button to log in with the Teams account that the app user will use to relay messages:';
+export const LoginAppUserAlreadyLoggedInMessageText: string =
+    'The app user has already logged in to Microsoft Teams. No need to login again.';
+export const AppUserLoginRequiredAdminHintMessageText: string =
+    'The Teams Bridge app user has not logged in to Microsoft Teams. '
+    + 'Messages in bridged rooms may not be fully relayed until the app user is logged in. '
+    + 'As an admin, please click the button below to complete the login for the app user:';
+export const AppUserLoginRequiredHintMessageText: string =
+    'The Teams Bridge app user has not logged in to Microsoft Teams. '
+    + 'Messages in this room may not be fully relayed. '
+    + 'Please ask your Rocket.Chat administrator to run /teamsbridge-login-app-user to fix this.';
+
 export const LoginButtonText: string = 'Login Teams';
 
 export const AuthenticationScopes = [
