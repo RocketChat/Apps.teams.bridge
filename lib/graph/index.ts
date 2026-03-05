@@ -6,7 +6,6 @@ export * from './getUserAccessTokenAsync';
 export * from './renewUserAccessTokenAsync';
 export * from './revokeUserRefreshTokenAsync';
 export * from './getUserProfileAsync';
-export * from './createOneOnOneChatThreadAsync';
 export * from './createChatThreadAsync';
 export * from './getChatThreadWithMembersAsync';
 export * from './addMemberToChatThreadAsync';

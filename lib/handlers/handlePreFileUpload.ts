@@ -5,9 +5,9 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IFileUploadContext } from "@rocket.chat/apps-engine/definition/uploads";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import { getUserAccessTokenAsync } from "../AuthHelper";
+import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "../AuthHelper";
 import { uploadFileToOneDriveAsync } from "../MicrosoftGraphApi";
-import { OneDriveFile, Room, UserMapping } from "../PersistHelper";
+import { OneDriveFile, Room } from "../PersistHelper";
 
 export const handlePreFileUploadAsync = async (options: {
     context: IFileUploadContext;
@@ -38,47 +38,24 @@ export const handlePreFileUploadAsync = async (options: {
         return;
     }
 
-    // There should be a room record in persist with a bridge user assigned
     const roomRecord = await Room.findByRCRoomId(read, roomId);
     if (!roomRecord) {
         throw new Error("No room record find for Teams interop room!");
     }
 
-    if (!roomRecord.bridgeUserRocketChatUserId) {
-        throw new Error("No bridge user assigned to Teams interop room!");
-    }
-
-    const bridgeUser = await UserMapping.findByRCUserId(
-        read,
-        roomRecord.bridgeUserRocketChatUserId
-    );
+    // Prefer the sender's own token; fall back to app-level token.
     let userAccessToken = await getUserAccessTokenAsync({
-        read,
-        persistence,
-        rocketChatUserId: roomRecord.bridgeUserRocketChatUserId,
-        app,
-        http,
-    });
-    if (!userAccessToken || !bridgeUser) {
-        await Room.persist(
-            persistence,
-            roomRecord.rocketChatRoomId,
-            roomRecord.teamsThreadId,
-            undefined
-        );
-        throw new Error("Invalid bridge user!");
-    }
-
-    const senderUserAccessToken = await getUserAccessTokenAsync({
         read,
         persistence,
         rocketChatUserId: senderRocketChatUserId,
         app,
         http,
     });
-    if (senderUserAccessToken) {
-        // If file uploader already logged in, make the file uploaded by themselves instead of via the bridge user
-        userAccessToken = senderUserAccessToken;
+    if (!userAccessToken) {
+        userAccessToken = await getAppAccessTokenAsync({ http, app });
+    }
+    if (!userAccessToken) {
+        throw new Error("No valid access token available to upload file!");
     }
 
     // Upload the file to One Drive

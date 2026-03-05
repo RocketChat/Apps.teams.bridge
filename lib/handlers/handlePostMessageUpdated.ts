@@ -5,14 +5,11 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import {
-    LoggedInBridgeUserRequiredHintMessageText,
-    UnsupportedScenarioHintMessageText,
-} from "../Const";
-import { getUserAccessTokenAsync } from "../AuthHelper";
+import { UnsupportedScenarioHintMessageText } from "../Const";
+import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "../AuthHelper";
 import { mapRocketChatMessageToTeamsMessageV2 } from "../MessageHelper";
 import { updateTextMessageInChatThreadAsync } from "../MicrosoftGraphApi";
-import { notifyNotLoggedInUserAsync, notifyRocketChatUserInRoomAsync } from "../Notifier";
+import { notifyRocketChatUserInRoomAsync } from "../Notifier";
 import { MessageMapping, Room } from "../PersistHelper";
 import { PreventRegistry } from "../PreventRegistry";
 
@@ -77,65 +74,44 @@ export const handlePostMessageUpdatedAsync = async (options: {
             attachments,
         });
     } else {
-        const bridgeRoom = await Room.findByTeamsThreadId(
-            read,
-            messageIdMapping.teamsThreadId
-        );
+        // Sender is not logged in — use app-level token to relay the edit.
+        const appAccessToken = await getAppAccessTokenAsync({ http, app });
 
-        if (bridgeRoom?.bridgeUserRocketChatUserId) {
-            const bridgeUserAccessToken = await getUserAccessTokenAsync({
-                app,
-                http,
-                persistence,
-                read,
-                rocketChatUserId: bridgeRoom.bridgeUserRocketChatUserId,
-            });
-
-            if (!bridgeUserAccessToken) {
-                const appUser = await read.getUserReader().getAppUser();
-                if (appUser) {
-                    await notifyRocketChatUserInRoomAsync(
-                        UnsupportedScenarioHintMessageText('The session of the bridge user is not valid. Please ask the user to log in again. Messaging without a valid bridge user session'),
-                        appUser,
-                        message.sender,
-                        message.room,
-                        read.getNotifier()
-                    );
-                }
-                return;
+        if (!appAccessToken) {
+            const appUser = await read.getUserReader().getAppUser();
+            if (appUser) {
+                await notifyRocketChatUserInRoomAsync(
+                    UnsupportedScenarioHintMessageText('No valid access token available to update message'),
+                    appUser,
+                    message.sender,
+                    message.room,
+                    read.getNotifier()
+                );
             }
-
-            await PreventRegistry.set(
-                persistence,
-                `PreventPostMessageUpdateHook/${message.id}`
-            );
-            const { text, attachments } = await mapRocketChatMessageToTeamsMessageV2({
-                message,
-                read,
-                originalSenderName: message.sender.name || message.sender.username,
-                forceBridgedMessage: true,
-                http,
-                accessToken: bridgeUserAccessToken,
-                messageIdMapping,
-            });
-            await updateTextMessageInChatThreadAsync({
-                http,
-                textMessage: text,
-                messageType: 'html',
-                messageId: messageIdMapping.teamsMessageId,
-                threadId: messageIdMapping.teamsThreadId,
-                userAccessToken: bridgeUserAccessToken,
-                attachments,
-            });
-
-        } else {
-            notifyNotLoggedInUserAsync(
-                read,
-                message.sender,
-                message.room,
-                app,
-                LoggedInBridgeUserRequiredHintMessageText
-            );
+            return;
         }
+
+        await PreventRegistry.set(
+            persistence,
+            `PreventPostMessageUpdateHook/${message.id}`
+        );
+        const { text, attachments } = await mapRocketChatMessageToTeamsMessageV2({
+            message,
+            read,
+            originalSenderName: message.sender.name || message.sender.username,
+            forceBridgedMessage: true,
+            http,
+            accessToken: appAccessToken,
+            messageIdMapping,
+        });
+        await updateTextMessageInChatThreadAsync({
+            http,
+            textMessage: text,
+            messageType: 'html',
+            messageId: messageIdMapping.teamsMessageId,
+            threadId: messageIdMapping.teamsThreadId,
+            userAccessToken: appAccessToken,
+            attachments,
+        });
     }
 };

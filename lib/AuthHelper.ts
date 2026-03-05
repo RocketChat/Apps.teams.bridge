@@ -101,6 +101,24 @@ export const getUserAccessTokenAsync = async (options: {
     });
 };
 
+export const getAppAccessTokenAsync = async (options: {
+    http: IHttp;
+    app: TeamsBridgeApp;
+}): Promise<string | null> => {
+    const { http, app } = options;
+    const [aadTenantId, aadClientId, aadClientSecret] = await Promise.all([
+        app.getSettingValueById(AppSetting.AadTenantId),
+        app.getSettingValueById(AppSetting.AadClientId),
+        app.getSettingValueById(AppSetting.AadClientSecret),
+    ]);
+    if (!aadTenantId || !aadClientId || !aadClientSecret) {
+        return null;
+    }
+    const { getApplicationAccessTokenAsync } = await import('./MicrosoftGraphApi');
+    const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
+    return response.accessToken ?? null;
+};
+
 export const getAllUsersAccessTokensAsync = async (options: {
     read: IRead;
     persistence: IPersistence;

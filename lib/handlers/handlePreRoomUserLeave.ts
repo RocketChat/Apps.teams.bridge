@@ -3,10 +3,9 @@ import {
     IPersistence,
     IRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
-import { UserNotAllowedException } from "@rocket.chat/apps-engine/definition/exceptions";
 import { IRoomUserLeaveContext } from "@rocket.chat/apps-engine/definition/rooms";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import { getUserAccessTokenAsync } from "../AuthHelper";
+import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "../AuthHelper";
 import { listMembersInChatThreadAsync, removeMemberFromChatThreadAsync } from "../MicrosoftGraphApi";
 import { Room, UserMapping } from "../PersistHelper";
 
@@ -44,31 +43,24 @@ export const handlePreRoomUserLeaveAsync = async (options: {
         return;
     }
 
-    if (!roomRecord.bridgeUserRocketChatUserId) {
-        console.error("No bridge user.");
-        throw new UserNotAllowedException();
+    const teamsUserId = embeddedLoginUser.teamsUserId;
+    if (!teamsUserId) {
+        return;
     }
 
-    const accessToken = await getUserAccessTokenAsync({
+    // Prefer the leaving user's own delegated token; fall back to app token.
+    let accessToken = await getUserAccessTokenAsync({
         read,
         persistence,
-        rocketChatUserId: roomRecord.bridgeUserRocketChatUserId,
+        rocketChatUserId: leavingRocketChatUserId,
         app,
         http,
     });
     if (!accessToken) {
-        console.error("No bridge user.");
-        await Room.persist(
-            persistence,
-            roomRecord.rocketChatRoomId,
-            roomRecord.teamsThreadId,
-            undefined
-        );
-        throw new UserNotAllowedException();
+        accessToken = await getAppAccessTokenAsync({ http, app });
     }
-
-    const teamsUserId = embeddedLoginUser.teamsUserId;
-    if (!teamsUserId) {
+    if (!accessToken) {
+        app.getLogger().warn(`[TeamsBridge] No access token available to remove Teams member ${teamsUserId} from thread ${roomRecord.teamsThreadId}.`);
         return;
     }
 
@@ -83,18 +75,6 @@ export const handlePreRoomUserLeaveAsync = async (options: {
             roomRecord.teamsThreadId,
             teamsUserId,
             accessToken
-        );
-    }
-
-    if (
-        embeddedLoginUser.teamsUserId === roomRecord.bridgeUserRocketChatUserId
-    ) {
-        // Clear bridge user if it's been removed
-        await Room.persist(
-            persistence,
-            roomRecord.rocketChatRoomId,
-            roomRecord.teamsThreadId,
-            undefined
         );
     }
 };

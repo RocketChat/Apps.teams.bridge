@@ -219,12 +219,11 @@ const handleInboundMessageCreatedAsync = async (
             const roomId = await creator.finish(roomBuilder);
             console.log(`Room ${roomId} created for incoming message!`);
 
-            // Set notification receiver as bridge user and persist room record
+            // Persist room record
             await Room.persist(
                 persis,
                 roomId,
-                threadInfo.threadId,
-                receiverRocketChatUserId
+                threadInfo.threadId
             );
 
             roomRecord = await Room.findByTeamsThreadId(
@@ -245,12 +244,10 @@ const handleInboundMessageCreatedAsync = async (
             return;
         }
 
-        // Only handle notification received by the bridge user to avoid duplication
-        if (
-            !roomRecord.bridgeUserRocketChatUserId ||
-            roomRecord.bridgeUserRocketChatUserId !== receiverRocketChatUserId
-        ) {
-            console.log("Skip notification for non-bridge user");
+        // Only handle notification received by the app bot to avoid duplication
+        const appUser = await read.getUserReader().getAppUser(appId);
+        if (receiverRocketChatUserId !== appUser?.id) {
+            console.log("Skip notification for non-app user");
             return;
         }
 

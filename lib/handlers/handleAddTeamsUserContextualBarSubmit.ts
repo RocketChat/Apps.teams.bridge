@@ -6,11 +6,11 @@ import {
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import { AddUserLoginRequiredHintMessageText } from "../Const";
-import { getUserAccessTokenAsync } from "../AuthHelper";
+import { UnsupportedScenarioHintMessageText } from "../Const";
+import { getAppAccessTokenAsync } from "../AuthHelper";
 import { addMemberToChatThreadAsync } from "../MicrosoftGraphApi";
-import { notifyNotLoggedInUserAsync } from "../Notifier";
-import { LoginMessage, Room } from "../PersistHelper";
+import { notifyRocketChatUserInRoomAsync } from "../Notifier";
+import { Room } from "../PersistHelper";
 
 export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
     operator: IUser;
@@ -36,45 +36,18 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
         return;
     }
 
-    if (!roomRecord.bridgeUserRocketChatUserId) {
-        await notifyNotLoggedInUserAsync(
-            read,
-            operator,
-            room,
-            app,
-            AddUserLoginRequiredHintMessageText
-        );
-        return;
-    }
-
-    // If there's a thread created in Teams side, update the participants there as well
-    const accessToken = await getUserAccessTokenAsync({
-        read,
-        persistence,
-        rocketChatUserId: roomRecord.bridgeUserRocketChatUserId,
-        app,
-        http,
-    });
+    // Use the app-level token to add members on Teams side.
+    const accessToken = await getAppAccessTokenAsync({ http, app });
 
     if (!accessToken) {
-        const wasSent = await LoginMessage.get({
-            read,
-            rocketChatUserId: operator.id,
-        });
-        if (!wasSent) {
-            await notifyNotLoggedInUserAsync(
-                read,
-                operator,
-                room,
-                app,
-                AddUserLoginRequiredHintMessageText
-            );
-            await LoginMessage.save({
-                persistence,
-                rocketChatUserId: operator.id,
-                wasSent: true,
-            });
-        }
+        const appUser = await read.getUserReader().getAppUser(app.getID()) as IUser;
+        await notifyRocketChatUserInRoomAsync(
+            UnsupportedScenarioHintMessageText('No valid access token available to add Teams user'),
+            appUser,
+            operator,
+            room,
+            read.getNotifier()
+        );
         return;
     }
 

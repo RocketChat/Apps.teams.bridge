@@ -12,7 +12,6 @@ const KEY = 'Room';
 export interface RoomModel {
     rocketChatRoomId: string;
     teamsThreadId?: string;
-    bridgeUserRocketChatUserId?: string;
     isBridged?: boolean;
 }
 
@@ -21,13 +20,12 @@ export const Room = {
         persis: IPersistence,
         rocketChatRoomId: string,
         teamsThreadId?: string,
-        bridgeUserRocketChatUserId?: string,
     ): Promise<void> {
         const byRoomId: Array<RocketChatAssociationRecord> = [
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
             new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, rocketChatRoomId),
         ];
-        const data: RoomModel = { rocketChatRoomId, teamsThreadId, bridgeUserRocketChatUserId };
+        const data: RoomModel = { rocketChatRoomId, teamsThreadId };
         await persis.updateByAssociations(byRoomId, data, true);
 
         if (teamsThreadId) {
