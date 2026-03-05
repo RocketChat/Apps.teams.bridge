@@ -7,7 +7,7 @@ import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { UnsupportedScenarioHintMessageText } from "../Const";
-import { getAppAccessTokenAsync } from "../AuthHelper";
+import { getUserAccessTokenAsync } from "../AuthHelper";
 import { addMemberToChatThreadAsync } from "../MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "../Notifier";
 import { Room } from "../PersistHelper";
@@ -36,11 +36,14 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
         return;
     }
 
-    // Use the app-level token to add members on Teams side.
-    const accessToken = await getAppAccessTokenAsync({ http, app });
+
+    const appUser = (await read
+        .getUserReader()
+        .getAppUser(app.getID())) as IUser;
+
+    const accessToken = await getUserAccessTokenAsync({ http, app, persistence, read, rocketChatUserId: appUser.id });
 
     if (!accessToken) {
-        const appUser = await read.getUserReader().getAppUser(app.getID()) as IUser;
         await notifyRocketChatUserInRoomAsync(
             UnsupportedScenarioHintMessageText('No valid access token available to add Teams user'),
             appUser,

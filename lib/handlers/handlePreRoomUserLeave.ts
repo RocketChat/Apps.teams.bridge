@@ -5,7 +5,7 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IRoomUserLeaveContext } from "@rocket.chat/apps-engine/definition/rooms";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "../AuthHelper";
+import { getUserAccessTokenAsync } from "../AuthHelper";
 import { listMembersInChatThreadAsync, removeMemberFromChatThreadAsync } from "../MicrosoftGraphApi";
 import { Room, UserMapping } from "../PersistHelper";
 
@@ -57,7 +57,10 @@ export const handlePreRoomUserLeaveAsync = async (options: {
         http,
     });
     if (!accessToken) {
-        accessToken = await getAppAccessTokenAsync({ http, app });
+        const appUser = await read.getUserReader().getAppUser(app.getID());
+        if (appUser) {
+            accessToken = await getUserAccessTokenAsync({ http, app, persistence, read, rocketChatUserId: appUser.id });
+        }
     }
     if (!accessToken) {
         app.getLogger().warn(`[TeamsBridge] No access token available to remove Teams member ${teamsUserId} from thread ${roomRecord.teamsThreadId}.`);

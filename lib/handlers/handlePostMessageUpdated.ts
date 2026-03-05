@@ -6,7 +6,7 @@ import {
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { UnsupportedScenarioHintMessageText } from "../Const";
-import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "../AuthHelper";
+import { getUserAccessTokenAsync } from "../AuthHelper";
 import { mapRocketChatMessageToTeamsMessageV2 } from "../MessageHelper";
 import { updateTextMessageInChatThreadAsync } from "../MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "../Notifier";
@@ -74,20 +74,33 @@ export const handlePostMessageUpdatedAsync = async (options: {
             attachments,
         });
     } else {
-        // Sender is not logged in — use app-level token to relay the edit.
-        const appAccessToken = await getAppAccessTokenAsync({ http, app });
+        // Sender is not logged in — use app user token to relay the edit.
+
+        const appUser = await read.getUserReader().getAppUser();
+        let appAccessToken: string | null = null;
+
+        if (appUser) {
+            appAccessToken = await getUserAccessTokenAsync({
+                http,
+                app,
+                persistence,
+                read,
+                rocketChatUserId: appUser.id,
+            });
+        } else {
+            return;
+        }
 
         if (!appAccessToken) {
-            const appUser = await read.getUserReader().getAppUser();
-            if (appUser) {
-                await notifyRocketChatUserInRoomAsync(
-                    UnsupportedScenarioHintMessageText('No valid access token available to update message'),
-                    appUser,
-                    message.sender,
-                    message.room,
-                    read.getNotifier()
-                );
-            }
+            await notifyRocketChatUserInRoomAsync(
+                UnsupportedScenarioHintMessageText(
+                    "No valid access token available to update message",
+                ),
+                appUser,
+                message.sender,
+                message.room,
+                read.getNotifier(),
+            );
             return;
         }
 

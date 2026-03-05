@@ -24,6 +24,7 @@ export const addMemberToChatThreadAsync = async (
     };
 
     const response = await http.post(url, httpRequest);
+    console.log(JSON.stringify(response, null, 2));
 
     if (response.statusCode !== HttpStatusCode.CREATED) {
         throw new Error(`Add member to group chat thread failed with http status code ${response.statusCode}.`);

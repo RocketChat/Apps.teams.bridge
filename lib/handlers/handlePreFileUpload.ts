@@ -5,7 +5,7 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IFileUploadContext } from "@rocket.chat/apps-engine/definition/uploads";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "../AuthHelper";
+import { getUserAccessTokenAsync } from "../AuthHelper";
 import { uploadFileToOneDriveAsync } from "../MicrosoftGraphApi";
 import { OneDriveFile, Room } from "../PersistHelper";
 
@@ -51,8 +51,8 @@ export const handlePreFileUploadAsync = async (options: {
         app,
         http,
     });
-    if (!userAccessToken) {
-        userAccessToken = await getAppAccessTokenAsync({ http, app });
+    if (!userAccessToken && appUser) {
+        userAccessToken = await getUserAccessTokenAsync({ http, app, persistence, read, rocketChatUserId: appUser.id });
     }
     if (!userAccessToken) {
         throw new Error("No valid access token available to upload file!");
