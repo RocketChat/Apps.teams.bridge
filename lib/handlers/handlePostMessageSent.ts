@@ -55,7 +55,11 @@ export const handlePostMessageSentAsync = async (options: {
         http,
     });
 
+    console.log(`[Teams Bridge] Access token for user ${message.sender.username} (${message.sender.id}): ${accessToken ? "Exists" : "Not found or expired"} ${accessToken}`);
+
     const userHasAccessToken = typeof accessToken === "string" && accessToken.length > 0;
+
+    console.log(`[Teams Bridge] User ${message.sender.username} (${message.sender.id}) has valid access token: ${userHasAccessToken}`);
 
     if (!userHasAccessToken) {
         const appUserToken = await getUserAccessTokenAsync({
@@ -170,19 +174,21 @@ export const handlePostMessageSentAsync = async (options: {
         teamsMessageId = response.messageId;
         rocketChatMessageId = message.id as string;
     } else {
-        const { text, attachments } = await mapRocketChatMessageToTeamsMessageV2({
-            message,
-            originalSenderName: message.sender.username,
-            read,
-            http,
-            accessToken,
-            messageIdMapping: {
-                rocketChatMessageId,
-                teamsMessageId,
-                teamsThreadId: roomRecord.teamsThreadId,
-            },
-            forceBridgedMessage: !userHasAccessToken,
-        });
+        const { text, attachments } =
+            await mapRocketChatMessageToTeamsMessageV2({
+                message,
+                originalSenderName:
+                    message.sender.name || message.sender.username,
+                read,
+                http,
+                accessToken,
+                messageIdMapping: {
+                    rocketChatMessageId,
+                    teamsMessageId,
+                    teamsThreadId: roomRecord.teamsThreadId,
+                },
+                forceBridgedMessage: !userHasAccessToken,
+            });
         messageText = text;
 
         // Send the message to the chat thread

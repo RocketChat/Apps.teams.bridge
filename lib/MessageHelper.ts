@@ -237,7 +237,7 @@ export const mapRocketChatMessageToTeamsMessageV2 = async ({
     const finalAttachments = [...messageAttachments, ...attachmentsWithoutMessageAttachment];
     teamsMessage = attachAttachments({ html: teamsMessageWithReferences, attachmentIds: attachmentsWithoutMessageAttachment.map(a => a.id) });
 
-    if (originalSenderName || forceBridgedMessage) {
+    if (forceBridgedMessage) {
         teamsMessage = getBridgedMessageFormatV2(
             originalSenderName || 'Rocket.Chat User',
             teamsMessage,

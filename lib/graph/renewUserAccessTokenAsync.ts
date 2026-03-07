@@ -1,5 +1,5 @@
 import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { AuthenticationScopes, getMicrosoftTokenUrl } from "../Const";
+import { BotUserAuthenticationScopes, getMicrosoftTokenUrl, NormalUserAuthenticationScopes } from "../Const";
 import { TokenResponse } from './types';
 
 export const renewUserAccessTokenAsync = async (
@@ -7,9 +7,11 @@ export const renewUserAccessTokenAsync = async (
     refreshToken: string,
     aadTenantId: string,
     aadClientId: string,
-    aadClientSecret: string): Promise<TokenResponse> => {
+    aadClientSecret: string,
+    type: 'bot' | 'normal'
+): Promise<TokenResponse> => {
     let body = `client_id=${aadClientId}`;
-    body += `&scope=${AuthenticationScopes.join(' ')}`;
+    body += `&scope=${type === 'bot' ? BotUserAuthenticationScopes.join(' ') : NormalUserAuthenticationScopes.join(' ')}`;
     body += `&refresh_token=${refreshToken}`;
     body += `&grant_type=refresh_token`;
     body += `&client_secret=${aadClientSecret}`;

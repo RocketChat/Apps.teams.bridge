@@ -295,7 +295,7 @@ const handleInboundMessageCreatedAsync = async (
             if (usesBotFallback && message.text !== "") {
                 const senderProfile = await TeamsUserProfile.findByTeamsUserId(read, fromUserTeamsId);
                 const displayName = senderProfile?.displayName ?? fromUserTeamsId;
-                message.text = `**${displayName}:** ${message.text}`;
+                message.text = `**${displayName}** _via Teams_\n${message.text}`;
             }
 
             if (message.text === "") {

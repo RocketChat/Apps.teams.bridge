@@ -92,8 +92,20 @@ export const AppUserLoginRequiredHintMessageText: string =
 
 export const LoginButtonText: string = 'Login Teams';
 
-export const AuthenticationScopes = [
+export const NormalUserAuthenticationScopes = [
     'offline_access',
+    'user.read',
+    'chat.readwrite',
+    'chat.readbasic',
+    'chatmessage.read',
+    'chatmessage.send',
+    'files.readwrite',
+    'openid',
+];
+
+export const BotUserAuthenticationScopes = [
+    'offline_access',
+    'user.read',
     'user.read.all',
     'chat.create',
     'chat.readbasic',
@@ -103,6 +115,16 @@ export const AuthenticationScopes = [
     'chatmessage.read',
     'chatmessage.send',
     'files.readwrite',
+];
+
+export const ApplicationAuthenticationScopes = [
+    'user.read.all',
+    'chat.create',
+    'chat.readbasic.all',
+    'chat.readwrite.all',
+    'chatmember.read.all',
+    'chatmember.readwrite.all',
+    'chatmessage.read.all',
 ];
 
 export const SupportedNotificationChangeTypes = [

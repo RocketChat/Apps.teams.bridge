@@ -37,7 +37,8 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
             const aadClientSecret = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)).value;
 
             const response = await getApplicationAccessTokenAsync(http, aadTenantId, aadClientId, aadClientSecret);
-            await AppToken.persist(persis, response.accessToken);
+            const epochNow = Math.round(Date.now() / 1000);
+            await AppToken.persist(persis, response.accessToken, epochNow + response.expiresIn);
 
             await notifyRocketChatUserInRoomAsync(AppSetupVerificationPassMessageText, appUser, messageReceiver, room, modify.getNotifier());
         } catch (error) {

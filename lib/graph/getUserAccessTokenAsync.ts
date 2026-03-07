@@ -1,5 +1,5 @@
 import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { AuthenticationScopes, getMicrosoftTokenUrl } from "../Const";
+import { BotUserAuthenticationScopes, getMicrosoftTokenUrl, NormalUserAuthenticationScopes } from "../Const";
 import { TokenResponse } from './types';
 
 export const getUserAccessTokenAsync = async (
@@ -8,9 +8,10 @@ export const getUserAccessTokenAsync = async (
     redirectUri: string,
     aadTenantId: string,
     aadClientId: string,
-    aadClientSecret: string): Promise<TokenResponse> => {
+    aadClientSecret: string,
+    userType: 'bot' | 'normal'): Promise<TokenResponse> => {
     let body = `client_id=${aadClientId}`;
-    body += `&scope=${AuthenticationScopes.join(' ')}`;
+    body += `&scope=${userType === 'bot' ? BotUserAuthenticationScopes.join(' ') : NormalUserAuthenticationScopes.join(' ')}`;
     body += `&code=${accessCode}`;
     body += `&redirect_uri=${redirectUri}`;
     body += `&grant_type=authorization_code`;

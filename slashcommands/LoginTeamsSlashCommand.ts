@@ -32,7 +32,7 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
 
         const room = context.getRoom();
         const commandSender = context.getSender();
-        const loginUrl = getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id);
+        const loginUrl = getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id, 'normal');
         const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
 
         // If the user has already logged, print some other information instead of the login url

@@ -71,7 +71,12 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                     .getById(AppSetting.AadClientSecret)
             ).value;
 
-            const rocketChatUserId: string = request.query.state;
+            const { rc_uid: rocketChatUserId, type } = JSON.parse(
+                Buffer.from(request.query.state, "base64").toString("utf-8"),
+            ) as {
+                rc_uid: string;
+                type: "bot" | "normal";
+            };
             const accessCode: string = request.query.code;
             const authEndpointUrl = await getRocketChatAppEndpointUrl(
                 this.app.getAccessors(),
@@ -84,7 +89,8 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 authEndpointUrl,
                 aadTenantId,
                 aadClientId,
-                aadClientSecret
+                aadClientSecret,
+                type,
             );
 
             const userAccessToken = response.accessToken;
@@ -137,6 +143,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
 
             return this.success(this.embeddedLoginSuccessMessage);
         } catch (error) {
+            console.log("Error in authentication endpoint:" + JSON.stringify(error, null, 2));
             return this.errorResponse();
         }
     }

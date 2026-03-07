@@ -93,6 +93,7 @@ export class LoginAppUserSlashCommand implements ISlashCommand {
             aadClientId,
             authEndpointUrl,
             appUser.id,
+            'bot',
         );
 
         const message = generateHintMessageWithTeamsLoginButton(
