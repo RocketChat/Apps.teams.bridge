@@ -14,10 +14,11 @@ import {
 import {
     getChatThreadWithMembersAsync,
     getMessageWithResourceStringAsync,
+    getTeamsUserProfileByIdAsync,
     MessageType,
     ThreadType,
 } from "./MicrosoftGraphApi";
-import { MessageMapping, Room, TeamsUserProfile, UploadMapping, UserMapping } from "./PersistHelper";
+import { MessageMapping, Room, UploadMapping, UserMapping } from "./PersistHelper";
 import type { UserModel } from "./PersistHelper";
 import type { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "./AuthHelper";
@@ -293,7 +294,7 @@ const handleInboundMessageCreatedAsync = async (
             });
 
             if (usesBotFallback && message.text !== "") {
-                const senderProfile = await TeamsUserProfile.findByTeamsUserId(read, fromUserTeamsId);
+                const senderProfile = await getTeamsUserProfileByIdAsync(http, userAccessToken, fromUserTeamsId);
                 const displayName = senderProfile?.displayName ?? fromUserTeamsId;
                 message.text = `**${displayName}** _via Teams_\n${message.text}`;
             }

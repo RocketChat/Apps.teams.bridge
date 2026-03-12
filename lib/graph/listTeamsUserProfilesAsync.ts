@@ -2,10 +2,26 @@ import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/de
 import { getGraphApiUserUrl } from "../Const";
 import { TeamsUserProfile } from './types';
 
-export const listTeamsUserProfilesAsync = async (
+export interface SearchTeamsUsersResult {
+    users: TeamsUserProfile[];
+    nextLink?: string;
+}
+
+export const searchTeamsUsersAsync = async (
     http: IHttp,
-    appAccessToken: string): Promise<TeamsUserProfile[]> => {
-    const url = getGraphApiUserUrl();
+    appAccessToken: string,
+    options: { query?: string; pageUrl?: string },
+): Promise<SearchTeamsUsersResult> => {
+    let url: string;
+    if (options.pageUrl) {
+        url = options.pageUrl;
+    } else {
+        url = `${getGraphApiUserUrl()}?$select=displayName,id,mail,givenName,surname&$top=25`;
+        if (options.query) {
+            url += `&$filter=startswith(displayName,'${encodeURIComponent(options.query)}')`;
+        }
+    }
+
     const httpRequest: IHttpRequest = {
         headers: {
             'Authorization': `Bearer ${appAccessToken}`,
@@ -14,32 +30,26 @@ export const listTeamsUserProfilesAsync = async (
 
     const response = await http.get(url, httpRequest);
 
-    if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
-        if (responseBody === undefined) {
-            throw new Error('List users failed!');
-        }
-
-        const userList = responseBody.value as any[];
-        const result: TeamsUserProfile[] = [];
-        for (let index = 0; index < userList.length; index++) {
-            try {
-                const user = userList[index];
-                const record: TeamsUserProfile = {
-                    displayName: user.displayName,
-                    givenName: user.givenName,
-                    surname: user.surname,
-                    mail: user.mail,
-                    id: user.id,
-                };
-                result.push(record);
-            } catch (error) {
-                console.error(`Error when handling user list. Details: ${error}`);
-            }
-        }
-
-        return result;
-    } else {
-        throw new Error(`List users failed with http status code ${response.statusCode}.`);
+    if (response.statusCode !== HttpStatusCode.OK) {
+        throw new Error(`Search users failed with http status code ${response.statusCode}.`);
     }
+
+    const responseBody = response.data;
+    if (!responseBody) {
+        throw new Error('Search users failed: empty response body');
+    }
+
+    const userList = (responseBody.value ?? []) as any[];
+    const users: TeamsUserProfile[] = userList.map((user) => ({
+        displayName: user.displayName ?? '',
+        givenName: user.givenName ?? '',
+        surname: user.surname ?? '',
+        mail: user.mail ?? '',
+        id: user.id,
+    }));
+
+    return {
+        users,
+        nextLink: responseBody['@odata.nextLink'],
+    };
 };

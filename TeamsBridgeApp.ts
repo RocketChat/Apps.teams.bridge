@@ -48,6 +48,7 @@ import {
 import {
     IUIKitResponse,
     UIKitActionButtonInteractionContext,
+    UIKitBlockInteractionContext,
     UIKitViewSubmitInteractionContext,
 } from "@rocket.chat/apps-engine/definition/uikit";
 import {
@@ -82,14 +83,15 @@ import {
 } from "./lib/EventHandler";
 import { getRocketChatAppEndpointUrl } from "./lib/UrlHelper";
 import {
+    decodeButtonState,
     getRoomIdFromSubmitActionId,
     openAddTeamsUserContextualBarBlocksAsync,
+    updateAddTeamsUserContextualBarAsync,
 } from "./lib/UserInterfaceHelper";
 import { AddUserSlashCommand } from "./slashcommands/AddUserSlashCommand";
 import { DeleteTeamsBotUserSlashCommand } from "./slashcommands/DeleteTeamsBotUserSlashCommand";
 import { LoginTeamsSlashCommand } from "./slashcommands/LoginTeamsSlashCommand";
 import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand";
-import { ProvisionTeamsBotUserSlashCommand } from "./slashcommands/ProvisionTeamsBotUserSlashCommand";
 import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
 import { LoginAppUserSlashCommand } from "./slashcommands/LoginAppUserSlashCommand";
 import { ResubscribeMessages } from "./slashcommands/ResubscriptionMessages";
@@ -425,12 +427,64 @@ export class TeamsBridgeApp
                 appUser,
                 read,
                 modify,
+                http,
+                persistence,
+                this,
             );
         }
 
         return {
             success: true,
         };
+    }
+
+    public async executeBlockActionHandler(
+        context: UIKitBlockInteractionContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify,
+    ): Promise<IUIKitResponse> {
+        const { actionId, value, room } = context.getInteractionData();
+
+        if (actionId === UIActionId.TeamsUserSearchInput) {
+            // Fires on every keystroke (ON_CHARACTER_ENTERED dispatch).
+            // value = current text in the search input; room = the open room.
+            const roomId = room?.id ?? '';
+            const updatedView = await updateAddTeamsUserContextualBarAsync({
+                actionId,
+                value,
+                roomId,
+                read,
+                http,
+                persistence,
+                app: this,
+                modify,
+            });
+            if (updatedView) {
+                return context.getInteractionResponder().updateContextualBarViewResponse(updatedView);
+            }
+        }
+
+        if (actionId === UIActionId.TeamsUserLoadMore && value) {
+            // value = base64 encoded { nextLink, loadedUsers, roomId }.
+            const { roomId } = decodeButtonState(value);
+            const updatedView = await updateAddTeamsUserContextualBarAsync({
+                actionId,
+                value,
+                roomId,
+                read,
+                http,
+                persistence,
+                app: this,
+                modify,
+            });
+            if (updatedView) {
+                return context.getInteractionResponder().updateContextualBarViewResponse(updatedView);
+            }
+        }
+
+        return context.getInteractionResponder().successResponse();
     }
 
     public async executeViewClosedHandler(): Promise<IUIKitResponse> {
@@ -484,6 +538,7 @@ export class TeamsBridgeApp
                     read,
                     persistence,
                     http,
+                    modify,
                     app: this,
                 });
             }
@@ -608,9 +663,6 @@ export class TeamsBridgeApp
                 new SetupVerificationSlashCommand(),
             ),
             configuration.slashCommands.provideSlashCommand(
-                new ProvisionTeamsBotUserSlashCommand(this),
-            ),
-            configuration.slashCommands.provideSlashCommand(
                 new DeleteTeamsBotUserSlashCommand(this),
             ),
             configuration.slashCommands.provideSlashCommand(
@@ -620,7 +672,7 @@ export class TeamsBridgeApp
                 new LogoutTeamsSlashCommand(this),
             ),
             configuration.slashCommands.provideSlashCommand(
-                new AddUserSlashCommand(),
+                new AddUserSlashCommand(this),
             ),
             configuration.slashCommands.provideSlashCommand(
                 new ResubscribeMessages(this),

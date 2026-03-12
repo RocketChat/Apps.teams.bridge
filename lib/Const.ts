@@ -159,6 +159,9 @@ export const DefaultTeamName = 'TeamsInteropGroupChat';
 export const UIActionId = {
     AddTeamsUserButtonClicked: 'TeamsBridge.AddTeamsUserButtonClicked',
     TeamsUserNameSearch: 'TeamsBridge.TeamsUserNameSearch',
+    TeamsUserSearchInput: 'TeamsBridge.TeamsUserSearchInput',
+    TeamsUserLoadMore: 'TeamsBridge.TeamsUserLoadMore',
+    TeamsUserSearchButton: 'TeamsBridge.TeamsUserSearchButton',
     SaveChanges: 'TeamsBridge.SaveChanges',
 };
 
@@ -171,6 +174,10 @@ export const UIElementText = {
     TeamsUserNameSearchTitle: 'Choose Teams users',
     TeamsUserNameSearchPlaceHolder: 'Choose Teams users',
     TeamsUsersSaveChangeButton: 'Add users',
+    TeamsUserSearchLabel: 'Search Teams users',
+    TeamsUserSearchPlaceholder: 'Type a display name to search...',
+    TeamsUserSearchButton: 'Search',
+    TeamsUserLoadMoreButton: 'Load more users',
 };
 
 export const getMicrosoftTokenUrl = (aadTenantId: string) => {

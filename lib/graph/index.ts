@@ -1,7 +1,8 @@
 export * from './types';
 export * from './parsers';
 export * from './getApplicationAccessTokenAsync';
-export * from './listTeamsUserProfilesAsync';
+export * from './listTeamsUserProfilesAsync'; // searchTeamsUsersAsync + SearchTeamsUsersResult
+export * from './getTeamsUserProfileByIdAsync';
 export * from './getUserAccessTokenAsync';
 export * from './renewUserAccessTokenAsync';
 export * from './revokeUserRefreshTokenAsync';

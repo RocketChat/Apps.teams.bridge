@@ -1,5 +1,6 @@
 import {
     IHttp,
+    IModify,
     IPersistence,
     IRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
@@ -11,6 +12,7 @@ import { getUserAccessTokenAsync } from "../AuthHelper";
 import { addMemberToChatThreadAsync } from "../MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "../Notifier";
 import { Room } from "../PersistHelper";
+import { decodeUserOptionValue } from "../UserInterfaceHelper";
 
 export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
     operator: IUser;
@@ -19,11 +21,13 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
     read: IRead;
     persistence: IPersistence;
     http: IHttp;
+    modify: IModify;
     app: TeamsBridgeApp;
 }): Promise<void> => {
     const {
         app,
         http,
+        modify,
         operator,
         persistence,
         read,
@@ -36,10 +40,7 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
         return;
     }
 
-
-    const appUser = (await read
-        .getUserReader()
-        .getAppUser(app.getID())) as IUser;
+    const appUser = (await read.getUserReader().getAppUser(app.getID())) as IUser;
 
     const accessToken = await getUserAccessTokenAsync({ http, app, persistence, read, rocketChatUserId: appUser.id });
 
@@ -49,19 +50,63 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
             appUser,
             operator,
             room,
-            read.getNotifier()
+            read.getNotifier(),
         );
         return;
     }
 
-    // Single-bot architecture: iterate directly over Teams user IDs —
-    // no dummy RC users to look up or add to the RC room.
-    for (const teamsUserId of teamsUserIdsToSave) {
-        await addMemberToChatThreadAsync(
+    const addedNames: string[] = [];
+    const alreadyMemberNames: string[] = [];
+    const failedNames: string[] = [];
+
+    for (const encodedValue of teamsUserIdsToSave) {
+        const { id: teamsUserId, displayName } = decodeUserOptionValue(encodedValue);
+
+        const result = await addMemberToChatThreadAsync(
             http,
             roomRecord.teamsThreadId,
             teamsUserId,
-            accessToken
+            accessToken,
         );
+
+        if (result.status === 'added') {
+            addedNames.push(displayName);
+        } else if (result.status === 'already_member') {
+            alreadyMemberNames.push(displayName);
+        } else {
+            failedNames.push(displayName);
+        }
+    }
+
+    // Permanent message for successfully added users
+    if (addedNames.length > 0) {
+        const nameList = addedNames.map((n) => `**${n}**`).join(', ');
+        const text = addedNames.length === 1
+            ? `${nameList} has been added to this channel on MS Teams.`
+            : `${nameList} have been added to this channel on MS Teams.`;
+
+        const msg = modify.getCreator().startMessage()
+            .setSender(appUser)
+            .setRoom(room)
+            .setText(text);
+        await modify.getCreator().finish(msg);
+    }
+
+    // Ephemeral message for users already in the channel
+    if (alreadyMemberNames.length > 0) {
+        const nameList = alreadyMemberNames.map((n) => `**${n}**`).join(', ');
+        const text = alreadyMemberNames.length === 1
+            ? `${nameList} is already a member of this channel on MS Teams.`
+            : `${nameList} are already members of this channel on MS Teams.`;
+        await notifyRocketChatUserInRoomAsync(text, appUser, operator, room, read.getNotifier());
+    }
+
+    // Ephemeral message for failed additions
+    if (failedNames.length > 0) {
+        const nameList = failedNames.map((n) => `**${n}**`).join(', ');
+        const text = failedNames.length === 1
+            ? `Failed to add ${nameList} to this channel on MS Teams.`
+            : `Failed to add ${nameList} to this channel on MS Teams.`;
+        await notifyRocketChatUserInRoomAsync(text, appUser, operator, room, read.getNotifier());
     }
 };
