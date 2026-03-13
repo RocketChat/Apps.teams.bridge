@@ -20,7 +20,7 @@ import {
     notifyRocketChatUserAsync,
     notifyRocketChatUserInRoomAsync,
 } from "../lib/Notifier";
-import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
+import { getLoginUrlAsync, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export class LoginAppUserSlashCommand implements ISlashCommand {
@@ -88,7 +88,8 @@ export class LoginAppUserSlashCommand implements ISlashCommand {
 
         // Generate a login URL scoped to the app user's RC ID so the OAuth2
         // callback stores the token under the app user's identity
-        const loginUrl = getLoginUrl(
+        const loginUrl = await getLoginUrlAsync(
+            persistence,
             aadTenantId,
             aadClientId,
             authEndpointUrl,

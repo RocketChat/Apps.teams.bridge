@@ -10,12 +10,14 @@ export const renewUserAccessTokenAsync = async (
     aadClientSecret: string,
     type: 'bot' | 'normal'
 ): Promise<TokenResponse> => {
-    let body = `client_id=${aadClientId}`;
-    body += `&scope=${type === 'bot' ? BotUserAuthenticationScopes.join(' ') : NormalUserAuthenticationScopes.join(' ')}`;
-    body += `&refresh_token=${refreshToken}`;
-    body += `&grant_type=refresh_token`;
-    body += `&client_secret=${aadClientSecret}`;
-    body = encodeURI(body);
+    const scopes = type === 'bot' ? BotUserAuthenticationScopes : NormalUserAuthenticationScopes;
+    const body = [
+        `client_id=${encodeURIComponent(aadClientId)}`,
+        `scope=${encodeURIComponent(scopes.join(' '))}`,
+        `refresh_token=${encodeURIComponent(refreshToken)}`,
+        `grant_type=refresh_token`,
+        `client_secret=${encodeURIComponent(aadClientSecret)}`,
+    ].join('&');
 
     const httpRequest: IHttpRequest = {
         headers: {

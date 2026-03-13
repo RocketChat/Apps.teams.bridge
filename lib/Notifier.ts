@@ -17,7 +17,7 @@ import {
     LoginButtonText,
 } from "./Const";
 import { AppUserLoginNotified } from "./PersistHelper";
-import { getLoginUrl, getRocketChatAppEndpointUrl } from "./UrlHelper";
+import { getLoginUrlAsync, getRocketChatAppEndpointUrl } from "./UrlHelper";
 
 export const notifyRocketChatUserAsync = async (
     message: IMessage,
@@ -106,7 +106,7 @@ export const notifyRoomMembersAppUserNotLoggedInAsync = async (options: {
     const authEndpointUrl = await getRocketChatAppEndpointUrl(accessors, AuthenticationEndpointPath);
 
     // Login URL state is the app user's RC ID so the token is stored under the app user
-    const loginUrl = getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, appUser.id);
+    const loginUrl = await getLoginUrlAsync(persistence, aadTenantId, aadClientId, authEndpointUrl, appUser.id);
 
     const members = await read.getRoomReader().getMembers(roomId);
     const notifier = modify.getNotifier();
@@ -141,6 +141,7 @@ export const notifyRoomMembersAppUserNotLoggedInAsync = async (options: {
 
 export const notifyNotLoggedInUserAsync = async (
     read: IRead,
+    persistence: IPersistence,
     user: IUser,
     room: IRoom,
     app: TeamsBridgeApp,
@@ -165,7 +166,8 @@ export const notifyNotLoggedInUserAsync = async (
         accessors,
         AuthenticationEndpointPath
     );
-    const loginUrl = getLoginUrl(
+    const loginUrl = await getLoginUrlAsync(
+        persistence,
         aadTenantId,
         aadClientId,
         authEndpointUrl,

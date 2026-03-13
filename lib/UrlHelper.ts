@@ -1,11 +1,13 @@
-import { IAppAccessors, IRead } from "@rocket.chat/apps-engine/definition/accessors";
+import { IAppAccessors, IPersistence, IRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { IApiEndpointMetadata } from "@rocket.chat/apps-engine/definition/api";
+import { randomBytes } from 'crypto';
 import {
     BotUserAuthenticationScopes,
     getMicrosoftAuthorizeUrl,
     NormalUserAuthenticationScopes,
     SubscriberEndpointPath,
 } from "./Const";
+import { OAuthNonce } from './persistence';
 
 import { AppSetting } from "../config/Settings";
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
@@ -62,23 +64,36 @@ export function getNotificationEndpointUrl({
 }
 
 
-export const getLoginUrl = (
+const buildLoginUrl = (
     aadTenantId: string,
     aadClientId: string,
     authEndpointUrl: string,
     userId: string,
-    userType: 'normal' | 'bot' = 'normal'
+    userType: 'normal' | 'bot',
+    nonce: string,
 ): string => {
+    const state = Buffer.from(JSON.stringify({ rc_uid: userId, type: userType, nonce })).toString('base64');
     let url = getMicrosoftAuthorizeUrl(aadTenantId);
-    const state = Buffer.from(JSON.stringify({ rc_uid: userId, type: userType })).toString("base64");
     url += `?client_id=${aadClientId}`;
-    url += "&response_type=code";
+    url += '&response_type=code';
     url += `&redirect_uri=${authEndpointUrl}`;
-    url += "&response_mode=query";
-    url += `&scope=${userType === 'bot' ? BotUserAuthenticationScopes.join("%20") : NormalUserAuthenticationScopes.join("%20")}`;
+    url += '&response_mode=query';
+    url += `&scope=${userType === 'bot' ? BotUserAuthenticationScopes.join('%20') : NormalUserAuthenticationScopes.join('%20')}`;
     url += `&state=${state}`;
-
     return url;
+};
+
+export const getLoginUrlAsync = async (
+    persis: IPersistence,
+    aadTenantId: string,
+    aadClientId: string,
+    authEndpointUrl: string,
+    userId: string,
+    userType: 'normal' | 'bot' = 'normal',
+): Promise<string> => {
+    const nonce = randomBytes(16).toString('hex');
+    await OAuthNonce.persist(persis, userId, nonce);
+    return buildLoginUrl(aadTenantId, aadClientId, authEndpointUrl, userId, userType, nonce);
 };
 
 

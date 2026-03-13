@@ -20,7 +20,7 @@ import {
     LoginMessageText,
     SubscriberEndpointPath,
 } from "../lib/Const";
-import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
+import { getLoginUrlAsync, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { UserMapping } from "../lib/PersistHelper";
 import { subscribeToAllMessagesForOneUserAsync } from "../lib/MicrosoftGraphApi";
@@ -64,7 +64,8 @@ export class ResubscribeMessages implements ISlashCommand {
 
         const room = context.getRoom();
         const commandSender = context.getSender();
-        const loginUrl = getLoginUrl(
+        const loginUrl = await getLoginUrlAsync(
+            persis,
             aadTenantId,
             aadClientId,
             authEndpointUrl,

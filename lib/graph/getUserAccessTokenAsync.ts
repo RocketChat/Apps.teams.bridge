@@ -10,13 +10,15 @@ export const getUserAccessTokenAsync = async (
     aadClientId: string,
     aadClientSecret: string,
     userType: 'bot' | 'normal'): Promise<TokenResponse> => {
-    let body = `client_id=${aadClientId}`;
-    body += `&scope=${userType === 'bot' ? BotUserAuthenticationScopes.join(' ') : NormalUserAuthenticationScopes.join(' ')}`;
-    body += `&code=${accessCode}`;
-    body += `&redirect_uri=${redirectUri}`;
-    body += `&grant_type=authorization_code`;
-    body += `&client_secret=${aadClientSecret}`;
-    body = encodeURI(body);
+    const scopes = userType === 'bot' ? BotUserAuthenticationScopes : NormalUserAuthenticationScopes;
+    const body = [
+        `client_id=${encodeURIComponent(aadClientId)}`,
+        `scope=${encodeURIComponent(scopes.join(' '))}`,
+        `code=${encodeURIComponent(accessCode)}`,
+        `redirect_uri=${encodeURIComponent(redirectUri)}`,
+        `grant_type=authorization_code`,
+        `client_secret=${encodeURIComponent(aadClientSecret)}`,
+    ].join('&');
 
     const httpRequest: IHttpRequest = {
         headers: {

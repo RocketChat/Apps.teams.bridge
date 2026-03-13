@@ -61,6 +61,8 @@ import { AuthenticationEndpoint } from "./endpoints/AuthenticationEndpoint";
 import { SubscriberEndpoint } from "./endpoints/SubscriberEndpoint";
 import {
     IncomingNotificationProcessorId,
+    OAuthNonceCleanupInterval,
+    OAuthNonceCleanupJobId,
     RegistrationAutoRenewInterval,
     RegistrationAutoRenewSchedulerId,
     SubscriberEndpointPath,
@@ -98,7 +100,7 @@ import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerification
 import { LoginAppUserSlashCommand } from "./slashcommands/LoginAppUserSlashCommand";
 import { ResubscribeMessages } from "./slashcommands/ResubscriptionMessages";
 import { ViewTeamsMembersSlashCommand } from "./slashcommands/ViewTeamsMembersSlashCommand";
-import { SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
+import { OAuthNonce, SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
 import { PreventRegistry } from "./lib/PreventRegistry";
 import {
     getExtraInfoAndOriginalFileName,
@@ -236,6 +238,12 @@ export class TeamsBridgeApp
                 id: RegistrationAutoRenewSchedulerId,
                 interval: RegistrationAutoRenewInterval,
                 data: { from: "ScheduleRecurring" },
+                skipImmediate: true,
+            });
+
+            await configurationModify.scheduler.scheduleRecurring({
+                id: OAuthNonceCleanupJobId,
+                interval: OAuthNonceCleanupInterval,
                 skipImmediate: true,
             });
         } catch (e) {
@@ -679,6 +687,22 @@ export class TeamsBridgeApp
         }
     };
 
+    protected oauthNonceCleanupJob = async (
+        _jobContext: IJobContext,
+        read: IRead,
+        _modify: IModify,
+        _http: IHttp,
+        persistence: IPersistence,
+    ) => {
+        try {
+            await OAuthNonce.deleteStale(read, persistence);
+        } catch (error) {
+            throw new Error(
+                `[Teams Bridge] OAuth nonce cleanup failed with error: ${error}`,
+            );
+        }
+    };
+
     protected async extendConfiguration(
         configuration: IConfigurationExtend,
     ): Promise<void> {
@@ -767,6 +791,10 @@ export class TeamsBridgeApp
             {
                 id: IncomingNotificationProcessorId,
                 processor: this.incomingNotificationJob,
+            },
+            {
+                id: OAuthNonceCleanupJobId,
+                processor: this.oauthNonceCleanupJob,
             },
         ]);
     }

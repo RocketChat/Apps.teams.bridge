@@ -23,7 +23,7 @@ import {
     getUserProfileAsync,
     subscribeToAllMessagesForOneUserAsync,
 } from "../lib/MicrosoftGraphApi";
-import { LoginMessage, UserMapping, UserRegistration, AppUserLoginNotified } from "../lib/PersistHelper";
+import { LoginMessage, UserMapping, UserRegistration, AppUserLoginNotified, OAuthNonce } from "../lib/PersistHelper";
 import { getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 
 export class AuthenticationEndpoint extends ApiEndpoint {
@@ -48,41 +48,72 @@ export class AuthenticationEndpoint extends ApiEndpoint {
         persis: IPersistence
     ): Promise<IApiResponse> {
         if (request.query.error && !request.query.code) {
+            this.app.getLogger().warn(
+                `Authentication failed — AAD error: ${request.query.error}` +
+                (request.query.error_description ? ` — ${request.query.error_description}` : ``)
+            );
             return this.errorResponse();
         }
 
+        let rocketChatUserId: string;
+        let type: 'bot' | 'normal';
+        let aadTenantId: string;
+        let aadClientId: string;
+        let aadClientSecret: string;
+        let accessCode: string;
+        let authEndpointUrl: string;
         try {
-            const aadTenantId = (
-                await read
-                    .getEnvironmentReader()
-                    .getSettings()
-                    .getById(AppSetting.AadTenantId)
-            ).value;
-            const aadClientId = (
-                await read
-                    .getEnvironmentReader()
-                    .getSettings()
-                    .getById(AppSetting.AadClientId)
-            ).value;
-            const aadClientSecret = (
-                await read
-                    .getEnvironmentReader()
-                    .getSettings()
-                    .getById(AppSetting.AadClientSecret)
-            ).value;
-
-            const { rc_uid: rocketChatUserId, type } = JSON.parse(
+            const parsed = JSON.parse(
                 Buffer.from(request.query.state, "base64").toString("utf-8"),
-            ) as {
-                rc_uid: string;
-                type: "bot" | "normal";
-            };
-            const accessCode: string = request.query.code;
-            const authEndpointUrl = await getRocketChatAppEndpointUrl(
+            ) as Record<string, unknown>;
+            if (
+                typeof parsed.rc_uid !== 'string' || parsed.rc_uid.length === 0 ||
+                (parsed.type !== 'bot' && parsed.type !== 'normal')
+            ) {
+                this.app.getLogger().warn('Authentication rejected — malformed state parameter.');
+                return this.errorResponse();
+            }
+            rocketChatUserId = parsed.rc_uid;
+            type = parsed.type as 'bot' | 'normal';
+
+            if (typeof parsed.nonce !== 'string' || parsed.nonce.length === 0) {
+                this.app.getLogger().warn('Authentication rejected — no nonce in state.');
+                return this.errorResponse();
+            }
+            const storedNonce = await OAuthNonce.findAndDelete(read, persis, rocketChatUserId);
+            if (storedNonce === null || storedNonce !== parsed.nonce) {
+                this.app.getLogger().warn('Authentication rejected — nonce mismatch.');
+                return this.errorResponse();
+            }
+
+            aadTenantId = (
+                await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)
+            ).value;
+            aadClientId = (
+                await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)
+            ).value;
+            aadClientSecret = (
+                await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)
+            ).value;
+            accessCode = request.query.code;
+            authEndpointUrl = await getRocketChatAppEndpointUrl(
                 this.app.getAccessors(),
                 AuthenticationEndpointPath
             );
+        } catch (error) {
+            this.app.getLogger().error(
+                `Authentication — phase A (state/settings) failed: ${(error as Error)?.message ?? String(error)}`
+            );
+            return this.errorResponse();
+        }
 
+        let userAccessToken: string;
+        let refreshToken: string;
+        let expiresIn: number;
+        let extExpiresIn: number;
+        let teamsUserId: string;
+        let appUser: Awaited<ReturnType<typeof read.getUserReader.prototype.getAppUser>>;
+        try {
             const response = await getUserAccessTokenAsync(
                 http,
                 accessCode,
@@ -93,23 +124,49 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 type,
             );
 
-            const userAccessToken = response.accessToken;
+            if (!response.refreshToken) {
+                throw new Error('Token exchange did not return a refresh token.');
+            }
 
-            const teamsUserProfile = await getUserProfileAsync(
-                http,
-                userAccessToken
+            userAccessToken = response.accessToken;
+            refreshToken = response.refreshToken;
+            expiresIn = response.expiresIn;
+            extExpiresIn = response.extExpiresIn;
+
+            const teamsUserProfile = await getUserProfileAsync(http, userAccessToken);
+            teamsUserId = teamsUserProfile.id;
+
+            appUser = await read.getUserReader().getAppUser(this.app.getID());
+
+            const existingMapping = await UserMapping.findByTeamsUserId(read, teamsUserId);
+            if (existingMapping !== null && existingMapping.rocketChatUserId !== rocketChatUserId) {
+                if (appUser && existingMapping.rocketChatUserId === appUser.id) {
+                    return this.conflictResponse(
+                        "This Teams account is used by the app user and cannot be linked to a personal Rocket.Chat account.",
+                    );
+                }
+                return this.conflictResponse(
+                    "This Teams account is already linked to another Rocket.Chat user. Please log out from Teams on the other account first.",
+                );
+            }
+        } catch (error) {
+            this.app.getLogger().error(
+                `Authentication — phase B (token exchange/profile) failed: ${(error as Error)?.message ?? String(error)}`
             );
+            return this.errorResponse();
+        }
 
+        try {
             await Promise.all([
                 UserRegistration.persist(
                     persis,
                     rocketChatUserId,
                     userAccessToken,
-                    response.refreshToken as string,
-                    response.expiresIn,
-                    response.extExpiresIn
+                    refreshToken,
+                    expiresIn,
+                    extExpiresIn
                 ),
-                UserMapping.persist(persis, rocketChatUserId, teamsUserProfile.id),
+                UserMapping.persist(persis, rocketChatUserId, teamsUserId),
                 LoginMessage.save({
                     persistence: persis,
                     rocketChatUserId,
@@ -119,7 +176,6 @@ export class AuthenticationEndpoint extends ApiEndpoint {
 
             // If the app user just logged in, reset the per-room notification
             // flags so rooms won't show stale "app user not logged in" warnings.
-            const appUser = await read.getUserReader().getAppUser(this.app.getID());
             if (appUser && rocketChatUserId === appUser.id) {
                 await AppUserLoginNotified.clearAll(persis);
             }
@@ -135,7 +191,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 persis,
                 rocketChatUserId,
                 subscriberEndpointUrl,
-                teamsUserId: teamsUserProfile.id,
+                teamsUserId,
                 userAccessToken,
                 renewIfExists: true,
                 forceRenew: true,
@@ -143,9 +199,19 @@ export class AuthenticationEndpoint extends ApiEndpoint {
 
             return this.success(this.embeddedLoginSuccessMessage);
         } catch (error) {
-            console.log("Error in authentication endpoint:" + JSON.stringify(error, null, 2));
+            this.app.getLogger().error(
+                `Authentication — phase C (persistence/subscription) failed: ${(error as Error)?.message ?? String(error)}`
+            );
             return this.errorResponse();
         }
+    }
+
+    private conflictResponse(message: string): IApiResponse {
+        const response: IApiResponseJSON = {
+            status: HttpStatusCode.CONFLICT,
+            content: { message },
+        };
+        return response;
     }
 
     private errorResponse(): IApiResponse {

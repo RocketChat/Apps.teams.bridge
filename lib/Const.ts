@@ -152,6 +152,10 @@ export const WebhookSecretCreationJobId = 'teamsbridge.secret.creation.job';
 
 export const IncomingNotificationProcessorId = 'teamsbridge.incoming.notification.processor';
 
+export const OAuthNonceCleanupJobId = 'teamsbridge.oauth.nonce.cleanup';
+
+export const OAuthNonceCleanupInterval = '600 seconds';
+
 export const DefaultThreadName = 'Rocket.Chat interop group';
 
 export const DefaultTeamName = 'TeamsInteropGroupChat';

@@ -4,7 +4,7 @@ import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AppSetting } from "../config/Settings";
 import { generateHintMessageWithTeamsLoginButton, notifyRocketChatUserAsync, notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
 import { AuthenticationEndpointPath, LoginMessageText, LoginNoNeedHintMessageText } from "../lib/Const";
-import { getLoginUrl, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
+import { getLoginUrlAsync, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "../lib/AuthHelper";
 
@@ -32,7 +32,7 @@ export class LoginTeamsSlashCommand implements ISlashCommand {
 
         const room = context.getRoom();
         const commandSender = context.getSender();
-        const loginUrl = getLoginUrl(aadTenantId, aadClientId, authEndpointUrl, commandSender.id, 'normal');
+        const loginUrl = await getLoginUrlAsync(persistence, aadTenantId, aadClientId, authEndpointUrl, commandSender.id, 'normal');
         const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
 
         // If the user has already logged, print some other information instead of the login url
