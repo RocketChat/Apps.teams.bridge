@@ -4,10 +4,11 @@ import { InputElementDispatchAction, UIKitSurfaceType } from "@rocket.chat/apps-
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import type { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { UIActionId, UIElementId, UIElementText } from "./Const";
-import { getAppAccessTokenAsync } from "./AuthHelper";
-import { searchTeamsUsersAsync } from "./MicrosoftGraphApi";
+import { getAppAccessTokenAsync, getUserAccessTokenAsync } from "./AuthHelper";
+import { getTeamsChatMembersAsync, searchTeamsUsersAsync } from "./MicrosoftGraphApi";
+import type { TeamsChatMember, GetTeamsChatMembersResult } from "./MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "./Notifier";
-import { UserMapping } from "./PersistHelper";
+import { Room, UserMapping } from "./PersistHelper";
 import type { UserModel } from "./PersistHelper";
 
 interface LoadedUser {
@@ -21,11 +22,23 @@ interface LoadMoreButtonState {
     roomId: string;
 }
 
+interface ViewMembersButtonState {
+    nextLink: string;
+    loadedMembers: TeamsChatMember[];
+    threadId: string;
+}
+
 const encodeButtonState = (state: LoadMoreButtonState): string =>
     Buffer.from(JSON.stringify(state)).toString('base64');
 
 export const decodeButtonState = (value: string): LoadMoreButtonState =>
     JSON.parse(Buffer.from(value, 'base64').toString('utf-8')) as LoadMoreButtonState;
+
+const encodeViewMembersButtonState = (state: ViewMembersButtonState): string =>
+    Buffer.from(JSON.stringify(state)).toString('base64');
+
+export const decodeViewMembersButtonState = (value: string): ViewMembersButtonState =>
+    JSON.parse(Buffer.from(value, 'base64').toString('utf-8')) as ViewMembersButtonState;
 
 export const encodeUserOptionValue = (id: string, displayName: string): string =>
     Buffer.from(JSON.stringify([id, displayName])).toString('base64');
@@ -188,3 +201,124 @@ export const createContextualBarBlocks = (
 export const getSubmitActionIdForRoomId = (roomId: IRoom['id']) => `${UIActionId.SaveChanges}--${roomId}`;
 
 export const getRoomIdFromSubmitActionId = (actionId: string) => actionId.trim().split('--').pop();
+
+export const updateViewTeamsMembersContextualBarAsync = async (options: {
+    value: string;
+    read: IRead;
+    http: IHttp;
+    persistence: IPersistence;
+    app: TeamsBridgeApp;
+    modify: IModify;
+}): Promise<IUIKitSurfaceViewParam | null> => {
+    const { value, read, http, persistence, app, modify } = options;
+
+    const { nextLink: pageUrl, loadedMembers: prevMembers, threadId } = decodeViewMembersButtonState(value);
+
+    const appUser = await read.getUserReader().getAppUser();
+    if (!appUser) { return null; }
+
+    const accessToken = await getUserAccessTokenAsync({
+        read, persistence, http, app, rocketChatUserId: appUser.id,
+    });
+    if (!accessToken) { return null; }
+
+    const result = await getTeamsChatMembersAsync(http, threadId, accessToken, { pageUrl });
+    if (!result) { return null; }
+
+    const mergedMembers: TeamsChatMember[] = [...prevMembers, ...result.members];
+    return createViewMembersContextualBarBlocks(modify, mergedMembers, threadId, result.nextLink);
+};
+
+export const openViewTeamsMembersContextualBarAsync = async (
+    triggerId: string,
+    currentRoom: IRoom,
+    operator: IUser,
+    read: IRead,
+    modify: IModify,
+    http: IHttp,
+    persistence: IPersistence,
+    app: TeamsBridgeApp,
+): Promise<void> => {
+    const appUser = await read.getUserReader().getAppUser();
+    if (!appUser) {
+        return;
+    }
+
+    const roomRecord = await Room.findByRCRoomId(read, currentRoom.id);
+    if (!roomRecord?.teamsThreadId) {
+        await notifyRocketChatUserInRoomAsync(
+            UIElementText.ViewMembersNoThreadText,
+            appUser, operator, currentRoom, read.getNotifier(),
+        );
+        return;
+    }
+
+    const accessToken = await getUserAccessTokenAsync({
+        read,
+        persistence,
+        http,
+        app,
+        rocketChatUserId: appUser.id,
+    });
+    if (!accessToken) {
+        await notifyRocketChatUserInRoomAsync(
+            UIElementText.ViewMembersNoTokenText,
+            appUser, operator, currentRoom, read.getNotifier(),
+        );
+        return;
+    }
+
+    const result = await getTeamsChatMembersAsync(http, roomRecord.teamsThreadId, accessToken);
+    const view = createViewMembersContextualBarBlocks(
+        modify,
+        result?.members ?? [],
+        roomRecord.teamsThreadId,
+        result?.nextLink,
+    );
+    await modify.getUiController().openSurfaceView(view, { triggerId }, operator);
+};
+
+const createViewMembersContextualBarBlocks = (
+    modify: IModify,
+    members: TeamsChatMember[],
+    threadId: string,
+    nextLink?: string,
+): IUIKitSurfaceViewParam => {
+    const blocks = modify.getCreator().getBlockBuilder();
+
+    if (members.length === 0) {
+        blocks.addSectionBlock({
+            text: blocks.newMarkdownTextObject(UIElementText.ViewMembersEmptyText),
+        });
+    } else {
+        const headerText = `${UIElementText.ViewMembersHeader} *(${members.length} shown)*`;
+        blocks.addSectionBlock({
+            text: blocks.newMarkdownTextObject(headerText),
+        });
+        for (const member of members) {
+            blocks.addSectionBlock({
+                text: blocks.newMarkdownTextObject(`**${member.displayName}**`),
+            });
+        }
+    }
+
+    if (nextLink) {
+        const buttonState: ViewMembersButtonState = { nextLink, loadedMembers: members, threadId };
+        blocks.addActionsBlock({
+            elements: [
+                blocks.newButtonElement({
+                    actionId: UIActionId.ViewMembersLoadMore,
+                    text: blocks.newPlainTextObject(UIElementText.ViewMembersLoadMoreButton),
+                    value: encodeViewMembersButtonState(buttonState),
+                }),
+            ],
+        });
+    }
+
+    return {
+        id: UIElementId.ViewMembersContextualBarId,
+        title: blocks.newPlainTextObject(UIElementText.ViewMembersContextualBarTitle),
+        type: UIKitSurfaceType.CONTEXTUAL_BAR,
+        blocks: blocks.getBlocks(),
+    };
+};

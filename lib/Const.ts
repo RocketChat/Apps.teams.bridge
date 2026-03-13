@@ -158,15 +158,18 @@ export const DefaultTeamName = 'TeamsInteropGroupChat';
 
 export const UIActionId = {
     AddTeamsUserButtonClicked: 'TeamsBridge.AddTeamsUserButtonClicked',
+    ViewTeamsMembersButtonClicked: 'TeamsBridge.ViewTeamsMembersButtonClicked',
     TeamsUserNameSearch: 'TeamsBridge.TeamsUserNameSearch',
     TeamsUserSearchInput: 'TeamsBridge.TeamsUserSearchInput',
     TeamsUserLoadMore: 'TeamsBridge.TeamsUserLoadMore',
     TeamsUserSearchButton: 'TeamsBridge.TeamsUserSearchButton',
+    ViewMembersLoadMore: 'TeamsBridge.ViewMembersLoadMore',
     SaveChanges: 'TeamsBridge.SaveChanges',
 };
 
 export const UIElementId = {
     ContextualBarId: 'TeamsBridge.ContextualBarId',
+    ViewMembersContextualBarId: 'TeamsBridge.ViewMembersContextualBarId',
 };
 
 export const UIElementText = {
@@ -178,6 +181,12 @@ export const UIElementText = {
     TeamsUserSearchPlaceholder: 'Type a display name to search...',
     TeamsUserSearchButton: 'Search',
     TeamsUserLoadMoreButton: 'Load more users',
+    ViewMembersContextualBarTitle: 'Teams Members',
+    ViewMembersNoThreadText: 'This room is not linked to a Teams chat. Please bridge the room before viewing members.',
+    ViewMembersNoTokenText: 'Could not fetch Teams members. Please ensure the app user is logged in to Microsoft Teams.',
+    ViewMembersEmptyText: 'No members found in the linked Teams chat.',
+    ViewMembersHeader: 'Members in the linked Teams chat:',
+    ViewMembersLoadMoreButton: 'Load more members',
 };
 
 export const getMicrosoftTokenUrl = (aadTenantId: string) => {

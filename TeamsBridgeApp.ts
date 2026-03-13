@@ -86,7 +86,9 @@ import {
     decodeButtonState,
     getRoomIdFromSubmitActionId,
     openAddTeamsUserContextualBarBlocksAsync,
+    openViewTeamsMembersContextualBarAsync,
     updateAddTeamsUserContextualBarAsync,
+    updateViewTeamsMembersContextualBarAsync,
 } from "./lib/UserInterfaceHelper";
 import { AddUserSlashCommand } from "./slashcommands/AddUserSlashCommand";
 import { DeleteTeamsBotUserSlashCommand } from "./slashcommands/DeleteTeamsBotUserSlashCommand";
@@ -95,6 +97,7 @@ import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand
 import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
 import { LoginAppUserSlashCommand } from "./slashcommands/LoginAppUserSlashCommand";
 import { ResubscribeMessages } from "./slashcommands/ResubscriptionMessages";
+import { ViewTeamsMembersSlashCommand } from "./slashcommands/ViewTeamsMembersSlashCommand";
 import { SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
 import { PreventRegistry } from "./lib/PreventRegistry";
 import {
@@ -433,6 +436,19 @@ export class TeamsBridgeApp
             );
         }
 
+        if (data.actionId === UIActionId.ViewTeamsMembersButtonClicked) {
+            await openViewTeamsMembersContextualBarAsync(
+                data.triggerId,
+                data.room,
+                data.user,
+                read,
+                modify,
+                http,
+                persistence,
+                this,
+            );
+        }
+
         return {
             success: true,
         };
@@ -473,6 +489,21 @@ export class TeamsBridgeApp
                 actionId,
                 value,
                 roomId,
+                read,
+                http,
+                persistence,
+                app: this,
+                modify,
+            });
+            if (updatedView) {
+                return context.getInteractionResponder().updateContextualBarViewResponse(updatedView);
+            }
+        }
+
+        if (actionId === UIActionId.ViewMembersLoadMore && value) {
+            // value = base64 encoded { nextLink, loadedMembers, threadId, total }.
+            const updatedView = await updateViewTeamsMembersContextualBarAsync({
+                value,
                 read,
                 http,
                 persistence,
@@ -680,6 +711,9 @@ export class TeamsBridgeApp
             configuration.slashCommands.provideSlashCommand(
                 new LoginAppUserSlashCommand(this),
             ),
+            configuration.slashCommands.provideSlashCommand(
+                new ViewTeamsMembersSlashCommand(this),
+            ),
         ]);
 
         // Register API endpoints
@@ -692,10 +726,24 @@ export class TeamsBridgeApp
             ],
         });
 
-        // Config context menu item
+        // Config context menu item - Add Teams user
         configuration.ui.registerButton({
             actionId: UIActionId.AddTeamsUserButtonClicked,
             labelI18n: "action_button_label_add_teams_user",
+            context: UIActionButtonContext.ROOM_ACTION,
+            when: {
+                roomTypes: [
+                    RoomTypeFilter.PRIVATE_DISCUSSION,
+                    RoomTypeFilter.PRIVATE_CHANNEL,
+                    RoomTypeFilter.PRIVATE_TEAM,
+                ],
+            },
+        });
+
+        // Config context menu item - View Teams members
+        configuration.ui.registerButton({
+            actionId: UIActionId.ViewTeamsMembersButtonClicked,
+            labelI18n: "action_button_label_view_teams_members",
             context: UIActionButtonContext.ROOM_ACTION,
             when: {
                 roomTypes: [

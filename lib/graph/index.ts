@@ -3,6 +3,7 @@ export * from './parsers';
 export * from './getApplicationAccessTokenAsync';
 export * from './listTeamsUserProfilesAsync'; // searchTeamsUsersAsync + SearchTeamsUsersResult
 export * from './getTeamsUserProfileByIdAsync';
+export * from './getTeamsChatMembersAsync';
 export * from './getUserAccessTokenAsync';
 export * from './renewUserAccessTokenAsync';
 export * from './revokeUserRefreshTokenAsync';
