@@ -75,6 +75,8 @@ export const AddUserLoginRequiredHintMessageText: string =
     + 'To start cross platform collaboration for your account, please click this button to login Teams:';
 export const LogoutNoNeedHintMessageText: string = 'You have NOT logged in to Microsoft yet. No need to logout.';
 export const LogoutSuccessHintMessageText: string = 'You have successfully logged out Microsoft Teams.';
+export const LogoutAppUserNoNeedHintMessageText: string = 'The app user is not currently logged in to Microsoft Teams. No need to logout.';
+export const LogoutAppUserSuccessHintMessageText: string = 'The app user has been successfully logged out from Microsoft Teams.';
 
 export const LoginAppUserMessageText: string =
     'The app user has not yet logged in to Microsoft Teams. '

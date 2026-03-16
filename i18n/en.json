@@ -11,6 +11,7 @@
     "action_button_label_add_teams_user": "Add Teams user",
     "teamsbridge-resubscribe-messages_command_description": "Resubscribe to Teams messages if you are not receiving them",
     "login_app_user_slash_command_description": "Log in the app user to Microsoft Teams to enable message relaying",
+    "logout_app_user_slash_command_description": "Log out the app user from Microsoft Teams",
     "view_teams_members_slash_command_description": "View current members of the linked Microsoft Teams chat",
     "action_button_label_view_teams_members": "View Teams members"
 }

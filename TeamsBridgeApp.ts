@@ -98,6 +98,7 @@ import { LoginTeamsSlashCommand } from "./slashcommands/LoginTeamsSlashCommand";
 import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand";
 import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
 import { LoginAppUserSlashCommand } from "./slashcommands/LoginAppUserSlashCommand";
+import { LogoutAppUserSlashCommand } from "./slashcommands/LogoutAppUserSlashCommand";
 import { ResubscribeMessages } from "./slashcommands/ResubscriptionMessages";
 import { ViewTeamsMembersSlashCommand } from "./slashcommands/ViewTeamsMembersSlashCommand";
 import { OAuthNonce, SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
@@ -734,6 +735,9 @@ export class TeamsBridgeApp
             ),
             configuration.slashCommands.provideSlashCommand(
                 new LoginAppUserSlashCommand(this),
+            ),
+            configuration.slashCommands.provideSlashCommand(
+                new LogoutAppUserSlashCommand(this),
             ),
             configuration.slashCommands.provideSlashCommand(
                 new ViewTeamsMembersSlashCommand(this),
