@@ -10,7 +10,7 @@ import { getUserAccessTokenAsync } from "../AuthHelper";
 import { mapRocketChatMessageToTeamsMessageV2 } from "../MessageHelper";
 import { updateTextMessageInChatThreadAsync } from "../MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "../Notifier";
-import { MessageMapping, Room } from "../PersistHelper";
+import { MessageMapping } from "../PersistHelper";
 import { PreventRegistry } from "../PreventRegistry";
 
 export const handlePostMessageUpdatedAsync = async (options: {

@@ -14,7 +14,7 @@ import {
     sendTextMessageToChatThreadAsync,
     shareOneDriveFileAsync,
 } from "../MicrosoftGraphApi";
-import { MessageMapping, OneDriveFile, Room, UserMapping, AppUserLoginNotified } from "../PersistHelper";
+import { MessageMapping, OneDriveFile, Room, UserMapping, AppUserLoginNotified, RecentActivity } from "../PersistHelper";
 import { PreventRegistry } from "../PreventRegistry";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { IModify } from "@rocket.chat/apps-engine/definition/accessors";
@@ -55,11 +55,7 @@ export const handlePostMessageSentAsync = async (options: {
         http,
     });
 
-    console.log(`[Teams Bridge] Access token for user ${message.sender.username} (${message.sender.id}): ${accessToken ? "Exists" : "Not found or expired"} ${accessToken}`);
-
     const userHasAccessToken = typeof accessToken === "string" && accessToken.length > 0;
-
-    console.log(`[Teams Bridge] User ${message.sender.username} (${message.sender.id}) has valid access token: ${userHasAccessToken}`);
 
     if (!userHasAccessToken) {
         const appUserToken = await getUserAccessTokenAsync({
@@ -140,6 +136,16 @@ export const handlePostMessageSentAsync = async (options: {
 
     let teamsMessageId = "";
     let rocketChatMessageId = "";
+
+    // Stamp recent activity before sending to Teams
+    await RecentActivity.set({
+        read,
+        persistence,
+        rcUserId: userHasAccessToken ? message.sender.id : appUser.id,
+        teamsThreadId: roomRecord.teamsThreadId,
+        kind: 'create',
+    });
+
     if (message.file) {
         // If message is a file, use send file operation
         let textMessage = "";

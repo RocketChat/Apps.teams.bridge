@@ -1,3 +1,4 @@
+import { RecentActivity } from "./lib/persistence";
 import {
     IAppAccessors,
     IAppInstallationContext,
@@ -69,6 +70,8 @@ import {
     UIActionId,
     UIElementId,
     WebhookSecretCreationJobId,
+    RecentActivityCleanupJobId,
+    RecentActivityCleanupInterval,
 } from "./lib/Const";
 import {
     handleAddTeamsUserContextualBarSubmitAsync,
@@ -127,6 +130,17 @@ export class TeamsBridgeApp
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
         super(info, logger, accessors);
     }
+
+    protected recentActivityCleanupJob = async (
+        jobContext: IJobContext,
+        read: IRead,
+        modify: IModify,
+        http: IHttp,
+        persis: IPersistence
+    ): Promise<void> => {
+        const deletedCount = await RecentActivity.deleteStale(read, persis);
+        this.getLogger().info(`Deleted ${deletedCount} stale recent activities.`);
+    };
 
     async getSettingValueById(id: string) {
         return this.getAccessors()
@@ -245,6 +259,11 @@ export class TeamsBridgeApp
             await configurationModify.scheduler.scheduleRecurring({
                 id: OAuthNonceCleanupJobId,
                 interval: OAuthNonceCleanupInterval,
+                skipImmediate: true,
+            });
+            await configurationModify.scheduler.scheduleRecurring({
+                id: RecentActivityCleanupJobId,
+                interval: RecentActivityCleanupInterval,
                 skipImmediate: true,
             });
         } catch (e) {
@@ -799,6 +818,10 @@ export class TeamsBridgeApp
             {
                 id: OAuthNonceCleanupJobId,
                 processor: this.oauthNonceCleanupJob,
+            },
+            {
+                id: RecentActivityCleanupJobId,
+                processor: this.recentActivityCleanupJob,
             },
         ]);
     }

@@ -185,17 +185,19 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 SubscriberEndpointPath
             );
 
-            await subscribeToAllMessagesForOneUserAsync({
-                http,
-                read,
-                persis,
-                rocketChatUserId,
-                subscriberEndpointUrl,
-                teamsUserId,
-                userAccessToken,
-                renewIfExists: true,
-                forceRenew: true,
-            });
+            if (type === 'bot') {
+                await subscribeToAllMessagesForOneUserAsync({
+                    http,
+                    read,
+                    persis,
+                    rocketChatUserId,
+                    subscriberEndpointUrl,
+                    teamsUserId,
+                    userAccessToken,
+                    renewIfExists: true,
+                    forceRenew: true,
+                });
+            }
 
             return this.success(this.embeddedLoginSuccessMessage);
         } catch (error) {

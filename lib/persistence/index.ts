@@ -11,7 +11,9 @@ export { OneDriveFile } from './OneDriveFile';
 export { LoginMessage } from './LoginMessage';
 export { MessageFootprint } from './MessageFootprint';
 export { WebhookSecret } from './WebhookSecret';
+
 export { OAuthNonce } from './OAuthNonce';
+export { RecentActivity } from './RecentActivity';
 
 export type { UserRegistrationModel } from './UserRegistration';
 export type { UserModel } from './UserMapping';

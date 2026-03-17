@@ -17,7 +17,7 @@ import {
 } from "../lib/Notifier";
 import {
     AuthenticationEndpointPath,
-    LoginMessageText,
+    LoginAppUserMessageText,
     SubscriberEndpointPath,
 } from "../lib/Const";
 import { getLoginUrlAsync, getRocketChatAppEndpointUrl } from "../lib/UrlHelper";
@@ -32,7 +32,7 @@ export class ResubscribeMessages implements ISlashCommand {
     public i18nDescription: string =
         "teamsbridge-resubscribe-messages_command_description";
 
-    public permission?: string | undefined;
+    public permission?: string | undefined = "manage-apps";
     public providesPreview: boolean = false;
 
     public constructor(private readonly app: TeamsBridgeApp) {}
@@ -64,28 +64,41 @@ export class ResubscribeMessages implements ISlashCommand {
 
         const room = context.getRoom();
         const commandSender = context.getSender();
-        const loginUrl = await getLoginUrlAsync(
-            persis,
-            aadTenantId,
-            aadClientId,
-            authEndpointUrl,
-            commandSender.id
-        );
+
+        if (!commandSender.roles.includes("admin")) {
+            const message = "This command is only for admin users.";
+            await notifyRocketChatUserInRoomAsync(
+                message,
+                commandSender,
+                commandSender,
+                room,
+                modify.getNotifier()
+            );
+            return;
+        }
         const appUser = (await read.getUserReader().getAppUser()) as IUser;
 
         const userAccessToken = await getUserAccessTokenAsync({
             read,
             persistence: persis,
-            rocketChatUserId: commandSender.id,
+            rocketChatUserId: appUser.id,
             app: this.app,
             http,
         });
         if (!userAccessToken) {
+            const loginUrl = await getLoginUrlAsync(
+                persis,
+                aadTenantId,
+                aadClientId,
+                authEndpointUrl,
+                appUser.id,
+                "bot",
+            );
             const message = generateHintMessageWithTeamsLoginButton(
                 loginUrl,
                 appUser,
                 room,
-                LoginMessageText
+                LoginAppUserMessageText,
             );
             await notifyRocketChatUserAsync(
                 message,
@@ -100,11 +113,11 @@ export class ResubscribeMessages implements ISlashCommand {
                 this.app.getAccessors(),
                 SubscriberEndpointPath
             );
-            const user = await UserMapping.findByRCUserId(
+            const userMapping = await UserMapping.findByRCUserId(
                 read,
-                commandSender.id
+                appUser.id
             );
-            if (!user) {
+            if (!userMapping) {
                 throw new Error(
                     "User not found or the teams user is not synced with Rocket.Chat"
                 );
@@ -113,14 +126,14 @@ export class ResubscribeMessages implements ISlashCommand {
                 http,
                 read,
                 persis,
-                rocketChatUserId: commandSender.id,
+                rocketChatUserId: userMapping.rocketChatUserId,
                 subscriberEndpointUrl,
-                teamsUserId: user.teamsUserId,
+                teamsUserId: userMapping.teamsUserId,
                 userAccessToken,
                 renewIfExists: true,
                 forceRenew: true,
             });
-            const message = `You have been successfully subscribed to messages.`;
+            const message = `The bot has been successfully subscribed to messages.`;
             await notifyRocketChatUserInRoomAsync(
                 message,
                 appUser,

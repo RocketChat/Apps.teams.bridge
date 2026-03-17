@@ -1,3 +1,5 @@
+export const RecentActivityCleanupJobId = 'teamsbridge.recent-activity.cleanup';
+export const RecentActivityCleanupInterval = '60 seconds';
 export const AuthenticationEndpointPath: string = 'auth';
 export const SubscriberEndpointPath: string = 'subscriber';
 

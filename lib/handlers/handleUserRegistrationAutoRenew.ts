@@ -17,55 +17,52 @@ export const handleUserRegistrationAutoRenewAsync = async (options: {
 }): Promise<void> => {
     const { http, persistence, read, subscriberEndpointUrl, app } = options;
 
-    const allRegistrations = await UserRegistration.findAll(read);
+    const appUser = await read.getUserReader().getAppUser();
+    if (!appUser) {
+        throw new Error("App user not found");
+    }
+    const registration = await UserRegistration.findByRCUserId({read, rocketChatUserId: appUser.id });
 
-    if (allRegistrations) {
-        const errorUserIds: string[] = [];
-        for (const registration of allRegistrations) {
-            try {
-                const userAccessToken = await getUserAccessTokenAsync({
-                    app,
-                    http,
-                    persistence,
-                    read,
-                    rocketChatUserId: registration.rocketChatUserId,
-                });
+    if (registration) {
+        try {
+            const userAccessToken = await getUserAccessTokenAsync({
+                app,
+                http,
+                persistence,
+                read,
+                rocketChatUserId: registration.rocketChatUserId,
+            });
 
-                if (!userAccessToken) {
-                    errorUserIds.push(registration.rocketChatUserId);
-                    continue;
-                }
+            if (!userAccessToken) {
+                throw new Error(`Failed to get access token for user ${registration.rocketChatUserId}`);
+            }
 
-                const user = await UserMapping.findByRCUserId(
-                    read,
-                    registration.rocketChatUserId
-                );
+            const user = await UserMapping.findByRCUserId(
+                read,
+                registration.rocketChatUserId
+            );
 
-                if (!user) {
-                    throw new Error(
-                        `User record for user ${registration.rocketChatUserId} not found!`
-                    );
-                }
-
-                await subscribeToAllMessagesForOneUserAsync({
-                    read,
-                    http,
-                    persis: persistence,
-                    rocketChatUserId: user.rocketChatUserId,
-                    subscriberEndpointUrl,
-                    teamsUserId: user.teamsUserId,
-                    userAccessToken,
-                    renewIfExists: true,
-                    forceRenew: false,
-                });
-            } catch (error) {
-                console.error(
-                    `Error during renew registration for user ${registration.rocketChatUserId}. Ignore this error and continue. Error: ${error}`
+            if (!user) {
+                throw new Error(
+                    `User record for user ${registration.rocketChatUserId} not found!`
                 );
             }
-        }
-        if (errorUserIds.length) {
-            app.getLogger().error(`Could not refresh user access token for users: ${errorUserIds.join(', ')}`)
+
+            await subscribeToAllMessagesForOneUserAsync({
+                read,
+                http,
+                persis: persistence,
+                rocketChatUserId: user.rocketChatUserId,
+                subscriberEndpointUrl,
+                teamsUserId: user.teamsUserId,
+                userAccessToken,
+                renewIfExists: true,
+                forceRenew: false,
+            });
+        } catch (error) {
+            console.error(
+                `Error during renew registration for user ${registration.rocketChatUserId}. Ignore this error and continue. Error: ${error}`
+            );
         }
     }
 };

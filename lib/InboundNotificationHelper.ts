@@ -18,11 +18,12 @@ import {
     MessageType,
     ThreadType,
 } from "./MicrosoftGraphApi";
-import { MessageMapping, Room, UploadMapping, UserMapping } from "./PersistHelper";
+import { MessageMapping, RecentActivity, Room, UploadMapping, UserMapping } from "./PersistHelper";
 import type { UserModel } from "./PersistHelper";
 import type { TeamsBridgeApp } from "../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "./AuthHelper";
 import { PreventRegistry } from "./PreventRegistry";
+import { App } from "@rocket.chat/apps-engine/definition/App";
 
 export enum NotificationChangeType {
     Created = "created",
@@ -83,7 +84,7 @@ export const handleInboundNotificationAsync = async (options: {
                 modify,
                 http,
                 persistence,
-                app.getID(),
+                app,
             );
             break;
 
@@ -121,7 +122,7 @@ const handleInboundMessageCreatedAsync = async (
     modify: IModify,
     http: IHttp,
     persis: IPersistence,
-    appId: string,
+    app: App,
 ): Promise<void> => {
     const receiverRocketChatUserId = inBoundNotification.receiverRocketChatUserId;
     const resourceString = inBoundNotification.resourceString;
@@ -131,13 +132,42 @@ const handleInboundMessageCreatedAsync = async (
         userAccessToken
     );
 
+
     if (getMessageResponse.messageType) {
         const storedMessageMap = await MessageMapping.findByTeamsMessageId(read, getMessageResponse.messageId);
-
         if (storedMessageMap?.rocketChatMessageId) {
             // IMPORTANT!!!!!
             // An echo message. Should skip. Else this will create a loop.
             return;
+        }
+
+        // --- Adaptive delay race mitigation ---
+        const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
+        if (fromUserTeamsId) {
+            const fromUserRocketChatUser = await UserMapping.findByTeamsUserId(read, fromUserTeamsId);
+            if (fromUserRocketChatUser) {
+                const isRecent = await RecentActivity.isRecent({
+                    read,
+                    rcUserId: fromUserRocketChatUser.rocketChatUserId,
+                    teamsThreadId: getMessageResponse.threadId,
+                    kind: 'create',
+                });
+                if (isRecent) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    const recheck = await MessageMapping.findByTeamsMessageId(read, getMessageResponse.messageId);
+                    await RecentActivity.delete({
+                        persistence: persis,
+                        rcUserId: fromUserRocketChatUser.rocketChatUserId,
+                        teamsThreadId: getMessageResponse.threadId,
+                        kind: 'create',
+                    });
+                    if (recheck?.rocketChatMessageId) {
+                        // confirmed echo
+                        app.getLogger().debug(`Skipping echo message for Teams message ${getMessageResponse.messageId}`);
+                        return;
+                    };
+                }
+            }
         }
 
         let roomRecord = await Room.findByTeamsThreadId(
@@ -246,7 +276,7 @@ const handleInboundMessageCreatedAsync = async (
         }
 
         // Only handle notification received by the app bot to avoid duplication
-        const appUser = await read.getUserReader().getAppUser(appId);
+        const appUser = await read.getUserReader().getAppUser();
         if (receiverRocketChatUserId !== appUser?.id) {
             console.log("Skip notification for non-app user");
             return;
@@ -269,7 +299,6 @@ const handleInboundMessageCreatedAsync = async (
                 roomRecord,
                 fromUserRocketChatUser,
                 read,
-                appId,
                 fromUserTeamsId,
             });
 
@@ -395,13 +424,11 @@ const getSenderUser = async ({
         roomRecord,
         fromUserRocketChatUser,
         read,
-        appId,
         fromUserTeamsId,
     }: {
         roomRecord: any,
         fromUserRocketChatUser: UserModel | null,
         read: IRead,
-        appId: string,
         fromUserTeamsId: string,
 }) => {
     if (fromUserRocketChatUser) {
@@ -416,7 +443,7 @@ const getSenderUser = async ({
     console.log(
         `No RC user found for Teams sender ${fromUserTeamsId}, falling back to app bot.`
     );
-    return read.getUserReader().getAppUser(appId);
+    return read.getUserReader().getAppUser();
 }
 
 const handleInboundMessageUpdatedAsync = async (
@@ -434,14 +461,13 @@ const handleInboundMessageUpdatedAsync = async (
     const getMessageResponse = await getMessageWithResourceStringAsync(
         http,
         resourceString,
-        userAccessToken
+        userAccessToken,
     );
 
-    const messageIdMapping =
-        await MessageMapping.findByTeamsMessageId(
-            read,
-            getMessageResponse.messageId
-        );
+    const messageIdMapping = await MessageMapping.findByTeamsMessageId(
+        read,
+        getMessageResponse.messageId,
+    );
     if (!messageIdMapping) {
         // If there's not an existing rocket chat message, stop processing
         return;
@@ -450,7 +476,7 @@ const handleInboundMessageUpdatedAsync = async (
     if (
         await PreventRegistry.capture(
             persis,
-            `PreventPostMessageUpdateHook/${messageIdMapping.rocketChatMessageId}`
+            `PreventPostMessageUpdateHook/${messageIdMapping.rocketChatMessageId}`,
         )
     ) {
         return;
@@ -484,11 +510,11 @@ const handleInboundMessageUpdatedAsync = async (
     const updator = modify.getUpdater();
     let messageBuilder = await updator.message(
         messageIdMapping.rocketChatMessageId,
-        sender
+        sender,
     );
     messageBuilder = messageBuilder
         .setText(updatedMessage.text)
-        .setEditor(sender)
+        .setEditor(sender);
     await updator.finish(messageBuilder);
 };
 
