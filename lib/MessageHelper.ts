@@ -53,7 +53,7 @@ export const sendRocketChatMessageInRoomAsync = async (
     modify: IModify) : Promise<string> => {
     const creator: IModifyCreator = modify.getCreator();
 
-    const message : IMessage = {
+    const message: IMessage = {
         text: messageText,
         sender,
         room,
@@ -143,6 +143,10 @@ export const mapTeamsMessageToRocketChatMessage = async ({
         uploadIds,
     }
 };
+
+export const formatTeamsSenderInfo = (message: string, senderName: string): string => {
+    return `**${senderName}** _via Teams_\n${message}`;
+}
 
 export const mapRocketChatMessageToTeamsMessage = (rocketChatMessage: string, originalSenderName?: string) : string => {
     // Handle emoji in text
