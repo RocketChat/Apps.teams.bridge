@@ -3,6 +3,7 @@ import {
     IMessageBuilder,
     IModify,
     IModifyCreator,
+    IPersistence,
     IRead,
     IRoomBuilder,
 } from "@rocket.chat/apps-engine/definition/accessors";
@@ -17,6 +18,8 @@ import { buildRocketChatMessageText, extractMainTextNodesFromBridgedMessageNodes
 import { attachAttachments, attachMessageReferences, createTeamsHTMLMessage } from "./RocketChatMessageParser";
 import { UploadMapping } from "./PersistHelper";
 import type { MessageMappingModel, UploadMappingModel } from "./PersistHelper";
+import { getAppAccessTokenAsync } from "./AuthHelper";
+import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export const sendRocketChatOneOnOneMessageAsync = async (
     message: string,
@@ -73,6 +76,8 @@ export const mapTeamsMessageToRocketChatMessage = async ({
     sender,
     http,
     uploadFiles,
+    persistence,
+    app,
 }: {
     getMessageResponse: GetMessageResponse,
     read: IRead,
@@ -82,6 +87,8 @@ export const mapTeamsMessageToRocketChatMessage = async ({
     modify: IModify,
     http: IHttp,
     uploadFiles: boolean,
+    persistence: IPersistence,
+    app: TeamsBridgeApp,
 }): Promise<{
     text: string;
     uploadIds: {
@@ -103,11 +110,19 @@ export const mapTeamsMessageToRocketChatMessage = async ({
                         const { contentUrl, name, id } = attachment;
                         if (contentUrl && name) {
                             try {
+                                const appAccessToken = await getAppAccessTokenAsync(
+                                    {
+                                        read,
+                                        persistence,
+                                        http,
+                                        app,
+                                    },
+                                );
                                 const upload = await downloadAttachmentFileFromExternalAndUploadToRocketChatAsync(
                                     {
                                         url: contentUrl,
                                         fileName: name,
-                                        accessToken,
+                                        accessToken: appAccessToken ?? accessToken,
                                         room,
                                         sender,
                                         http,

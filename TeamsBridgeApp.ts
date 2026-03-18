@@ -110,7 +110,7 @@ import {
     getExtraInfoAndOriginalFileName,
     popExtraInfoAttachment,
 } from "./lib/MessageHelper";
-import { handleInboundNotificationAsync } from "./lib/InboundNotificationHelper";
+import { handleInboundNotificationAsync } from "./lib/inboundNotification/handleInboundNotificationAsync";
 import { handleWebhookSecretCreationAsync } from "./lib/handlers/handleWebhookSecretCreation";
 
 export class TeamsBridgeApp

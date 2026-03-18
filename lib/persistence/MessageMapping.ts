@@ -13,6 +13,7 @@ export interface MessageMappingModel {
     rocketChatMessageId: string;
     teamsMessageId: string;
     teamsThreadId: string;
+    relayedByAppUser?: boolean;
 }
 
 export const MessageMapping = {
@@ -21,8 +22,9 @@ export const MessageMapping = {
         rocketChatMessageId: string;
         teamsMessageId: string;
         teamsThreadId: string;
+        relayedByAppUser?: boolean;
     }): Promise<void> {
-        const { persistence, rocketChatMessageId, teamsMessageId, teamsThreadId } = options;
+        const { persistence, rocketChatMessageId, teamsMessageId, teamsThreadId, relayedByAppUser } = options;
         const byRC: Array<RocketChatAssociationRecord> = [
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
             new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, rocketChatMessageId),
@@ -31,7 +33,12 @@ export const MessageMapping = {
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
             new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, teamsMessageId),
         ];
-        const data: MessageMappingModel = { rocketChatMessageId, teamsMessageId, teamsThreadId };
+        const data: MessageMappingModel = {
+            rocketChatMessageId,
+            teamsMessageId,
+            teamsThreadId,
+            ...(relayedByAppUser !== undefined ? { relayedByAppUser } : {}),
+        };
         await persistence.updateByAssociations(byRC, data, true);
         await persistence.updateByAssociations(byTeams, data, true);
     },

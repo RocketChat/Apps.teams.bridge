@@ -38,7 +38,7 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         persistence: IPersistence
     ): Promise<void> {
         const notifier = modify.getNotifier();
-        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
+        const appUser = await read.getUserReader().getAppUser();
         const sender = context.getSender();
         const currentRoom = context.getRoom();
 
@@ -72,13 +72,13 @@ export class LogoutTeamsSlashCommand implements ISlashCommand {
         await Promise.all([
             UserRegistration.delete(persistence, rocketChatUserId),
             UserMapping.delete(read, persistence, rocketChatUserId),
-            notifyRocketChatUserInRoomAsync(
+            appUser ? notifyRocketChatUserInRoomAsync(
                 userAccessToken ? LogoutSuccessHintMessageText : LogoutNoNeedHintMessageText,
                 appUser,
                 sender,
                 currentRoom,
                 notifier
-            ),
+            ) : Promise.resolve(),
             LoginMessage.save({
                 persistence,
                 rocketChatUserId,

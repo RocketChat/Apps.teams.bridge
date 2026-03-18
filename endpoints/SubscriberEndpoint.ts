@@ -15,7 +15,7 @@ import {
     InBoundNotification,
     NotificationChangeType,
     NotificationResourceType,
-} from "../lib/InboundNotificationHelper";
+} from "../lib/inboundNotification/handleInboundNotificationAsync";
 import { WebhookSecret } from "../lib/PersistHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
 

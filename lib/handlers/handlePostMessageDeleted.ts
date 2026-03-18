@@ -55,7 +55,7 @@ export const handlePostMessageDeletedAsync = async (options: {
     }
 
     // --- Step 2: Ensure sender info (user + access token) ---
-    const { senderUser, accessToken } = await ensureSenderInfo({
+    let { senderUser, accessToken } = await ensureSenderInfo({
         senderId: message.sender.id,
         read,
         persistence,
@@ -63,6 +63,17 @@ export const handlePostMessageDeletedAsync = async (options: {
         http,
     });
 
+    const appUser = await read.getUserReader().getAppUser();
+    if (messageIdMapping?.relayedByAppUser && appUser) {
+        senderUser = await UserMapping.findByRCUserId(read, appUser.id);
+        accessToken = await getUserAccessTokenAsync({
+            read,
+            persistence,
+            rocketChatUserId: appUser.id,
+            app,
+            http,
+        });
+    }
     if (!senderUser || !accessToken) {
         return;
     }

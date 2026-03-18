@@ -14,6 +14,7 @@ export interface UploadMappingModel {
     teamsMessageId: string;
     teamsThreadId: string;
     teamsAttachmentId: string;
+    relayedByAppUser?: boolean;
 }
 
 export const UploadMapping = {
@@ -23,8 +24,9 @@ export const UploadMapping = {
         teamsMessageId: string;
         teamsThreadId: string;
         teamsAttachmentId: string;
+        relayedByAppUser?: boolean;
     }): Promise<void> {
-        const { persistence, rocketchatUploadId, teamsMessageId, teamsThreadId, teamsAttachmentId } = options;
+        const { persistence, rocketchatUploadId, teamsMessageId, teamsThreadId, teamsAttachmentId, relayedByAppUser } = options;
         const byUploadId: Array<RocketChatAssociationRecord> = [
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, rocketchatUploadId),
@@ -33,7 +35,13 @@ export const UploadMapping = {
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, teamsMessageId),
         ];
-        const data: UploadMappingModel = { rocketchatUploadId, teamsMessageId, teamsThreadId, teamsAttachmentId };
+        const data: UploadMappingModel = {
+            rocketchatUploadId,
+            teamsMessageId,
+            teamsThreadId,
+            teamsAttachmentId,
+            ...(relayedByAppUser !== undefined ? { relayedByAppUser } : {}),
+        };
         await persistence.updateByAssociations(byUploadId, data, true);
         await persistence.updateByAssociations(byTeamsMessageId, data, true);
     },

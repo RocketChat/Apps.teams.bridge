@@ -34,6 +34,8 @@ const GraphApiEndpoint = {
     OneDriveItem: (driveItemId: string) => `/me/drive/items/${driveItemId}`,
     ShareLink: (driveItemId: string) =>
         `/me/drive/items/${driveItemId}/createLink`,
+    ChatMessage: (threadId: string, messageId: string) =>
+        `chats/${threadId}/messages/${messageId}`,
 };
 
 export const AppSetupVerificationPassMessageText: string = 'TeamsBridge app setup verification PASSED!';
@@ -129,6 +131,7 @@ export const ApplicationAuthenticationScopes = [
     'chatmember.read.all',
     'chatmember.readwrite.all',
     'chatmessage.read.all',
+    'files.read.all',
 ];
 
 export const SupportedNotificationChangeTypes = [
@@ -291,6 +294,10 @@ export const getGraphApiSubscriptionOperationUrl = (subscriptionId: string) => {
 
 export const getGraphApiResourceUrl = (resourceString: string) => {
     return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${resourceString}`;
+};
+
+export const getChatMessageUrl = (threadId: string, messageId: string) => {
+    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.ChatMessage(threadId, messageId)}`;
 };
 
 export const TestEnvironment = {

@@ -215,6 +215,7 @@ export const handlePostMessageSentAsync = async (options: {
         rocketChatMessageId,
         teamsMessageId,
         teamsThreadId: roomRecord.teamsThreadId,
+        relayedByAppUser: !userHasAccessToken,
     });
 };
 
