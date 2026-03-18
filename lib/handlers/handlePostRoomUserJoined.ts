@@ -7,8 +7,9 @@ import {
 import { IRoomUserJoinedContext } from "@rocket.chat/apps-engine/definition/rooms";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "../AuthHelper";
-import { notifyRoomMembersAppUserNotLoggedInAsync } from "../Notifier";
+import { notifyRocketChatUserInRoomAsync, notifyRoomMembersAppUserNotLoggedInAsync } from "../Notifier";
 import { AppUserLoginNotified, Room } from "../PersistHelper";
+import { AppUserAddedToRoomMessageText } from "../Const";
 
 export const handlePostRoomUserJoinedAsync = async (options: {
     context: IRoomUserJoinedContext;
@@ -19,7 +20,7 @@ export const handlePostRoomUserJoinedAsync = async (options: {
     app: TeamsBridgeApp;
 }): Promise<void> => {
     const { context, read, persistence, modify, app, http } = options;
-    const { joiningUser, room } = context;
+    const { joiningUser, room, inviter } = context;
 
     const appUser = await read.getUserReader().getAppUser(app.getID());
     if (!appUser || joiningUser.id !== appUser.id) {
@@ -35,26 +36,29 @@ export const handlePostRoomUserJoinedAsync = async (options: {
         `(app user added by ${context.inviter?.username ?? 'unknown'}).`
     );
 
-    // Check whether the app user has a delegated Teams token. If not, notify
-    // room members so an admin knows to run /teamsbridge-login-app-user.
-    const alreadyNotified = await AppUserLoginNotified.isSet(read.getPersistenceReader(), room.id);
-    if (!alreadyNotified) {
-        const appUserToken = await getUserAccessTokenAsync({
+    const appUserToken = await getUserAccessTokenAsync({
+        read,
+        persistence,
+        rocketChatUserId: appUser.id,
+        app,
+        http,
+    });
+    if (!appUserToken) {
+        await notifyRoomMembersAppUserNotLoggedInAsync({
             read,
-            persistence,
-            rocketChatUserId: appUser.id,
-            app,
+            modify,
             http,
+            persistence,
+            app,
+            roomId: room.id,
         });
-        if (!appUserToken) {
-            await notifyRoomMembersAppUserNotLoggedInAsync({
-                read,
-                modify,
-                http,
-                persistence,
-                app,
-                roomId: room.id,
-            });
-        }
+    } else if(inviter){
+        await notifyRocketChatUserInRoomAsync(
+            AppUserAddedToRoomMessageText,
+            appUser,
+            inviter,
+            room,
+            modify.getNotifier(),
+        );
     }
 };

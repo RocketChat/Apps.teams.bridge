@@ -95,7 +95,7 @@ export const AppUserLoginRequiredHintMessageText: string =
     'The Teams Bridge app user has not logged in to Microsoft Teams. '
     + 'Messages in this room may not be fully relayed. '
     + 'Please ask your Rocket.Chat administrator to run /teamsbridge-login-app-user to fix this.';
-
+export const AppUserAddedToRoomMessageText: string = 'Hey, I been added to this room. So the room is now an active bridge room and I will start relaying messages between Rocket.Chat and Microsoft Teams.';
 export const LoginButtonText: string = 'Login Teams';
 
 export const NormalUserAuthenticationScopes = [
