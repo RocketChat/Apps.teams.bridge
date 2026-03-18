@@ -8,6 +8,7 @@ import { DefaultTeamName } from "../Const";
 import { InBoundNotification } from "./handleInboundNotificationAsync";
 import { IHttp, IModify, IPersistence, IRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
+import { randomBytes } from "crypto";
 
 export const handleInboundMessageCreatedAsync = async (
     userAccessToken: string,
@@ -28,6 +29,7 @@ export const handleInboundMessageCreatedAsync = async (
     );
 
     if (getMessageResponse.messageType) {
+        const appUser = await read.getUserReader().getAppUser();
         const storedMessageMap = await MessageMapping.findByTeamsMessageId(
             read,
             getMessageResponse.messageId,
@@ -99,7 +101,7 @@ export const handleInboundMessageCreatedAsync = async (
                 receiverRocketChatUserId,
             );
 
-            let topic = DefaultTeamName;
+            let topic = `${DefaultTeamName}_${randomBytes(4).toString("hex").slice(0, 8)}`;
 
             const creator = modify.getCreator();
             const roomBuilder = creator.startRoom();
@@ -128,6 +130,7 @@ export const handleInboundMessageCreatedAsync = async (
                 }
 
                 // Add thread members to the room
+                let madeFirstMemberOwner = false;
                 for (const teamsMemberId of teamsMemberIds) {
                     const rocketChatUser = await UserMapping.findByTeamsUserId(
                         read,
@@ -138,6 +141,10 @@ export const handleInboundMessageCreatedAsync = async (
                             rocketChatUser.rocketChatUserId,
                         );
                         roomBuilder.addMemberToBeAddedByUsername(user.username);
+                        if (!madeFirstMemberOwner && user.id !== appUser?.id) {
+                            roomBuilder.setCreator(user);
+                            madeFirstMemberOwner = true;
+                        }
                     } else {
                         // Under single-bot arch there are no dummy users. Teams-only members
                         // who have no RC registration are not added to the RC room.
@@ -177,7 +184,6 @@ export const handleInboundMessageCreatedAsync = async (
         }
 
         // Only handle notification received by the app bot to avoid duplication
-        const appUser = await read.getUserReader().getAppUser();
         if (receiverRocketChatUserId !== appUser?.id) {
             console.log("Skip notification for non-app user");
             return;
