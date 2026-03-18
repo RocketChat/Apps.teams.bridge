@@ -167,7 +167,10 @@ export const handlePostMessageSentAsync = async (options: {
             accessToken
         );
 
-        // Send the message to the chat thread
+        await PreventRegistry.set(
+            persistence,
+            `PreventPostMessageUpdateHook/${message.id}`,
+        );
         const response = await sendFileMessageToChatThreadAsync(
             http,
             textMessage,

@@ -29,7 +29,7 @@ export const handlePreFileUploadAsync = async (options: {
     }
 
     // Skip uploads made by the app bot itself (e.g. inbound relayed files)
-    const appUser = await read.getUserReader().getAppUser(app.getID());
+    const appUser = await read.getUserReader().getAppUser();
     if (appUser && senderRocketChatUserId === appUser.id) {
         return;
     }
