@@ -56,7 +56,6 @@ import {
     IFileUploadContext,
     IPreFileUpload,
 } from "@rocket.chat/apps-engine/definition/uploads";
-import { UserType } from "@rocket.chat/apps-engine/definition/users";
 import { settings } from "./config/Settings";
 import { AuthenticationEndpoint } from "./endpoints/AuthenticationEndpoint";
 import { SubscriberEndpoint } from "./endpoints/SubscriberEndpoint";
@@ -89,14 +88,14 @@ import {
 import { getRocketChatAppEndpointUrl } from "./lib/UrlHelper";
 import {
     decodeButtonState,
-    getRoomIdFromSubmitActionId,
+    getRoomIdFromActionId,
+    isActionId,
     openAddTeamsUserContextualBarBlocksAsync,
     openViewTeamsMembersContextualBarAsync,
     updateAddTeamsUserContextualBarAsync,
     updateViewTeamsMembersContextualBarAsync,
 } from "./lib/UserInterfaceHelper";
 import { AddUserSlashCommand } from "./slashcommands/AddUserSlashCommand";
-import { DeleteTeamsBotUserSlashCommand } from "./slashcommands/DeleteTeamsBotUserSlashCommand";
 import { LoginTeamsSlashCommand } from "./slashcommands/LoginTeamsSlashCommand";
 import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand";
 import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
@@ -489,12 +488,12 @@ export class TeamsBridgeApp
         persistence: IPersistence,
         modify: IModify,
     ): Promise<IUIKitResponse> {
-        const { actionId, value, room } = context.getInteractionData();
+        const { actionId, value, room, blockId } = context.getInteractionData();
+        const roomId = getRoomIdFromActionId(actionId) ?? room?.id ?? "";
 
-        if (actionId === UIActionId.TeamsUserSearchInput) {
+        if (isActionId(actionId,UIActionId.TeamsUserSearchInput)) {
             // Fires on every keystroke (ON_CHARACTER_ENTERED dispatch).
             // value = current text in the search input; room = the open room.
-            const roomId = room?.id ?? '';
             const updatedView = await updateAddTeamsUserContextualBarAsync({
                 actionId,
                 value,
@@ -505,12 +504,13 @@ export class TeamsBridgeApp
                 app: this,
                 modify,
             });
+
             if (updatedView) {
                 return context.getInteractionResponder().updateContextualBarViewResponse(updatedView);
             }
         }
 
-        if (actionId === UIActionId.TeamsUserLoadMore && value) {
+        if (isActionId(actionId, UIActionId.TeamsUserLoadMore) && value) {
             // value = base64 encoded { nextLink, loadedUsers, roomId }.
             const { roomId } = decodeButtonState(value);
             const updatedView = await updateAddTeamsUserContextualBarAsync({
@@ -528,7 +528,7 @@ export class TeamsBridgeApp
             }
         }
 
-        if (actionId === UIActionId.ViewMembersLoadMore && value) {
+        if (isActionId(actionId, UIActionId.ViewMembersLoadMore) && value) {
             // value = base64 encoded { nextLink, loadedMembers, threadId, total }.
             const updatedView = await updateViewTeamsMembersContextualBarAsync({
                 value,
@@ -537,6 +537,7 @@ export class TeamsBridgeApp
                 persistence,
                 app: this,
                 modify,
+                roomId,
             });
             if (updatedView) {
                 return context.getInteractionResponder().updateContextualBarViewResponse(updatedView);
@@ -566,7 +567,7 @@ export class TeamsBridgeApp
 
             let currentRoom: IRoom | undefined;
             const roomIdFromActionId =
-                submitActionId && getRoomIdFromSubmitActionId(submitActionId);
+                submitActionId && getRoomIdFromActionId(submitActionId);
             if (roomIdFromActionId) {
                 const room = await read
                     .getRoomReader()
@@ -581,14 +582,13 @@ export class TeamsBridgeApp
             if (view.state) {
                 Object.values(view.state).forEach((item) => {
                     Object.entries(item).forEach(([key, value]) => {
-                        if (key === UIActionId.TeamsUserNameSearch) {
+                        if (isActionId(key, UIActionId.TeamsUserNameSearch)) {
                             teamsUserIdsToSave = value as string[] | undefined;
                         }
                     });
                 });
             }
 
-            // Fallback to object property implementation
             if (teamsUserIdsToSave && currentRoom) {
                 await handleAddTeamsUserContextualBarSubmitAsync({
                     operator: user,
@@ -606,14 +606,6 @@ export class TeamsBridgeApp
         return {
             success: true,
         };
-    }
-
-    public async deleteAppUsers(modify: IModify): Promise<void> {
-        await Promise.all([
-            modify.getDeleter().deleteUsers(this.getID(), UserType.APP),
-            modify.getDeleter().deleteUsers(this.getID(), UserType.BOT), // To remove old bot users
-        ]);
-        return;
     }
 
     protected incomingNotificationJob = async (
@@ -736,9 +728,6 @@ export class TeamsBridgeApp
         await Promise.all([
             configuration.slashCommands.provideSlashCommand(
                 new SetupVerificationSlashCommand(),
-            ),
-            configuration.slashCommands.provideSlashCommand(
-                new DeleteTeamsBotUserSlashCommand(this),
             ),
             configuration.slashCommands.provideSlashCommand(
                 new LoginTeamsSlashCommand(this),

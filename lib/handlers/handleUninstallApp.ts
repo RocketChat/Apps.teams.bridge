@@ -16,10 +16,8 @@ export const handleUninstallApp = async (options: {
     persistence: IPersistence;
     app: TeamsBridgeApp;
 }) => {
-    const { modify, app } = options;
     try {
-        await deleteAllUsersSubscriptions(options),
-        await app.deleteAppUsers(modify);
+        await deleteAllUsersSubscriptions(options);
     } catch (error) {
         console.error(`Error during app uninstallation: ${error.message}`);
     }

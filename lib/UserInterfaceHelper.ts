@@ -165,7 +165,7 @@ export const updateAddTeamsUserContextualBarAsync = async (options: {
         return null;
     }
 
-    if (actionId === UIActionId.TeamsUserSearchInput) {
+    if (isActionId(actionId, UIActionId.TeamsUserSearchInput)) {
         // Real-time search on every character change (ON_CHARACTER_ENTERED dispatch).
         // value = the current full text in the search box.
         const query = value ?? "";
@@ -188,7 +188,7 @@ export const updateAddTeamsUserContextualBarAsync = async (options: {
         );
     }
 
-    if (actionId === UIActionId.TeamsUserLoadMore && value) {
+    if (isActionId(actionId, UIActionId.TeamsUserLoadMore) && value) {
         // Append the next Graph page to the accumulated list.
         const { nextLink: prevNextLink, loadedUsers: prevUsers } =
             decodeButtonState(value);
@@ -228,7 +228,7 @@ export const createContextualBarBlocks = (
     blocks.addInputBlock({
         blockId: SearchBlockId,
         element: blocks.newPlainTextInputElement({
-            actionId: UIActionId.TeamsUserSearchInput,
+            actionId: getTeamSearchInputActionIdForRoomId(roomId),
             placeholder: blocks.newPlainTextObject(
                 UIElementText.TeamsUserSearchPlaceholder,
             ),
@@ -249,7 +249,7 @@ export const createContextualBarBlocks = (
         blocks.addActionsBlock({
             elements: [
                 blocks.newButtonElement({
-                    actionId: UIActionId.TeamsUserLoadMore,
+                    actionId: getTeamLoadMoreActionIdForRoomId(roomId),
                     text: blocks.newPlainTextObject(
                         UIElementText.TeamsUserLoadMoreButton,
                     ),
@@ -267,7 +267,7 @@ export const createContextualBarBlocks = (
     blocks.addInputBlock({
         blockId: UserSelectBlockId,
         element: blocks.newMultiStaticElement({
-            actionId: UIActionId.TeamsUserNameSearch,
+            actionId: getTeamsUserNameSearchActionIdForRoomId(roomId),
             placeholder: blocks.newPlainTextObject(
                 UIElementText.TeamsUserNameSearchPlaceHolder,
             ),
@@ -296,8 +296,23 @@ export const createContextualBarBlocks = (
 export const getSubmitActionIdForRoomId = (roomId: IRoom["id"]) =>
     `${UIActionId.SaveChanges}--${roomId}`;
 
-export const getRoomIdFromSubmitActionId = (actionId: string) =>
+export const getTeamSearchInputActionIdForRoomId = (roomId: IRoom["id"]) =>
+    `${UIActionId.TeamsUserSearchInput}--${roomId}`;
+
+export const getTeamLoadMoreActionIdForRoomId = (roomId: IRoom["id"]) =>
+    `${UIActionId.TeamsUserLoadMore}--${roomId}`;
+
+export const getViewMembersLoadMoreActionIdForRoomId = (roomId: string) =>
+    `${UIActionId.ViewMembersLoadMore}--${roomId}`;
+
+export const getTeamsUserNameSearchActionIdForRoomId = (roomId: IRoom["id"]) =>
+    `${UIActionId.TeamsUserNameSearch}--${roomId}`;
+
+export const getRoomIdFromActionId = (actionId: string) =>
     actionId.trim().split("--").pop();
+
+export const isActionId = (actionIdString: string, hasActionId: string) =>
+    actionIdString.trim().split('--')[0] === hasActionId;
 
 export const updateViewTeamsMembersContextualBarAsync = async (options: {
     value: string;
@@ -306,8 +321,9 @@ export const updateViewTeamsMembersContextualBarAsync = async (options: {
     persistence: IPersistence;
     app: TeamsBridgeApp;
     modify: IModify;
+    roomId: string;
 }): Promise<IUIKitSurfaceViewParam | null> => {
-    const { value, read, http, persistence, app, modify } = options;
+    const { value, read, http, persistence, app, modify, roomId } = options;
 
     const {
         nextLink: pageUrl,
@@ -348,6 +364,7 @@ export const updateViewTeamsMembersContextualBarAsync = async (options: {
         threadId,
         nextLink: result.nextLink,
         read,
+        roomId,
     });
 };
 
@@ -407,6 +424,7 @@ export const openViewTeamsMembersContextualBarAsync = async (
         threadId: roomRecord.teamsThreadId,
         nextLink: result?.nextLink,
         read,
+        roomId: currentRoom.id,
     });
     await modify
         .getUiController()
@@ -427,11 +445,13 @@ const createViewMembersContextualBarBlocks = async ({
     threadId,
     nextLink,
     read,
+    roomId,
 }: {
     modify: IModify;
     members: TeamsChatMember[];
     threadId: string;
     nextLink?: string;
+    roomId: string;
     read: IRead;
 }): Promise<IUIKitSurfaceViewParam> => {
     const blocks = modify.getCreator().getBlockBuilder();
@@ -491,7 +511,7 @@ const createViewMembersContextualBarBlocks = async ({
         blocks.addActionsBlock({
             elements: [
                 blocks.newButtonElement({
-                    actionId: UIActionId.ViewMembersLoadMore,
+                    actionId: getViewMembersLoadMoreActionIdForRoomId(roomId),
                     text: blocks.newPlainTextObject(
                         UIElementText.ViewMembersLoadMoreButton,
                     ),

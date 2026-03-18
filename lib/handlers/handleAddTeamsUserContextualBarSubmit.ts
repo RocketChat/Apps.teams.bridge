@@ -40,7 +40,7 @@ export const handleAddTeamsUserContextualBarSubmitAsync = async (options: {
         return;
     }
 
-    const appUser = (await read.getUserReader().getAppUser(app.getID())) as IUser;
+    const appUser = await read.getUserReader().getAppUser() as IUser;
 
     const accessToken = await getUserAccessTokenAsync({ http, app, persistence, read, rocketChatUserId: appUser.id });
 
