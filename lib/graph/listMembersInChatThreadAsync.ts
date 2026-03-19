@@ -4,7 +4,7 @@ import { getGraphApiChatMemberUrl } from "../Const";
 export const listMembersInChatThreadAsync = async (
     http: IHttp,
     threadId: string,
-    userAccessToken: string): Promise<string[]> => {
+    userAccessToken: string): Promise<{ id: string, userId: string }[]> => {
     const url = getGraphApiChatMemberUrl(threadId);
     const httpRequest: IHttpRequest = {
         headers: {
@@ -22,10 +22,13 @@ export const listMembersInChatThreadAsync = async (
         }
 
         const userList = responseBody.value as any[];
-        const result: string[] = [];
+        const result: { id: string, userId: string }[] = [];
 
         for (const user of userList) {
-            result.push(user.userId);
+            result.push({
+                id: user.id,
+                userId: user.userId,
+            });
         }
 
         return result;

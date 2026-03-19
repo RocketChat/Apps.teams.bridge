@@ -20,8 +20,8 @@ const GraphApiEndpoint = {
     Chat: 'chats',
     ChatThread: (threadId: string) => `chats/${threadId}`,
     ChatMember: (threadId: string) => `chats/${threadId}/members`,
-    RemoveChatMember: (threadId: string, userId: string) =>
-        `chats/${threadId}/members/${userId}`,
+    RemoveChatMember: (threadId: string, membershipId: string) =>
+        `chats/${threadId}/members/${membershipId}`,
     Message: (threadId: string) => `chats/${threadId}/messages`,
     DeleteMessage: (userId: string, threadId: string, messageId: string) =>
         `users/${userId}/chats/${threadId}/messages/${messageId}/softDelete`,
@@ -232,8 +232,8 @@ export const getGraphApiChatMemberUrl = (threadId: string) => {
     return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.ChatMember(threadId)}`;
 };
 
-export const getGraphApiChatMemberRemoveUrl = (threadId: string, userId: string) => {
-    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.RemoveChatMember(threadId, userId)}`;
+export const getGraphApiChatMemberRemoveUrl = (threadId: string, membershipId: string) => {
+    return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.RemoveChatMember(threadId, membershipId)}`;
 };
 
 export const getGraphApiMessageUrl = (

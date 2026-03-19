@@ -4,9 +4,9 @@ import { getGraphApiChatMemberRemoveUrl } from "../Const";
 export const removeMemberFromChatThreadAsync = async (
     http: IHttp,
     threadId: string,
-    teamsUserId: string,
+    membershipId: string,
     userAccessToken: string): Promise<void> => {
-    const url = getGraphApiChatMemberRemoveUrl(threadId, teamsUserId);
+    const url = getGraphApiChatMemberRemoveUrl(threadId, membershipId);
     const httpRequest: IHttpRequest = {
         headers: {
             'Content-Type': 'application/json',

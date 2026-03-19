@@ -8,8 +8,9 @@ import { IRoomUserJoinedContext } from "@rocket.chat/apps-engine/definition/room
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "../AuthHelper";
 import { notifyRocketChatUserInRoomAsync, notifyRoomMembersAppUserNotLoggedInAsync } from "../Notifier";
-import { AppUserLoginNotified, Room } from "../PersistHelper";
+import { AppUserLoginNotified, Room, UserMapping } from "../PersistHelper";
 import { AppUserAddedToRoomMessageText } from "../Const";
+import { addMemberToChatThreadAsync } from "../MicrosoftGraphApi";
 
 export const handlePostRoomUserJoinedAsync = async (options: {
     context: IRoomUserJoinedContext;
@@ -23,7 +24,34 @@ export const handlePostRoomUserJoinedAsync = async (options: {
     const { joiningUser, room, inviter } = context;
 
     const appUser = await read.getUserReader().getAppUser(app.getID());
-    if (!appUser || joiningUser.id !== appUser.id) {
+    if (!appUser) {
+        return;
+    }
+
+    if (joiningUser.id !== appUser.id) {
+        const roomRecord = await Room.findByRCRoomId(read, room.id);
+        if (!roomRecord || !roomRecord.isBridged || !roomRecord.teamsThreadId) {
+            return;
+        }
+
+        const embeddedLoginUser = await UserMapping.findByRCUserId(read, joiningUser.id);
+        if (!embeddedLoginUser?.teamsUserId) {
+            return;
+        }
+
+        const appUserToken = await getUserAccessTokenAsync({ http, app, persistence, read, rocketChatUserId: appUser.id });
+        if (!appUserToken) {
+            app.getLogger().warn(`[TeamsBridge] No app user access token available to add Teams member ${embeddedLoginUser.teamsUserId} to thread ${roomRecord.teamsThreadId}.`);
+            return;
+        }
+
+        await addMemberToChatThreadAsync(
+            http,
+            roomRecord.teamsThreadId,
+            embeddedLoginUser.teamsUserId,
+            appUserToken
+        );
+
         return;
     }
 
@@ -52,7 +80,7 @@ export const handlePostRoomUserJoinedAsync = async (options: {
             app,
             roomId: room.id,
         });
-    } else if(inviter){
+    } else if (inviter) {
         await notifyRocketChatUserInRoomAsync(
             AppUserAddedToRoomMessageText,
             appUser,

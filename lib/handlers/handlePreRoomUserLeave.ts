@@ -67,16 +67,17 @@ export const handlePreRoomUserLeaveAsync = async (options: {
         return;
     }
 
-    const threadMemberTeamsUserIds = await listMembersInChatThreadAsync(
+    const threadMembers = await listMembersInChatThreadAsync(
         http,
         roomRecord.teamsThreadId,
         accessToken
     );
-    if (threadMemberTeamsUserIds.find((id) => id === teamsUserId)) {
+    const leavingMember = threadMembers.find((member) => member.userId === teamsUserId);
+    if (leavingMember) {
         await removeMemberFromChatThreadAsync(
             http,
             roomRecord.teamsThreadId,
-            teamsUserId,
+            leavingMember.id,
             accessToken
         );
     }
