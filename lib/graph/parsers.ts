@@ -11,6 +11,9 @@ export const parseMessageType = (messageType: string, eventDetail?: any): Messag
             if (eventDetail['@odata.type'] === '#microsoft.graph.membersAddedEventMessageDetail') {
                 return MessageType.SystemAddMembers;
             }
+            if (eventDetail['@odata.type'] === '#microsoft.graph.membersDeletedEventMessageDetail') {
+                return MessageType.SystemRemoveMembers;
+            }
         }
     }
     return undefined;

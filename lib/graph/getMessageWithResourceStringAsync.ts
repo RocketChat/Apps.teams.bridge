@@ -43,7 +43,7 @@ export const getMessageWithResourceStringAsync = async (
         const messageType = parseMessageType(responseBody.messageType, responseBody.eventDetail);
 
         let memberIds: string[] | undefined = undefined;
-        if (messageType === MessageType.SystemAddMembers) {
+        if (messageType === MessageType.SystemAddMembers || messageType === MessageType.SystemRemoveMembers) {
             memberIds = [];
             const jsonMembers = responseBody.eventDetail.members as any[];
             for (const jsonMember of jsonMembers) {

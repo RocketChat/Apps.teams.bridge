@@ -41,7 +41,8 @@ export interface SubscriptionResponse {
 
 export enum MessageType {
     Message = 'message',
-    SystemAddMembers = 'addMembers'
+    SystemAddMembers = 'addMembers',
+    SystemRemoveMembers = 'removeMembers',
 };
 
 export enum MessageContentType {

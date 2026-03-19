@@ -9,6 +9,7 @@ import { InBoundNotification } from "./handleInboundNotificationAsync";
 import { IHttp, IModify, IPersistence, IRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { randomBytes } from "crypto";
+import { PreventRegistry } from "../PreventRegistry";
 
 export const handleInboundMessageCreatedAsync = async (
     userAccessToken: string,
@@ -295,6 +296,12 @@ export const handleInboundMessageCreatedAsync = async (
             }
 
             for (const memberToAddTeamsId of memberToAddTeamsIds) {
+                // Echo prevention: skip if this add was initiated from RC side
+                const captured = await PreventRegistry.capture(persis, `member-add:${getMessageResponse.threadId}:${memberToAddTeamsId}`);
+                if (captured) {
+                    continue;
+                }
+
                 let userToAdd: IUser | undefined = undefined;
 
                 // First, try find whether there's a real Rocket.Chat user for this Teams user to add
@@ -329,6 +336,11 @@ export const handleInboundMessageCreatedAsync = async (
                 roomBuilder.addMemberToBeAddedByUsername(userToAdd.username);
                 await updater.finish(roomBuilder);
             }
+        } else if (
+            getMessageResponse.messageType === MessageType.SystemRemoveMembers
+        ) {
+            // APP Engine does not support removing users from rooms?
+            return;
         } else {
             console.log("Unsupported message type.");
         }

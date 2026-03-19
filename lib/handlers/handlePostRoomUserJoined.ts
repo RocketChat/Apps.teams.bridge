@@ -11,6 +11,7 @@ import { notifyRocketChatUserInRoomAsync, notifyRoomMembersAppUserNotLoggedInAsy
 import { AppUserLoginNotified, Room, UserMapping } from "../PersistHelper";
 import { AppUserAddedToRoomMessageText } from "../Const";
 import { addMemberToChatThreadAsync } from "../MicrosoftGraphApi";
+import { PreventRegistry } from "../PreventRegistry";
 
 export const handlePostRoomUserJoinedAsync = async (options: {
     context: IRoomUserJoinedContext;
@@ -44,6 +45,8 @@ export const handlePostRoomUserJoinedAsync = async (options: {
             app.getLogger().warn(`[TeamsBridge] No app user access token available to add Teams member ${embeddedLoginUser.teamsUserId} to thread ${roomRecord.teamsThreadId}.`);
             return;
         }
+
+        await PreventRegistry.set(persistence, `member-add:${roomRecord.teamsThreadId}:${embeddedLoginUser.teamsUserId}`);
 
         await addMemberToChatThreadAsync(
             http,

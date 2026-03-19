@@ -8,6 +8,7 @@ import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { getUserAccessTokenAsync } from "../AuthHelper";
 import { listMembersInChatThreadAsync, removeMemberFromChatThreadAsync } from "../MicrosoftGraphApi";
 import { Room, UserMapping } from "../PersistHelper";
+import { PreventRegistry } from "../PreventRegistry";
 
 export const handlePreRoomUserLeaveAsync = async (options: {
     context: IRoomUserLeaveContext;
@@ -74,6 +75,8 @@ export const handlePreRoomUserLeaveAsync = async (options: {
     );
     const leavingMember = threadMembers.find((member) => member.userId === teamsUserId);
     if (leavingMember) {
+        await PreventRegistry.set(persistence, `member-remove:${roomRecord.teamsThreadId}:${teamsUserId}`);
+
         await removeMemberFromChatThreadAsync(
             http,
             roomRecord.teamsThreadId,
