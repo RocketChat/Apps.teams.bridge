@@ -64,7 +64,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
         const { aadTenantId, aadClientId, aadClientSecret, authEndpointUrl } = env;
 
         const tokenResult = await this.exchangeAndValidateTokens(
-            http, read, accessCode, authEndpointUrl, aadTenantId, aadClientId, aadClientSecret, type, rocketChatUserId
+            http, read, persis, accessCode, authEndpointUrl, aadTenantId, aadClientId, aadClientSecret, type, rocketChatUserId
         );
         if (!tokenResult) {
             return this.errorResponse();
@@ -141,7 +141,7 @@ export class AuthenticationEndpoint extends ApiEndpoint {
     }
 
     private async exchangeAndValidateTokens(
-        http: IHttp, read: IRead, accessCode: string, authEndpointUrl: string,
+        http: IHttp, read: IRead, persis: IPersistence, accessCode: string, authEndpointUrl: string,
         aadTenantId: string, aadClientId: string, aadClientSecret: string, type: 'bot' | 'normal', rocketChatUserId: string
     ) {
         try {
@@ -165,7 +165,21 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 if (appUser && existingMapping.rocketChatUserId === appUser.id) {
                     return { conflictError: "This Teams account is used by the app user and cannot be linked to a personal Rocket.Chat account." };
                 }
-                return { conflictError: "This Teams account is already linked to another Rocket.Chat user. Please log out from Teams on the other account first." };
+
+                const existingUser = await read.getUserReader().getById(existingMapping.rocketChatUserId);
+                if (!existingUser || !existingUser.isEnabled) {
+                    // If the user linked is disabled or deleted, clean up the mapping
+                    await Promise.all([
+                        UserRegistration.delete(persis, existingMapping.rocketChatUserId),
+                        UserMapping.delete(read, persis, existingMapping.rocketChatUserId),
+                        LoginMessage.delete(persis, existingMapping.rocketChatUserId),
+                    ]);
+                    this.app.getLogger().log(
+                        `[Teams Bridge] Cleaned up orphaned Teams link mapping for deleted/inactive user ${existingMapping.rocketChatUserId} during new login.`
+                    );
+                } else {
+                    return { conflictError: `This Teams account is already linked to another Rocket.Chat user (@${existingUser.username}). Please log out from Teams on the other account first.` };
+                }
             }
 
             return { userAccessToken, refreshToken, expiresIn, extExpiresIn, teamsUserId, appUser };

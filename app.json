@@ -26,7 +26,8 @@
         "IPreFileUpload",
         "IPreMessageSentModify",
         "IPreRoomUserLeave",
-        "IPostRoomUserJoined"
+        "IPostRoomUserJoined",
+        "IPostUserDeleted"
     ],
     "permissions": [
         {

@@ -44,4 +44,15 @@ export const LoginMessage = {
         }
         return !!result[0]?.isLoginMessageSent;
     },
+
+    async delete(
+        persistence: IPersistence,
+        rocketChatUserId: string,
+    ): Promise<void> {
+        const associations: Array<RocketChatAssociationRecord> = [
+            new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
+            new RocketChatAssociationRecord(RocketChatAssociationModel.USER, rocketChatUserId),
+        ];
+        await persistence.removeByAssociations(associations);
+    },
 };

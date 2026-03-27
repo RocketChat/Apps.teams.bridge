@@ -24,7 +24,7 @@ export const handlePostRoomUserJoinedAsync = async (options: {
     const { context, read, persistence, modify, app, http } = options;
     const { joiningUser, room, inviter } = context;
 
-    const appUser = await read.getUserReader().getAppUser(app.getID());
+    const appUser = await read.getUserReader().getAppUser();
     if (!appUser) {
         return;
     }

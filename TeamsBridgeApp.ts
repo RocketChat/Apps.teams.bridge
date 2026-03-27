@@ -38,6 +38,10 @@ import {
     IRoomUserLeaveContext,
 } from "@rocket.chat/apps-engine/definition/rooms";
 import {
+    IPostUserDeleted,
+    IUserContext,
+} from "@rocket.chat/apps-engine/definition/users";
+import {
     IJobContext,
     StartupType,
 } from "@rocket.chat/apps-engine/definition/scheduler";
@@ -84,6 +88,7 @@ import {
     handlePreRoomUserLeaveAsync,
     handleUninstallApp,
     handleUserRegistrationAutoRenewAsync,
+    handlePostUserDeletedAsync,
 } from "./lib/EventHandler";
 import { getRocketChatAppEndpointUrl } from "./lib/UrlHelper";
 import {
@@ -124,7 +129,8 @@ export class TeamsBridgeApp
         IPreFileUpload,
         IPreMessageSentModify,
         IPreRoomUserLeave,
-        IPostRoomUserJoined
+        IPostRoomUserJoined,
+        IPostUserDeleted
 {
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
         super(info, logger, accessors);
@@ -425,6 +431,31 @@ export class TeamsBridgeApp
         modify: IModify,
     ): Promise<void> {
         await handlePostRoomUserJoinedAsync({
+            app: this,
+            context,
+            read,
+            persistence,
+            http,
+            modify,
+        });
+    }
+
+    public async executePostUserCreated(
+        context: IUserContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify,
+    ): Promise<void> {}
+
+    public async executePostUserDeleted(
+        context: IUserContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify,
+    ): Promise<void> {
+        await handlePostUserDeletedAsync({
             app: this,
             context,
             read,
