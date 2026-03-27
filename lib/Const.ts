@@ -4,7 +4,7 @@ export const AuthenticationEndpointPath: string = 'auth';
 export const SubscriberEndpointPath: string = 'subscriber';
 
 const LoginBaseUrl: string = 'https://login.microsoftonline.com';
-const GraphApiBaseUrl: string = 'https://graph.microsoft.com';
+export const GraphApiBaseUrl: string = 'https://graph.microsoft.com';
 
 export const SubscriptionMaxExpireTimeInSecond: number = 3600;
 

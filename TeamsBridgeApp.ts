@@ -648,7 +648,7 @@ export class TeamsBridgeApp
         persistence: IPersistence,
     ) => {
         try {
-            console.log(
+            this.getLogger().info(
                 `[Teams Bridge] Start renew registrations! (from: ${jobContext.from})`,
             );
             let jobState = await SubscriptionRenewalJob.find({
@@ -665,7 +665,7 @@ export class TeamsBridgeApp
                     5 * 60 * 1000
             ) {
                 // Job ran less than 5 minutes ago
-                console.log(
+                this.getLogger().info(
                     `[Teams Bridge] ${RegistrationAutoRenewSchedulerId} Job already ran less than 5 minutes ago. Skipping this run.`,
                 );
                 return;
@@ -689,7 +689,7 @@ export class TeamsBridgeApp
                 persistence,
                 app: this,
             });
-            console.log(
+            this.getLogger().info(
                 "[Teams Bridge] Finish renew registrations!",
             );
         } catch (error) {

@@ -55,13 +55,39 @@ export class AuthenticationEndpoint extends ApiEndpoint {
             return this.errorResponse();
         }
 
-        let rocketChatUserId: string;
-        let type: 'bot' | 'normal';
-        let aadTenantId: string;
-        let aadClientId: string;
-        let aadClientSecret: string;
-        let accessCode: string;
-        let authEndpointUrl: string;
+        const stateResult = await this.validateStateAndNonce(request, read, persis);
+        if (!stateResult) return this.errorResponse();
+        const { rocketChatUserId, type, accessCode } = stateResult;
+
+        const env = await this.fetchAppEnvironment(read);
+        if (!env) return this.errorResponse();
+        const { aadTenantId, aadClientId, aadClientSecret, authEndpointUrl } = env;
+
+        const tokenResult = await this.exchangeAndValidateTokens(
+            http, read, accessCode, authEndpointUrl, aadTenantId, aadClientId, aadClientSecret, type, rocketChatUserId
+        );
+        if (!tokenResult) {
+            return this.errorResponse();
+        }
+        if ('conflictError' in tokenResult) {
+            return this.conflictResponse(tokenResult.conflictError as string);
+        }
+
+        const persistResult = await this.persistAndSubscribe(
+            read, persis, http, rocketChatUserId, type, tokenResult
+        );
+        if (!persistResult) {
+            return this.errorResponse();
+        }
+
+        return this.success(this.embeddedLoginSuccessMessage);
+    }
+
+    private async validateStateAndNonce(
+        request: IApiRequest,
+        read: IRead,
+        persis: IPersistence
+    ): Promise<{ rocketChatUserId: string; type: 'bot' | 'normal'; accessCode: string } | null> {
         try {
             const parsed = JSON.parse(
                 Buffer.from(request.query.state, "base64").toString("utf-8"),
@@ -71,100 +97,95 @@ export class AuthenticationEndpoint extends ApiEndpoint {
                 (parsed.type !== 'bot' && parsed.type !== 'normal')
             ) {
                 this.app.getLogger().warn('Authentication rejected — malformed state parameter.');
-                return this.errorResponse();
+                return null;
             }
-            rocketChatUserId = parsed.rc_uid;
-            type = parsed.type as 'bot' | 'normal';
+
+            const rocketChatUserId = parsed.rc_uid as string;
+            const type = parsed.type as 'bot' | 'normal';
 
             if (typeof parsed.nonce !== 'string' || parsed.nonce.length === 0) {
                 this.app.getLogger().warn('Authentication rejected — no nonce in state.');
-                return this.errorResponse();
+                return null;
             }
             const storedNonce = await OAuthNonce.findAndDelete(read, persis, rocketChatUserId);
             if (storedNonce === null || storedNonce !== parsed.nonce) {
                 this.app.getLogger().warn('Authentication rejected — nonce mismatch.');
-                return this.errorResponse();
+                return null;
             }
 
-            aadTenantId = (
-                await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)
-            ).value;
-            aadClientId = (
-                await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)
-            ).value;
-            aadClientSecret = (
-                await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientSecret)
-            ).value;
-            accessCode = request.query.code;
-            authEndpointUrl = await getRocketChatAppEndpointUrl(
-                this.app.getAccessors(),
-                AuthenticationEndpointPath
-            );
+            return { rocketChatUserId, type, accessCode: request.query.code as string };
         } catch (error) {
             this.app.getLogger().error(
-                `Authentication — phase A (state/settings) failed: ${(error as Error)?.message ?? String(error)}`
+                `Authentication — state validation failed: ${(error as Error)?.message ?? String(error)}`
             );
-            return this.errorResponse();
+            return null;
         }
+    }
 
-        let userAccessToken: string;
-        let refreshToken: string;
-        let expiresIn: number;
-        let extExpiresIn: number;
-        let teamsUserId: string;
-        let appUser: Awaited<ReturnType<typeof read.getUserReader.prototype.getAppUser>>;
+    private async fetchAppEnvironment(read: IRead): Promise<{ aadTenantId: string; aadClientId: string; aadClientSecret: string; authEndpointUrl: string } | null> {
+        try {
+            const [aadTenantId, aadClientId, aadClientSecret, authEndpointUrl] = await Promise.all([
+                read.getEnvironmentReader().getSettings().getValueById(AppSetting.AadTenantId),
+                read.getEnvironmentReader().getSettings().getValueById(AppSetting.AadClientId),
+                read.getEnvironmentReader().getSettings().getValueById(AppSetting.AadClientSecret),
+                getRocketChatAppEndpointUrl(this.app.getAccessors(), AuthenticationEndpointPath)
+            ]);
+
+            return { aadTenantId, aadClientId, aadClientSecret, authEndpointUrl };
+        } catch (error) {
+            this.app.getLogger().error(
+                `Authentication — settings fetch failed: ${(error as Error)?.message ?? String(error)}`
+            );
+            return null;
+        }
+    }
+
+    private async exchangeAndValidateTokens(
+        http: IHttp, read: IRead, accessCode: string, authEndpointUrl: string,
+        aadTenantId: string, aadClientId: string, aadClientSecret: string, type: 'bot' | 'normal', rocketChatUserId: string
+    ) {
         try {
             const response = await getUserAccessTokenAsync(
-                http,
-                accessCode,
-                authEndpointUrl,
-                aadTenantId,
-                aadClientId,
-                aadClientSecret,
-                type,
+                http, accessCode, authEndpointUrl, aadTenantId, aadClientId, aadClientSecret, type,
             );
 
             if (!response.refreshToken) {
                 throw new Error('Token exchange did not return a refresh token.');
             }
 
-            userAccessToken = response.accessToken;
-            refreshToken = response.refreshToken;
-            expiresIn = response.expiresIn;
-            extExpiresIn = response.extExpiresIn;
+            const { accessToken: userAccessToken, refreshToken, expiresIn, extExpiresIn } = response;
 
             const teamsUserProfile = await getUserProfileAsync(http, userAccessToken);
-            teamsUserId = teamsUserProfile.id;
+            const teamsUserId = teamsUserProfile.id;
 
-            appUser = await read.getUserReader().getAppUser(this.app.getID());
+            const appUser = await read.getUserReader().getAppUser(this.app.getID());
 
             const existingMapping = await UserMapping.findByTeamsUserId(read, teamsUserId);
             if (existingMapping !== null && existingMapping.rocketChatUserId !== rocketChatUserId) {
                 if (appUser && existingMapping.rocketChatUserId === appUser.id) {
-                    return this.conflictResponse(
-                        "This Teams account is used by the app user and cannot be linked to a personal Rocket.Chat account.",
-                    );
+                    return { conflictError: "This Teams account is used by the app user and cannot be linked to a personal Rocket.Chat account." };
                 }
-                return this.conflictResponse(
-                    "This Teams account is already linked to another Rocket.Chat user. Please log out from Teams on the other account first.",
-                );
+                return { conflictError: "This Teams account is already linked to another Rocket.Chat user. Please log out from Teams on the other account first." };
             }
+
+            return { userAccessToken, refreshToken, expiresIn, extExpiresIn, teamsUserId, appUser };
         } catch (error) {
             this.app.getLogger().error(
-                `Authentication — phase B (token exchange/profile) failed: ${(error as Error)?.message ?? String(error)}`
+                `Authentication — token exchange/profile failed: ${(error as Error)?.message ?? String(error)}`
             );
-            return this.errorResponse();
+            return null;
         }
+    }
 
+    private async persistAndSubscribe(
+        read: IRead, persis: IPersistence, http: IHttp, rocketChatUserId: string, type: 'bot' | 'normal', tokenData: any
+    ) {
         try {
+            const { userAccessToken, refreshToken, expiresIn, extExpiresIn, teamsUserId, appUser } = tokenData;
+
             await Promise.all([
                 UserRegistration.persist(
-                    persis,
-                    rocketChatUserId,
-                    userAccessToken,
-                    refreshToken,
-                    expiresIn,
-                    extExpiresIn
+                    persis, rocketChatUserId, userAccessToken, refreshToken, expiresIn, extExpiresIn
                 ),
                 UserMapping.persist(persis, rocketChatUserId, teamsUserId),
                 LoginMessage.save({
@@ -187,24 +208,18 @@ export class AuthenticationEndpoint extends ApiEndpoint {
 
             if (type === 'bot') {
                 await subscribeToAllMessagesForOneUserAsync({
-                    http,
-                    read,
-                    persis,
-                    rocketChatUserId,
-                    subscriberEndpointUrl,
-                    teamsUserId,
-                    userAccessToken,
-                    renewIfExists: true,
-                    forceRenew: true,
+                    http, read, persis, rocketChatUserId,
+                    subscriberEndpointUrl, teamsUserId, userAccessToken,
+                    renewIfExists: true, forceRenew: true,
                 });
             }
 
-            return this.success(this.embeddedLoginSuccessMessage);
+            return true;
         } catch (error) {
             this.app.getLogger().error(
-                `Authentication — phase C (persistence/subscription) failed: ${(error as Error)?.message ?? String(error)}`
+                `Authentication — persistence/subscription failed: ${(error as Error)?.message ?? String(error)}`
             );
-            return this.errorResponse();
+            return false;
         }
     }
 

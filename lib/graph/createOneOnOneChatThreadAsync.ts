@@ -1,5 +1,5 @@
 import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { getGraphApiChatUrl } from "../Const";
+import { getGraphApiChatUrl, GraphApiBaseUrl } from "../Const";
 import { CreateThreadResponse } from './types';
 
 export const createOneOnOneChatThreadAsync = async (
@@ -14,7 +14,7 @@ export const createOneOnOneChatThreadAsync = async (
         members: [senderUserTeamsId, receiverUserTeamsId].map(userId => ({
             '@odata.type': '#microsoft.graph.aadUserConversationMember',
             roles: ['owner'],
-            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${userId}')`,
+            'user@odata.bind': `${GraphApiBaseUrl}/v1.0/users('${userId}')`,
         })),
     };
 

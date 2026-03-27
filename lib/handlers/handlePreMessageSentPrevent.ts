@@ -12,14 +12,19 @@ import { notifyRocketChatUserInRoomAsync } from "../Notifier";
 import { MessageMapping, Room } from "../PersistHelper";
 import { PreventRegistry } from "../PreventRegistry";
 
-export const handlePreMessageSentPreventAsync = async (options: {
+export const handlePreMessageSentPreventAsync = async ({
+    message,
+    read,
+    persistence,
+    app,
+    http,
+}: {
     message: IMessage;
     read: IRead;
     persistence: IPersistence;
     app: TeamsBridgeApp;
     http: IHttp,
 }): Promise<boolean> => {
-    const { message, read, app } = options;
     try {
         const appUser = await read.getUserReader().getAppUser(app.getID()) as IUser;
         const notifier = read.getNotifier();
