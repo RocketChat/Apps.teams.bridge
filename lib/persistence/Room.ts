@@ -17,15 +17,17 @@ export interface RoomModel {
 
 export const Room = {
     async persist(
+        read: IRead,
         persis: IPersistence,
         rocketChatRoomId: string,
         teamsThreadId?: string,
     ): Promise<void> {
+        const existing = await Room.findByRCRoomId(read, rocketChatRoomId);
         const byRoomId: Array<RocketChatAssociationRecord> = [
             new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
             new RocketChatAssociationRecord(RocketChatAssociationModel.MESSAGE, rocketChatRoomId),
         ];
-        const data: RoomModel = { rocketChatRoomId, teamsThreadId };
+        const data: RoomModel = { ...existing, rocketChatRoomId, teamsThreadId };
         await persis.updateByAssociations(byRoomId, data, true);
 
         if (teamsThreadId) {

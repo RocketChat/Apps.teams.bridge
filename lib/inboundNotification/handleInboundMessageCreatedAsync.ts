@@ -164,7 +164,7 @@ export const handleInboundMessageCreatedAsync = async (
             console.log(`Room ${roomId} created for incoming message!`);
 
             // Persist room record
-            await Room.persist(persis, roomId, threadInfo.threadId);
+            await Room.persist(read, persis, roomId, threadInfo.threadId);
 
             roomRecord = await Room.findByTeamsThreadId(
                 read,

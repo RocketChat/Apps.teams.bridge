@@ -19,8 +19,6 @@ export const getSenderUser = async ({
         }
     }
 
-    // Under single-bot arch there are no dummy users. Fall back to the app bot
-    // so the message is still relayed to RC under the bridge bot identity.
     console.log(
         `No RC user found for Teams sender ${fromUserTeamsId}, falling back to app bot.`
     );

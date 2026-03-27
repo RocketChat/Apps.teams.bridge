@@ -123,6 +123,7 @@ export const handlePostMessageSentAsync = async (options: {
         roomRecord.teamsThreadId = response.threadId;
 
         await Room.persist(
+            read,
             persistence,
             roomRecord.rocketChatRoomId,
             roomRecord.teamsThreadId
