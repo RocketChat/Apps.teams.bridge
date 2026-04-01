@@ -1,16 +1,7 @@
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import {
-    getMessageWithResourceStringAsync,
-    getTeamsUserProfileByIdAsync,
-} from "../graph";
-import {
-    formatTeamsSenderInfo,
-    mapTeamsMessageToRocketChatMessage,
-} from "../MessageHelper";
-import {
-    MessageMapping,
-    UserMapping,
-} from "../PersistHelper";
+import { getMessageWithResourceStringAsync } from "../graph";
+import { mapTeamsMessageToRocketChatMessage } from "../MessageHelper";
+import { MessageMapping } from "../PersistHelper";
 import { InBoundNotification } from "./handleInboundNotificationAsync";
 import {
     IHttp,
@@ -20,7 +11,6 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { TeamsBridgeApp } from "../../TeamsBridgeApp";
 import { PreventRegistry } from "../PreventRegistry";
-import { getUserAccessTokenAsync } from "../AuthHelper";
 
 export const handleInboundMessageUpdatedAsync = async (
     userAccessToken: string,
@@ -31,9 +21,6 @@ export const handleInboundMessageUpdatedAsync = async (
     persis: IPersistence,
     app: TeamsBridgeApp,
 ): Promise<void> => {
-    const receiverRocketChatUserId =
-        inBoundNotification.receiverRocketChatUserId;
-
     const resourceString = inBoundNotification.resourceString;
     const getMessageResponse = await getMessageWithResourceStringAsync(
         http,
@@ -58,7 +45,7 @@ export const handleInboundMessageUpdatedAsync = async (
     ) {
         return;
     }
-    const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
+    const fromUserTeamsId = getMessageResponse.fromTeamsUser.id;
     if (!fromUserTeamsId) {
         // If there's not a sender, stop processing
         return;
@@ -70,37 +57,6 @@ export const handleInboundMessageUpdatedAsync = async (
     if (!message) {
         // If there's not an existing rocket chat message, stop processing
         return;
-    }
-    const appUser = await read.getUserReader().getAppUser();
-    let botFallback = false;
-    let displayName = `Teams User (${fromUserTeamsId})`;
-
-    if (appUser) {
-        const appUsermapping = await UserMapping.findByRCUserId(
-            read,
-            appUser.id,
-        );
-        if (
-            appUsermapping?.teamsUserId !== fromUserTeamsId &&
-            message.sender.id === appUser.id
-        ) {
-            botFallback = true;
-            const accessToken = await getUserAccessTokenAsync({
-                read,
-                persistence: persis,
-                rocketChatUserId: appUser.id,
-                app,
-                http,
-            });
-            if (accessToken) {
-                const senderProfile = await getTeamsUserProfileByIdAsync(
-                    http,
-                    accessToken,
-                    fromUserTeamsId,
-                );
-                displayName = senderProfile?.displayName ?? displayName;
-            }
-        }
     }
 
     const sender: IUser = message.sender;
@@ -124,11 +80,7 @@ export const handleInboundMessageUpdatedAsync = async (
     );
 
     messageBuilder = messageBuilder
-        .setText(
-            botFallback
-                ? formatTeamsSenderInfo(updatedMessage.text, displayName)
-                : updatedMessage.text,
-        )
+        .setText(updatedMessage.text)
         .setEditor(sender);
     await PreventRegistry.set(
         persis,

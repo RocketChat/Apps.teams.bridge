@@ -78,7 +78,10 @@ export interface GetMessageResponse {
     threadId: string;
     messageId: string;
     messageType: MessageType | undefined;
-    fromUserTeamsId: string;
+    fromTeamsUser: {
+        id: string;
+        displayName: string;
+    };
     messageContentType: MessageContentType | undefined;
     messageContent: string;
     attachments?: Attachment[];

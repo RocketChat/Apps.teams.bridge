@@ -53,7 +53,12 @@ export const sendRocketChatMessageInRoomAsync = async (
     messageText: string,
     sender: IUser,
     room: IRoom,
-    modify: IModify) : Promise<string> => {
+    modify: IModify,
+    read: IRead,
+    options?: {
+        alias?: string;
+    }
+) : Promise<string> => {
     const creator: IModifyCreator = modify.getCreator();
 
     const message: IMessage = {
@@ -61,10 +66,16 @@ export const sendRocketChatMessageInRoomAsync = async (
         sender,
         room,
         attachments: [await buildExtraInfoAttachment({ source: 'ms-teams' })],
+    };
+
+    if (options?.alias) {
+        message.alias = options.alias;
+        const siteUrl = await read.getEnvironmentReader().getServerSettings().getValueById('Site_Url');
+        message.avatarUrl = `${siteUrl || ''}/avatar/${options.alias}`;
     }
 
     const messageBuilder: IMessageBuilder = creator.startMessage(message as IMessage);
-    return creator.finish(messageBuilder);
+    return await creator.finish(messageBuilder);
 };
 
 export const mapTeamsMessageToRocketChatMessage = async ({

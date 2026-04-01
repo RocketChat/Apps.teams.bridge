@@ -55,7 +55,10 @@ export const getMessageWithResourceStringAsync = async (
             threadId: responseBody.chatId,
             messageId: responseBody.id,
             messageType: messageType,
-            fromUserTeamsId: responseBody.from?.user?.id,
+            fromTeamsUser: {
+                id: responseBody.from?.user?.id,
+                displayName: responseBody.from?.user?.displayName,
+            },
             messageContentType: parseMessageContentType(responseBody.body?.contentType),
             messageContent: responseBody.body?.content,
             attachments: attachments,

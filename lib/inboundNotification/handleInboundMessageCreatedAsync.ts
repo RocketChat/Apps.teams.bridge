@@ -42,7 +42,7 @@ export const handleInboundMessageCreatedAsync = async (
         }
 
         // --- Adaptive delay race mitigation ---
-        const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
+        const fromUserTeamsId = getMessageResponse.fromTeamsUser.id;
         if (fromUserTeamsId) {
             const fromUserRocketChatUser = await UserMapping.findByTeamsUserId(
                 read,
@@ -191,7 +191,7 @@ export const handleInboundMessageCreatedAsync = async (
         }
 
         if (getMessageResponse.messageType === MessageType.Message) {
-            const fromUserTeamsId = getMessageResponse.fromUserTeamsId;
+            const fromUserTeamsId = getMessageResponse.fromTeamsUser.id;
             if (!fromUserTeamsId) {
                 // If there's no sender, stop processing
                 console.error("No sender for message");
@@ -232,39 +232,34 @@ export const handleInboundMessageCreatedAsync = async (
                 persistence: persis,
             });
 
-            if (usesBotFallback && message.text !== "") {
-                const senderProfile = await getTeamsUserProfileByIdAsync(
-                    http,
-                    userAccessToken,
-                    fromUserTeamsId,
-                );
-                const displayName =
-                    senderProfile?.displayName ?? fromUserTeamsId;
-                message.text = formatTeamsSenderInfo(message.text, displayName);
-            }
+            const persistUploadPromises = message.uploadIds.map((uploadIdMap) =>
+                UploadMapping.persist({
+                    persistence: persis,
+                    rocketchatUploadId: uploadIdMap.rocketChat,
+                    teamsAttachmentId: uploadIdMap.teams,
+                    teamsMessageId: getMessageResponse.messageId,
+                    teamsThreadId: getMessageResponse.threadId,
+                    relayedByAppUser: usesBotFallback,
+                })
+            );
 
             if (message.text === "") {
                 // File message, no text content
-                await Promise.all(
-                    message.uploadIds.map((uploadIdMap) => {
-                        return UploadMapping.persist({
-                            persistence: persis,
-                            rocketchatUploadId: uploadIdMap.rocketChat,
-                            teamsAttachmentId: uploadIdMap.teams,
-                            teamsMessageId: getMessageResponse.messageId,
-                            teamsThreadId: getMessageResponse.threadId,
-                            relayedByAppUser: usesBotFallback,
-                        });
-                    }),
-                );
+                await Promise.all(persistUploadPromises);
                 return;
             }
+
+            const messageOptions = usesBotFallback
+                ? { alias: getMessageResponse.fromTeamsUser.displayName ?? getMessageResponse.fromTeamsUser.id }
+                : undefined;
 
             const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(
                 message.text,
                 senderUser,
                 room,
                 modify,
+                read,
+                messageOptions
             );
 
             await Promise.all([
@@ -275,16 +270,7 @@ export const handleInboundMessageCreatedAsync = async (
                     teamsThreadId: getMessageResponse.threadId,
                     relayedByAppUser: usesBotFallback,
                 }),
-                ...message.uploadIds.map((uploadIdMap) => {
-                    return UploadMapping.persist({
-                        persistence: persis,
-                        rocketchatUploadId: uploadIdMap.rocketChat,
-                        teamsAttachmentId: uploadIdMap.teams,
-                        teamsMessageId: getMessageResponse.messageId,
-                        teamsThreadId: getMessageResponse.threadId,
-                        relayedByAppUser: usesBotFallback,
-                    });
-                }),
+                ...persistUploadPromises,
             ]);
         } else if (
             getMessageResponse.messageType === MessageType.SystemAddMembers
