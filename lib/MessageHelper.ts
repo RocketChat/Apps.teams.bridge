@@ -26,7 +26,7 @@ export const sendRocketChatOneOnOneMessageAsync = async (
     sender: IUser,
     receiver: IUser,
     read: IRead,
-    modify: IModify) : Promise<string> => {
+    modify: IModify): Promise<string> => {
     const creator: IModifyCreator = modify.getCreator();
     const roomBuilder: IRoomBuilder = creator
         .startRoom()
@@ -49,6 +49,12 @@ export const sendRocketChatOneOnOneMessageAsync = async (
     return await creator.finish(messageBuilder);
 };
 
+
+export const getAvatarUrlForUsername = async (username: string, read: IRead): Promise<string> => {
+    const siteUrl = await read.getEnvironmentReader().getServerSettings().getValueById('Site_Url');
+    return `${siteUrl || ''}/avatar/${username}`;
+}
+
 export const sendRocketChatMessageInRoomAsync = async (
     messageText: string,
     sender: IUser,
@@ -58,64 +64,52 @@ export const sendRocketChatMessageInRoomAsync = async (
     options?: {
         alias?: string;
     }
-) : Promise<string> => {
+): Promise<string> => {
     const creator: IModifyCreator = modify.getCreator();
 
     const message: IMessage = {
         text: messageText,
         sender,
         room,
-        attachments: [await buildExtraInfoAttachment({ source: 'ms-teams' })],
+        attachments: [await buildExtraInfoAttachment({ source: 'ms-teams', ...(options?.alias && { alias: options.alias }) })],
     };
-
-    if (options?.alias) {
-        message.alias = options.alias;
-        const siteUrl = await read.getEnvironmentReader().getServerSettings().getValueById('Site_Url');
-        message.avatarUrl = `${siteUrl || ''}/avatar/${options.alias}`;
-    }
 
     const messageBuilder: IMessageBuilder = creator.startMessage(message as IMessage);
     return await creator.finish(messageBuilder);
 };
 
-export const mapTeamsMessageToRocketChatMessage = async ({
-    getMessageResponse,
+export const generateUploadCallback = ({
+    attachments,
+    uploadFiles,
     read,
+    persistence,
+    http,
+    app,
     accessToken,
-    modify,
     room,
     sender,
-    http,
-    uploadFiles,
-    persistence,
-    app,
+    modify,
+    alias,
 }: {
-    getMessageResponse: GetMessageResponse,
-    read: IRead,
-    accessToken: string
-    room: IRoom,
-    sender: IUser,
-    modify: IModify,
-    http: IHttp,
-    uploadFiles: boolean,
-    persistence: IPersistence,
-    app: TeamsBridgeApp,
-}): Promise<{
-    text: string;
-    uploadIds: {
-        rocketChat: string;
-        teams: string;
-    }[];
-}> => {
-    const { messageContent, messageContentType, attachments } = getMessageResponse;
+    attachments: any[];
+    uploadFiles: boolean;
+    read: IRead;
+    persistence: IPersistence;
+    http: IHttp;
+    app: TeamsBridgeApp;
+    accessToken: string;
+    room: IRoom;
+    sender: IUser;
+    modify: IModify;
+    alias?: string;
+}) => async (): Promise<{ rocketChat: string; teams: string }[]> => {
     let uploadIds: { rocketChat: string; teams: string }[] = [];
-    let text = messageContent;
     if (attachments && attachments.length > 0) {
         if (uploadFiles) {
             const attachmentsToUpload = attachments.filter(
                 (a) => a.contentType === TeamsAttachmentType.File
             );
-           (
+            (
                 await Promise.all(
                     attachmentsToUpload.map(async (attachment) => {
                         const { contentUrl, name, id } = attachment;
@@ -138,6 +132,7 @@ export const mapTeamsMessageToRocketChatMessage = async ({
                                         sender,
                                         http,
                                         modify,
+                                        options: { alias },
                                     }
                                 );
                                 return { rocketChat: upload.id, teams: id };
@@ -158,6 +153,57 @@ export const mapTeamsMessageToRocketChatMessage = async ({
             })
         }
     }
+    return uploadIds;
+};
+
+export const mapTeamsMessageToRocketChatMessage = async ({
+    getMessageResponse,
+    read,
+    accessToken,
+    modify,
+    room,
+    sender,
+    http,
+    uploadFiles,
+    persistence,
+    app,
+    messageOptions,
+}: {
+    getMessageResponse: GetMessageResponse,
+    read: IRead,
+    accessToken: string
+    room: IRoom,
+    sender: IUser,
+    modify: IModify,
+    http: IHttp,
+    uploadFiles: boolean,
+    persistence: IPersistence,
+    app: TeamsBridgeApp,
+    messageOptions?: { alias?: string },
+}): Promise<{
+    text: string;
+    uploadCallback: () => Promise<{
+        rocketChat: string;
+        teams: string;
+    }[]>;
+}> => {
+    const { messageContent, messageContentType, attachments } = getMessageResponse;
+    let text = messageContent;
+
+    const uploadCallback = generateUploadCallback({
+        attachments: attachments ?? [],
+        uploadFiles,
+        read,
+        persistence,
+        http,
+        app,
+        accessToken,
+        room,
+        sender,
+        modify,
+        alias: messageOptions?.alias,
+    });
+
     if (messageContentType && messageContentType === MessageContentType.Html) {
         const isBridged = isBridgedMessageFormat(messageContent);
         const parsedNodes = parseHTML(messageContent);
@@ -166,15 +212,11 @@ export const mapTeamsMessageToRocketChatMessage = async ({
 
     return {
         text,
-        uploadIds,
+        uploadCallback,
     }
 };
 
-export const formatTeamsSenderInfo = (message: string, senderName: string): string => {
-    return `**${senderName}** _via Teams_\n${message}`;
-}
-
-export const mapRocketChatMessageToTeamsMessage = (rocketChatMessage: string, originalSenderName?: string) : string => {
+export const mapRocketChatMessageToTeamsMessage = (rocketChatMessage: string, originalSenderName?: string): string => {
     // Handle emoji in text
     let teamsMessage = shortnameToUnicode(rocketChatMessage);
 
@@ -211,15 +253,15 @@ export const getBridgedMessageFormatV2 = (
         "</p>" +
         // Opening blockquote for ms-teams
         '<blockquote style="font-size:14px; font-style:inherit; font-weight:inherit; margin:0.7rem 0">' +
-            // Sender name paragraph
-            '<p style="font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
-                `<strong>${originalSenderName}:</strong>` +
-                '<hr/>' +
-            `</p>` +
-            // Message paragraph
-            '<p style="font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
-                message +
-            '</p>' +
+        // Sender name paragraph
+        '<p style="font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
+        `<strong>${originalSenderName}:</strong>` +
+        '<hr/>' +
+        `</p>` +
+        // Message paragraph
+        '<p style="font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">' +
+        message +
+        '</p>' +
         // Closing blockquote
         '</blockquote>'
     );
@@ -285,6 +327,7 @@ const downloadAttachmentFileFromExternalAndUploadToRocketChatAsync = async ({
     sender,
     http,
     modify,
+    options,
 }: {
     url: string,
     fileName: string,
@@ -293,13 +336,16 @@ const downloadAttachmentFileFromExternalAndUploadToRocketChatAsync = async ({
     sender: IUser,
     http: IHttp,
     modify: IModify,
+    options?: {
+        alias?: string;
+    }
 }) => {
     const encodedUrl = `u!${base64Encode(url).replace(/=+$/, '').replace('/', '_').replace('+', '-')}`;
 
     const buff = await downloadOneDriveFileAsync(http, encodedUrl, accessToken);
     const uploadCreator = modify.getCreator().getUploadCreator();
     const fileInfo: IUploadDescriptor = {
-        filename: buildExtraInfoFileName(fileName, { source: 'ms-teams' }),
+        filename: buildExtraInfoFileName(fileName, { source: 'ms-teams', ...(options?.alias && { alias: options.alias }) }),
         room: room,
         user: sender
     };
@@ -311,7 +357,7 @@ const getTeamsMessageUrl = (url: string): string => {
     return `<a href=\"${url}\" title=\"${url}\" target=\"_blank\" rel=\"noreferrer noopener\">${url}</a>`;
 };
 
-const base64Encode = (str: string):string => Buffer.from(str, 'binary').toString('base64');
+const base64Encode = (str: string): string => Buffer.from(str, 'binary').toString('base64');
 
 export const buildExtraInfoAttachment = (data: any) => {
     const attachment: IMessageAttachment = {
@@ -323,7 +369,7 @@ export const buildExtraInfoAttachment = (data: any) => {
 };
 
 export const popExtraInfoAttachment = (message: IMessage) => {
-    const data = {} as any;
+    const data = {} as Record<string, any>;
     const extraInfoAttachment = message.attachments?.find((att) => {
         const match = att.imageUrl?.match(/<metadata>([\s\S]*?)<\/metadata>/);
         if (match) {
@@ -379,7 +425,7 @@ export const getExtraInfoAndOriginalFileName = (filename: string): { originalFil
         return { originalFilename: filename, extraInfo: {}, present: false };
     }
 
-    const [ , baseName, encoded ] = match;
+    const [, baseName, encoded] = match;
     const ext = filename.slice((baseName + `__extradata_${encoded}`).length);
 
     try {
@@ -480,7 +526,7 @@ export const combineRocketChatMessagesToTeamsMessage = async ({
     const finalAttachments = filterTeamsAttachments(uniqueAttachments, teamsAttachmentIds);
 
     return {
-        text: attachAttachments({ html: text, attachmentIds: teamsAttachmentIds}),
+        text: attachAttachments({ html: text, attachmentIds: teamsAttachmentIds }),
         shouldDeleteTeamsMessage:
             targetMessages.length === 0 && teamsAttachmentIds.length === 0,
         attachments: finalAttachments,

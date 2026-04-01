@@ -10,3 +10,4 @@ export { handlePreRoomUserLeaveAsync } from './handlers/handlePreRoomUserLeave';
 export { handleUserRegistrationAutoRenewAsync } from './handlers/handleUserRegistrationAutoRenew';
 export { handleUninstallApp } from './handlers/handleUninstallApp';
 export { handlePostUserDeletedAsync } from './handlers/handlePostUserDeleted';
+export { handlePreMessageSentModifyAsync } from './handlers/handlePreMessageSentModify';

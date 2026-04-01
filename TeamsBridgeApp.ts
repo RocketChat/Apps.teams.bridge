@@ -89,6 +89,7 @@ import {
     handleUninstallApp,
     handleUserRegistrationAutoRenewAsync,
     handlePostUserDeletedAsync,
+    handlePreMessageSentModifyAsync,
 } from "./lib/EventHandler";
 import { getRocketChatAppEndpointUrl } from "./lib/UrlHelper";
 import {
@@ -110,10 +111,6 @@ import { ResubscribeMessages } from "./slashcommands/ResubscriptionMessages";
 import { ViewTeamsMembersSlashCommand } from "./slashcommands/ViewTeamsMembersSlashCommand";
 import { OAuthNonce, SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
 import { PreventRegistry } from "./lib/PreventRegistry";
-import {
-    getExtraInfoAndOriginalFileName,
-    popExtraInfoAttachment,
-} from "./lib/MessageHelper";
 import { handleInboundNotificationAsync } from "./lib/inboundNotification/handleInboundNotificationAsync";
 import { handleWebhookSecretCreationAsync } from "./lib/handlers/handleWebhookSecretCreation";
 
@@ -163,78 +160,21 @@ export class TeamsBridgeApp
         await WebhookSecret.create({ persistence });
     }
 
-    async executePreMessageSentModify(
+    public async executePreMessageSentModify(
         message: IMessage,
         builder: IMessageBuilder,
         read: IRead,
         http: IHttp,
         persistence: IPersistence,
-    ) {
-        let extraInfoData = popExtraInfoAttachment(message);
-        if (extraInfoData.source === "ms-teams") {
-            await PreventRegistry.set(
-                persistence,
-                `PreventPostMessageHook/${message.id}`,
-                true,
-            );
-            return message;
-        }
-
-        extraInfoData = {};
-        let pos = -1;
-        let originalFilenameFound = "";
-        message.attachments?.forEach((att, i) => {
-            if (!att.title?.value) {
-                return false;
-            }
-            const { originalFilename, present, extraInfo } =
-                getExtraInfoAndOriginalFileName(att.title.value);
-            if (present) {
-                extraInfoData = extraInfo;
-                pos = i;
-                originalFilenameFound = originalFilename;
-            }
-            return true;
+    ): Promise<IMessage> {
+        return await handlePreMessageSentModifyAsync({
+            app: this,
+            message,
+            builder,
+            read,
+            persistence,
+            http,
         });
-
-        if (extraInfoData.source === "ms-teams") {
-            await PreventRegistry.set(
-                persistence,
-                `PreventPostMessageHook/${message.id}`,
-                true,
-            );
-        }
-
-        if (pos !== -1) {
-            if (Array.isArray(message["_unmappedProperties_"]?.["files"])) {
-                message["_unmappedProperties_"]["files"] = message[
-                    "_unmappedProperties_"
-                ]["files"].map((file) => {
-                    if (file.name === message.attachments![pos].title?.value) {
-                        return { ...file, name: originalFilenameFound };
-                    }
-                    return file;
-                });
-            }
-
-            // Replace the attachment at position 'pos' with updated title
-            if (message.attachments?.[pos]) {
-                message.attachments[pos] = {
-                    ...message.attachments[pos],
-                    title: {
-                        ...message.attachments[pos].title,
-                        value: originalFilenameFound,
-                    },
-                };
-            }
-
-            // Update the file name if present
-            if (message.file && originalFilenameFound) {
-                message.file = { ...message.file, name: originalFilenameFound };
-            }
-            return message;
-        }
-        return message;
     }
 
     async onEnable(

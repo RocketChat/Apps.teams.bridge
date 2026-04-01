@@ -1,6 +1,6 @@
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { getChatThreadWithMembersAsync, getMessageWithResourceStringAsync, getTeamsUserProfileByIdAsync, MessageType, ThreadType } from "../graph";
-import { formatTeamsSenderInfo, mapTeamsMessageToRocketChatMessage, sendRocketChatMessageInRoomAsync } from "../MessageHelper";
+import { mapTeamsMessageToRocketChatMessage, sendRocketChatMessageInRoomAsync } from "../MessageHelper";
 import { MessageMapping, RecentActivity, Room, UploadMapping, UserMapping } from "../PersistHelper";
 import { getSenderUser } from "./getSender";
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
@@ -219,6 +219,10 @@ export const handleInboundMessageCreatedAsync = async (
             // users can see who originally sent it.
             const usesBotFallback = !fromUserRocketChatUser;
 
+
+            const messageOptions = usesBotFallback
+                ? { alias: getMessageResponse.fromTeamsUser.displayName ?? getMessageResponse.fromTeamsUser.id }
+                : undefined;
             const message = await mapTeamsMessageToRocketChatMessage({
                 getMessageResponse,
                 accessToken: userAccessToken,
@@ -230,28 +234,30 @@ export const handleInboundMessageCreatedAsync = async (
                 uploadFiles: true,
                 app,
                 persistence: persis,
+                messageOptions,
             });
 
-            const persistUploadPromises = message.uploadIds.map((uploadIdMap) =>
-                UploadMapping.persist({
-                    persistence: persis,
-                    rocketchatUploadId: uploadIdMap.rocketChat,
-                    teamsAttachmentId: uploadIdMap.teams,
-                    teamsMessageId: getMessageResponse.messageId,
-                    teamsThreadId: getMessageResponse.threadId,
-                    relayedByAppUser: usesBotFallback,
-                })
-            );
+            const persistUploadsAsync = async () => {
+                const uploadIds = await message.uploadCallback();
+                return uploadIds.map((uploadIdMap) =>
+                    UploadMapping.persist({
+                        persistence: persis,
+                        rocketchatUploadId: uploadIdMap.rocketChat,
+                        teamsAttachmentId: uploadIdMap.teams,
+                        teamsMessageId: getMessageResponse.messageId,
+                        teamsThreadId: getMessageResponse.threadId,
+                        relayedByAppUser: usesBotFallback,
+                    })
+                );
+            };
+
+            const persistUploadPromises = await persistUploadsAsync();
+            await Promise.all(persistUploadPromises);
 
             if (message.text === "") {
                 // File message, no text content
-                await Promise.all(persistUploadPromises);
                 return;
             }
-
-            const messageOptions = usesBotFallback
-                ? { alias: getMessageResponse.fromTeamsUser.displayName ?? getMessageResponse.fromTeamsUser.id }
-                : undefined;
 
             const rocketChatMessageId = await sendRocketChatMessageInRoomAsync(
                 message.text,
@@ -262,16 +268,13 @@ export const handleInboundMessageCreatedAsync = async (
                 messageOptions
             );
 
-            await Promise.all([
-                MessageMapping.persist({
-                    persistence: persis,
-                    rocketChatMessageId,
-                    teamsMessageId: getMessageResponse.messageId,
-                    teamsThreadId: getMessageResponse.threadId,
-                    relayedByAppUser: usesBotFallback,
-                }),
-                ...persistUploadPromises,
-            ]);
+            await MessageMapping.persist({
+                persistence: persis,
+                rocketChatMessageId,
+                teamsMessageId: getMessageResponse.messageId,
+                teamsThreadId: getMessageResponse.threadId,
+                relayedByAppUser: usesBotFallback,
+            });
         } else if (
             getMessageResponse.messageType === MessageType.SystemAddMembers
         ) {
