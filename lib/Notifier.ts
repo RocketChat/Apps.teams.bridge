@@ -1,73 +1,48 @@
-import {
-    IHttp,
-    IModify,
-    INotifier,
-    IPersistence,
-    IRead,
-} from "@rocket.chat/apps-engine/definition/accessors";
-import { IMessage, IMessageAction, IMessageAttachment, MessageActionType } from "@rocket.chat/apps-engine/definition/messages";
-import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
-import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { AppSetting } from "../config/Settings";
-import { TeamsBridgeApp } from "../TeamsBridgeApp";
-import {
-    AppUserLoginRequiredAdminHintMessageText,
-    AppUserLoginRequiredHintMessageText,
-    AuthenticationEndpointPath,
-    LoginButtonText,
-} from "./Const";
-import { AppUserLoginNotified } from "./PersistHelper";
-import { getLoginUrlAsync, getRocketChatAppEndpointUrl } from "./UrlHelper";
+import type { IHttp, IModify, INotifier, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';
+import type { IMessage, IMessageAction, IMessageAttachment } from '@rocket.chat/apps-engine/definition/messages';
+import { MessageActionType } from '@rocket.chat/apps-engine/definition/messages';
+import type { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
+import type { IUser } from '@rocket.chat/apps-engine/definition/users';
 
-export const notifyRocketChatUserAsync = async (
-    message: IMessage,
-    user: IUser,
-    notifier: INotifier): Promise<void> => {
-    await notifier.notifyUser(user, message);
+import type { TeamsBridgeApp } from '../TeamsBridgeApp';
+import { AppUserLoginRequiredAdminHintMessageText, AppUserLoginRequiredHintMessageText, AuthenticationEndpointPath, LoginButtonText } from './Const';
+import { AppUserLoginNotified } from './PersistHelper';
+import { getLoginUrlAsync, getRocketChatAppEndpointUrl } from './UrlHelper';
+import { AppSetting } from '../config/Settings';
+
+export const notifyRocketChatUserAsync = async (message: IMessage, user: IUser, notifier: INotifier): Promise<void> => {
+	await notifier.notifyUser(user, message);
 };
 
-export const notifyRocketChatUserInRoomAsync = async (
-    message: string,
-    appUser: IUser,
-    user: IUser,
-    room: IRoom,
-    notifier: INotifier): Promise<void> => {
-    const messageTemplate: IMessage = {
-        text: message,
-        sender: appUser,
-        room
-    };
+export const notifyRocketChatUserInRoomAsync = async (message: string, appUser: IUser, user: IUser, room: IRoom, notifier: INotifier): Promise<void> => {
+	const messageTemplate: IMessage = {
+		text: message,
+		sender: appUser,
+		room,
+	};
 
-    await notifyRocketChatUserAsync(messageTemplate, user, notifier);
+	await notifyRocketChatUserAsync(messageTemplate, user, notifier);
 };
 
-export const generateHintMessageWithTeamsLoginButton = (
-    loginUrl: string,
-    sender: IUser,
-    room: IRoom,
-    hintMessageText: string): IMessage => {
-    const buttonAction: IMessageAction = {
-        type: MessageActionType.BUTTON,
-        text: LoginButtonText,
-        url: loginUrl,
-    };
+export const generateHintMessageWithTeamsLoginButton = (loginUrl: string, sender: IUser, room: IRoom, hintMessageText: string): IMessage => {
+	const buttonAction: IMessageAction = {
+		type: MessageActionType.BUTTON,
+		text: LoginButtonText,
+		url: loginUrl,
+	};
 
-    const buttonAttachment: IMessageAttachment = {
-        actions: [
-            buttonAction
-        ]
-    };
+	const buttonAttachment: IMessageAttachment = {
+		actions: [buttonAction],
+	};
 
-    const message: IMessage = {
-        text: hintMessageText,
-        sender: sender,
-        room,
-        attachments: [
-            buttonAttachment
-        ]
-    };
+	const message: IMessage = {
+		text: hintMessageText,
+		sender,
+		room,
+		attachments: [buttonAttachment],
+	};
 
-    return message;
+	return message;
 };
 
 /**
@@ -77,108 +52,69 @@ export const generateHintMessageWithTeamsLoginButton = (
  * Sets the AppUserLoginNotified flag for the room to avoid repeat spam.
  */
 export const notifyRoomMembersAppUserNotLoggedInAsync = async (options: {
-    read: IRead;
-    modify: IModify;
-    http: IHttp;
-    persistence: IPersistence;
-    app: TeamsBridgeApp;
-    roomId: string;
+	read: IRead;
+	modify: IModify;
+	http: IHttp;
+	persistence: IPersistence;
+	app: TeamsBridgeApp;
+	roomId: string;
 }): Promise<void> => {
-    const { read, modify, http, persistence, app, roomId } = options;
+	const { read, modify, http, persistence, app, roomId } = options;
 
-    const appUser = await read.getUserReader().getAppUser(app.getID());
-    if (!appUser) {
-        return;
-    }
+	const appUser = await read.getUserReader().getAppUser(app.getID());
+	if (!appUser) {
+		return;
+	}
 
-    const room = await read.getRoomReader().getById(roomId);
-    if (!room) {
-        return;
-    }
+	const room = await read.getRoomReader().getById(roomId);
+	if (!room) {
+		return;
+	}
 
-    const aadTenantId = (
-        await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)
-    ).value;
-    const aadClientId = (
-        await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)
-    ).value;
-    const accessors = app.getAccessors();
-    const authEndpointUrl = await getRocketChatAppEndpointUrl(accessors, AuthenticationEndpointPath);
+	const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
+	const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
+	const accessors = app.getAccessors();
+	const authEndpointUrl = await getRocketChatAppEndpointUrl(accessors, AuthenticationEndpointPath);
 
-    // Login URL state is the app user's RC ID so the token is stored under the app user
-    const loginUrl = await getLoginUrlAsync(persistence, aadTenantId, aadClientId, authEndpointUrl, appUser.id);
+	// Login URL state is the app user's RC ID so the token is stored under the app user
+	const loginUrl = await getLoginUrlAsync(persistence, aadTenantId, aadClientId, authEndpointUrl, appUser.id);
 
-    const members = await read.getRoomReader().getMembers(roomId);
-    const notifier = modify.getNotifier();
+	const members = await read.getRoomReader().getMembers(roomId);
+	const notifier = modify.getNotifier();
 
-    await Promise.all(
-        members
-            .filter((member) => member.id !== appUser.id)
-            .map(async (member) => {
-                const isAdmin = Array.isArray(member.roles) && member.roles.includes('admin');
-                if (isAdmin) {
-                    const message = generateHintMessageWithTeamsLoginButton(
-                        loginUrl,
-                        appUser,
-                        room,
-                        AppUserLoginRequiredAdminHintMessageText,
-                    );
-                    await notifyRocketChatUserAsync(message, member, notifier);
-                } else {
-                    await notifyRocketChatUserInRoomAsync(
-                        AppUserLoginRequiredHintMessageText,
-                        appUser,
-                        member,
-                        room,
-                        notifier,
-                    );
-                }
-            }),
-    );
+	await Promise.all(
+		members
+			.filter((member) => member.id !== appUser.id)
+			.map(async (member) => {
+				const isAdmin = Array.isArray(member.roles) && member.roles.includes('admin');
+				if (isAdmin) {
+					const message = generateHintMessageWithTeamsLoginButton(loginUrl, appUser, room, AppUserLoginRequiredAdminHintMessageText);
+					await notifyRocketChatUserAsync(message, member, notifier);
+				} else {
+					await notifyRocketChatUserInRoomAsync(AppUserLoginRequiredHintMessageText, appUser, member, room, notifier);
+				}
+			}),
+	);
 
-    await AppUserLoginNotified.set(persistence, roomId);
+	await AppUserLoginNotified.set(persistence, roomId);
 };
 
 export const notifyNotLoggedInUserAsync = async (
-    read: IRead,
-    persistence: IPersistence,
-    user: IUser,
-    room: IRoom,
-    app: TeamsBridgeApp,
-    hintMessageText: string
+	read: IRead,
+	persistence: IPersistence,
+	user: IUser,
+	room: IRoom,
+	app: TeamsBridgeApp,
+	hintMessageText: string,
 ): Promise<void> => {
-    const appUser = (await read.getUserReader().getById(app.getID()));
+	const appUser = await read.getUserReader().getById(app.getID());
 
-    const aadTenantId = (
-        await read
-            .getEnvironmentReader()
-            .getSettings()
-            .getById(AppSetting.AadTenantId)
-    ).value;
-    const aadClientId = (
-        await read
-            .getEnvironmentReader()
-            .getSettings()
-            .getById(AppSetting.AadClientId)
-    ).value;
-    const accessors = app.getAccessors();
-    const authEndpointUrl = await getRocketChatAppEndpointUrl(
-        accessors,
-        AuthenticationEndpointPath
-    );
-    const loginUrl = await getLoginUrlAsync(
-        persistence,
-        aadTenantId,
-        aadClientId,
-        authEndpointUrl,
-        user.id
-    );
-    const message = generateHintMessageWithTeamsLoginButton(
-        loginUrl,
-        appUser,
-        room,
-        hintMessageText
-    );
+	const aadTenantId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadTenantId)).value;
+	const aadClientId = (await read.getEnvironmentReader().getSettings().getById(AppSetting.AadClientId)).value;
+	const accessors = app.getAccessors();
+	const authEndpointUrl = await getRocketChatAppEndpointUrl(accessors, AuthenticationEndpointPath);
+	const loginUrl = await getLoginUrlAsync(persistence, aadTenantId, aadClientId, authEndpointUrl, user.id);
+	const message = generateHintMessageWithTeamsLoginButton(loginUrl, appUser, room, hintMessageText);
 
-    await notifyRocketChatUserAsync(message, user, read.getNotifier());
+	await notifyRocketChatUserAsync(message, user, read.getNotifier());
 };

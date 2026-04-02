@@ -1,30 +1,28 @@
-import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { getGraphApiOneDriveFileLinkUrl } from "../Const";
+import type { IHttp, IHttpRequest } from '@rocket.chat/apps-engine/definition/accessors';
+import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
-export const getOneDriveFileLinkAsync = async (
-    http: IHttp,
-    oneDriveItemId: string,
-    userAccessToken: string): Promise<string> => {
-    const url = getGraphApiOneDriveFileLinkUrl(oneDriveItemId);
+import { getGraphApiOneDriveFileLinkUrl } from '../Const';
 
-    const httpRequest: IHttpRequest = {
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
-        },
-    };
+export const getOneDriveFileLinkAsync = async (http: IHttp, oneDriveItemId: string, userAccessToken: string): Promise<string> => {
+	const url = getGraphApiOneDriveFileLinkUrl(oneDriveItemId);
 
-    const response = await http.get(url, httpRequest);
+	const httpRequest: IHttpRequest = {
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${userAccessToken}`,
+		},
+	};
 
-    if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
-        if (responseBody === undefined) {
-            throw new Error('Get one drive file link failed!');
-        }
+	const response = await http.get(url, httpRequest);
 
-        const result: string = responseBody.webUrl as string;
-        return result;
-    } else {
-        throw new Error(`Get one drive file link failed with http status code ${response.statusCode}.`);
-    }
+	if (response.statusCode === HttpStatusCode.OK) {
+		const responseBody = response.data;
+		if (responseBody === undefined) {
+			throw new Error('Get one drive file link failed!');
+		}
+
+		const result: string = responseBody.webUrl as string;
+		return result;
+	}
+	throw new Error(`Get one drive file link failed with http status code ${response.statusCode}.`);
 };

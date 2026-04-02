@@ -1,24 +1,22 @@
-import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { getGraphApiSubscriptionOperationUrl } from "../Const";
+import type { IHttp, IHttpRequest } from '@rocket.chat/apps-engine/definition/accessors';
+import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
-export const deleteSubscriptionAsync = async (
-    http: IHttp,
-    subscriptionId: string,
-    userAccessToken: string): Promise<void> => {
-    const url = getGraphApiSubscriptionOperationUrl(subscriptionId);
+import { getGraphApiSubscriptionOperationUrl } from '../Const';
 
-    const httpRequest: IHttpRequest = {
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
-        },
-    };
+export const deleteSubscriptionAsync = async (http: IHttp, subscriptionId: string, userAccessToken: string): Promise<void> => {
+	const url = getGraphApiSubscriptionOperationUrl(subscriptionId);
 
-    const response = await http.del(url, httpRequest);
+	const httpRequest: IHttpRequest = {
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${userAccessToken}`,
+		},
+	};
 
-    if (response.statusCode === HttpStatusCode.NO_CONTENT) {
-        return;
-    } else {
-        throw new Error(`Delete subscription failed with http status code ${response.statusCode}.`);
-    }
+	const response = await http.del(url, httpRequest);
+
+	if (response.statusCode === HttpStatusCode.NO_CONTENT) {
+	} else {
+		throw new Error(`Delete subscription failed with http status code ${response.statusCode}.`);
+	}
 };

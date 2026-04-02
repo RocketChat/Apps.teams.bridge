@@ -1,68 +1,47 @@
-import {
-    IHttp,
-    IModify,
-    IPersistence,
-    IRead,
-} from "@rocket.chat/apps-engine/definition/accessors";
-import { TeamsBridgeApp } from "../../TeamsBridgeApp";
-import { getAllUsersAccessTokensAsync } from "../AuthHelper";
-import { deleteAllSubscriptions } from "../MicrosoftGraphApi";
-import { getNotificationEndpointUrl } from "../UrlHelper";
+import type { IHttp, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';
 
-export const handleUninstallApp = async (options: {
-    read: IRead;
-    http: IHttp;
-    modify: IModify;
-    persistence: IPersistence;
-    app: TeamsBridgeApp;
-}) => {
-    try {
-        await deleteAllUsersSubscriptions(options);
-    } catch (error) {
-        console.error(`Error during app uninstallation: ${error.message}`);
-    }
+import type { TeamsBridgeApp } from '../../TeamsBridgeApp';
+import { getAllUsersAccessTokensAsync } from '../AuthHelper';
+import { deleteAllSubscriptions } from '../MicrosoftGraphApi';
+import { getNotificationEndpointUrl } from '../UrlHelper';
+
+export const handleUninstallApp = async (options: { read: IRead; http: IHttp; modify: IModify; persistence: IPersistence; app: TeamsBridgeApp }) => {
+	try {
+		await deleteAllUsersSubscriptions(options);
+	} catch (error) {
+		console.error(`Error during app uninstallation: ${error.message}`);
+	}
 };
 
-const deleteAllUsersSubscriptions = async (options: {
-    read: IRead;
-    persistence: IPersistence;
-    http: IHttp;
-    app: TeamsBridgeApp;
-}) => {
-    const { read, persistence, http, app } = options;
-    const allRegisteredUsers = await getAllUsersAccessTokensAsync({
-        read,
-        http,
-        app,
-        persistence,
-    });
+const deleteAllUsersSubscriptions = async (options: { read: IRead; persistence: IPersistence; http: IHttp; app: TeamsBridgeApp }) => {
+	const { read, persistence, http, app } = options;
+	const allRegisteredUsers = await getAllUsersAccessTokensAsync({
+		read,
+		http,
+		app,
+		persistence,
+	});
 
-    if (!allRegisteredUsers) {
-        return;
-    }
+	if (!allRegisteredUsers) {
+		return;
+	}
 
-    const batchSize = 10;
-    for (let i = 0; i < allRegisteredUsers.length; i += batchSize) {
-        const batch = allRegisteredUsers.slice(i, i + batchSize);
-        const deletePromises = batch.map(async ({ accessToken, rocketChatUserId }) => {
-            try {
-                const notificationUrl = await getNotificationEndpointUrl({
-                    appAccessors: app.getAccessors(),
-                    rocketChatUserId: rocketChatUserId,
-                });
-                if (accessToken) {
-                    await deleteAllSubscriptions(
-                        http,
-                        accessToken,
-                        notificationUrl
-                    );
-                }
-            } catch (error) {
-                console.error(
-                    `Error deleting subscriptions for user: ${error.message}`
-                );
-            }
-        });
-        await Promise.all(deletePromises); // Wait for the current batch to complete
-    }
+	const batchSize = 10;
+	for (let i = 0; i < allRegisteredUsers.length; i += batchSize) {
+		const batch = allRegisteredUsers.slice(i, i + batchSize);
+		const deletePromises = batch.map(async ({ accessToken, rocketChatUserId }) => {
+			try {
+				const notificationUrl = await getNotificationEndpointUrl({
+					appAccessors: app.getAccessors(),
+					rocketChatUserId,
+				});
+				if (accessToken) {
+					await deleteAllSubscriptions(http, accessToken, notificationUrl);
+				}
+			} catch (error) {
+				console.error(`Error deleting subscriptions for user: ${error.message}`);
+			}
+		});
+		await Promise.all(deletePromises); // Wait for the current batch to complete
+	}
 };

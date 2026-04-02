@@ -1,8 +1,6 @@
-import { IPersistence } from "@rocket.chat/apps-engine/definition/accessors";
-import {
-    RocketChatAssociationModel,
-    RocketChatAssociationRecord,
-} from "@rocket.chat/apps-engine/definition/metadata";
+import type { IPersistence } from '@rocket.chat/apps-engine/definition/accessors';
+import { RocketChatAssociationModel, RocketChatAssociationRecord } from '@rocket.chat/apps-engine/definition/metadata';
+
 const PREVENT_REGISTRY_KEY = 'PreventRegistry';
 
 /**
@@ -11,77 +9,47 @@ const PREVENT_REGISTRY_KEY = 'PreventRegistry';
  * It uses a persistence layer to store the key related to each task.
  */
 export class PreventRegistry {
-    public static async set(
-        persistence: IPersistence,
-        key: string,
-        value?: any,
-    ): Promise<void> {
-        const associations = [
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                PREVENT_REGISTRY_KEY
-            ),
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                key,
-            ),
-        ];
+	public static async set(persistence: IPersistence, key: string, value?: any): Promise<void> {
+		const associations = [
+			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, PREVENT_REGISTRY_KEY),
+			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, key),
+		];
 
-        await persistence.updateByAssociations(associations, { ...(value && { value }) }, true);
-    }
+		await persistence.updateByAssociations(associations, { ...(value && { value }) }, true);
+	}
 
-    public static async capture(persistence: IPersistence, key: string) {
-        const associations = [
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                PREVENT_REGISTRY_KEY
-            ),
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                key
-            ),
-        ];
+	public static async capture(persistence: IPersistence, key: string) {
+		const associations = [
+			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, PREVENT_REGISTRY_KEY),
+			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, key),
+		];
 
-        const data = await persistence.removeByAssociations(associations);
+		const data = await persistence.removeByAssociations(associations);
 
-        if (!data) {
-            return null;
-        }
+		if (!data) {
+			return null;
+		}
 
-        return data.shift() ?? null;
-    }
+		return data.shift() ?? null;
+	}
 
-    public static async captureMany(
-        persistence: IPersistence,
-        keys: string[]
-    ): Promise<boolean> {
-        const results = await Promise.all(keys.map(key => this.capture(persistence, key)));
-        return results.some(Boolean);
-    }
+	public static async captureMany(persistence: IPersistence, keys: string[]): Promise<boolean> {
+		const results = await Promise.all(keys.map((key) => this.capture(persistence, key)));
+		return results.some(Boolean);
+	}
 
-    public static async clear(persistence: IPersistence) {
-        const associations = [
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                PREVENT_REGISTRY_KEY
-            ),
-        ];
+	public static async clear(persistence: IPersistence) {
+		const associations = [new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, PREVENT_REGISTRY_KEY)];
 
-        await persistence.removeByAssociations(associations);
-    }
+		await persistence.removeByAssociations(associations);
+	}
 
-    public static async release(persistence: IPersistence, key: string) {
-        const associations = [
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                PREVENT_REGISTRY_KEY
-            ),
-            new RocketChatAssociationRecord(
-                RocketChatAssociationModel.MISC,
-                key
-            ),
-        ];
+	public static async release(persistence: IPersistence, key: string) {
+		const associations = [
+			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, PREVENT_REGISTRY_KEY),
+			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, key),
+		];
 
-        await persistence.removeByAssociations(associations);
-    }
+		await persistence.removeByAssociations(associations);
+	}
 }

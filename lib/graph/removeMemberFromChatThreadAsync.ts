@@ -1,24 +1,21 @@
-import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { getGraphApiChatMemberRemoveUrl } from "../Const";
+import type { IHttp, IHttpRequest } from '@rocket.chat/apps-engine/definition/accessors';
+import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
-export const removeMemberFromChatThreadAsync = async (
-    http: IHttp,
-    threadId: string,
-    membershipId: string,
-    userAccessToken: string): Promise<void> => {
-    const url = getGraphApiChatMemberRemoveUrl(threadId, membershipId);
-    const httpRequest: IHttpRequest = {
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
-        },
-    };
+import { getGraphApiChatMemberRemoveUrl } from '../Const';
 
-    const response = await http.del(url, httpRequest);
+export const removeMemberFromChatThreadAsync = async (http: IHttp, threadId: string, membershipId: string, userAccessToken: string): Promise<void> => {
+	const url = getGraphApiChatMemberRemoveUrl(threadId, membershipId);
+	const httpRequest: IHttpRequest = {
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${userAccessToken}`,
+		},
+	};
 
-    if (response.statusCode === HttpStatusCode.NO_CONTENT) {
-        return;
-    } else {
-        throw new Error(`Remove member from chat thread failed with http status code ${response.statusCode}.`);
-    }
+	const response = await http.del(url, httpRequest);
+
+	if (response.statusCode === HttpStatusCode.NO_CONTENT) {
+	} else {
+		throw new Error(`Remove member from chat thread failed with http status code ${response.statusCode}.`);
+	}
 };

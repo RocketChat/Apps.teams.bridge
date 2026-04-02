@@ -1,75 +1,71 @@
-import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { getChatMessageUrl, getGraphApiResourceUrl } from "../Const";
-import { Attachment, GetMessageResponse } from './types';
+import type { IHttp, IHttpRequest } from '@rocket.chat/apps-engine/definition/accessors';
+import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
+
+import { getChatMessageUrl, getGraphApiResourceUrl } from '../Const';
 import { parseMessageType, parseMessageContentType } from './parsers';
-import { MessageType } from './types';
+import type { Attachment, GetMessageResponse, MessageType } from './types';
 
 // TODO: Test it.
-export const getChatMessage = async (
-    http: IHttp,
-    threadId: string,
-    messageId: string,
-    userAccessToken: string): Promise<GetMessageResponse> => {
-    const url = getChatMessageUrl(threadId, messageId);
+export const getChatMessage = async (http: IHttp, threadId: string, messageId: string, userAccessToken: string): Promise<GetMessageResponse> => {
+	const url = getChatMessageUrl(threadId, messageId);
 
-    const httpRequest: IHttpRequest = {
-        headers: {
-            'Authorization': `Bearer ${userAccessToken}`,
-        },
-    };
+	const httpRequest: IHttpRequest = {
+		headers: {
+			Authorization: `Bearer ${userAccessToken}`,
+		},
+	};
 
-    const response = await http.get(url, httpRequest);
+	const response = await http.get(url, httpRequest);
 
-    if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
-        if (responseBody === undefined) {
-            throw new Error('Get message with resource string failed!');
-        }
+	if (response.statusCode === HttpStatusCode.OK) {
+		const responseBody = response.data;
+		if (responseBody === undefined) {
+			throw new Error('Get message with resource string failed!');
+		}
 
-        let attachments: Attachment[] | undefined = undefined;
+		let attachments: Attachment[] | undefined = undefined;
 
-        const jsonAttachments = responseBody.attachments as any[];
-        if (jsonAttachments && jsonAttachments.length > 0) {
-            attachments = [];
-            for (const jsonAttachment of jsonAttachments) {
-                const attachment: Attachment = {
-                    id: jsonAttachment.id,
-                    contentType: jsonAttachment.contentType,
-                    contentUrl: jsonAttachment.contentUrl,
-                    name: jsonAttachment.name,
-                };
-                attachments.push(attachment);
-            }
-        }
+		const jsonAttachments = responseBody.attachments as any[];
+		if (jsonAttachments && jsonAttachments.length > 0) {
+			attachments = [];
+			for (const jsonAttachment of jsonAttachments) {
+				const attachment: Attachment = {
+					id: jsonAttachment.id,
+					contentType: jsonAttachment.contentType,
+					contentUrl: jsonAttachment.contentUrl,
+					name: jsonAttachment.name,
+				};
+				attachments.push(attachment);
+			}
+		}
 
-        const messageType = parseMessageType(responseBody.messageType, responseBody.eventDetail);
+		const messageType = parseMessageType(responseBody.messageType, responseBody.eventDetail);
 
-        let memberIds: string[] | undefined = undefined;
-        if (messageType === MessageType.SystemAddMembers || messageType === MessageType.SystemRemoveMembers) {
-            memberIds = [];
-            const jsonMembers = responseBody.eventDetail.members as any[];
-            for (const jsonMember of jsonMembers) {
-                memberIds.push(jsonMember.id);
-            }
-        }
+		let memberIds: string[] | undefined = undefined;
+		if (messageType === MessageType.SystemAddMembers || messageType === MessageType.SystemRemoveMembers) {
+			memberIds = [];
+			const jsonMembers = responseBody.eventDetail.members as any[];
+			for (const jsonMember of jsonMembers) {
+				memberIds.push(jsonMember.id);
+			}
+		}
 
-        const result: GetMessageResponse = {
-            threadId: responseBody.chatId,
-            messageId: responseBody.id,
-            messageType: messageType,
-            fromTeamsUser: {
-                id: responseBody.from?.user?.id,
-                displayName: responseBody.from?.user?.displayName,
-            },
-            messageContentType: parseMessageContentType(responseBody.body?.contentType),
-            messageContent: responseBody.body?.content,
-            attachments: attachments,
-            memberIds: memberIds,
-            reactions: responseBody.reactions,
-        };
+		const result: GetMessageResponse = {
+			threadId: responseBody.chatId,
+			messageId: responseBody.id,
+			messageType,
+			fromTeamsUser: {
+				id: responseBody.from?.user?.id,
+				displayName: responseBody.from?.user?.displayName,
+			},
+			messageContentType: parseMessageContentType(responseBody.body?.contentType),
+			messageContent: responseBody.body?.content,
+			attachments,
+			memberIds,
+			reactions: responseBody.reactions,
+		};
 
-        return result;
-    } else {
-        throw new Error(`Get message with resource string failed with http status code ${response.statusCode}.`);
-    }
+		return result;
+	}
+	throw new Error(`Get message with resource string failed with http status code ${response.statusCode}.`);
 };

@@ -1,38 +1,36 @@
-import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { getGraphApiChatMemberUrl } from "../Const";
+import type { IHttp, IHttpRequest } from '@rocket.chat/apps-engine/definition/accessors';
+import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
-export const listMembersInChatThreadAsync = async (
-    http: IHttp,
-    threadId: string,
-    userAccessToken: string): Promise<{ id: string, userId: string }[]> => {
-    const url = getGraphApiChatMemberUrl(threadId);
-    const httpRequest: IHttpRequest = {
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userAccessToken}`,
-        },
-    };
+import { getGraphApiChatMemberUrl } from '../Const';
 
-    const response = await http.get(url, httpRequest);
+export const listMembersInChatThreadAsync = async (http: IHttp, threadId: string, userAccessToken: string): Promise<{ id: string; userId: string }[]> => {
+	const url = getGraphApiChatMemberUrl(threadId);
+	const httpRequest: IHttpRequest = {
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${userAccessToken}`,
+		},
+	};
 
-    if (response.statusCode === HttpStatusCode.OK) {
-        const responseBody = response.data;
-        if (responseBody === undefined) {
-            throw new Error('List members in chat thread failed!');
-        }
+	const response = await http.get(url, httpRequest);
 
-        const userList = responseBody.value as any[];
-        const result: { id: string, userId: string }[] = [];
+	if (response.statusCode === HttpStatusCode.OK) {
+		const responseBody = response.data;
+		if (responseBody === undefined) {
+			throw new Error('List members in chat thread failed!');
+		}
 
-        for (const user of userList) {
-            result.push({
-                id: user.id,
-                userId: user.userId,
-            });
-        }
+		const userList = responseBody.value as any[];
+		const result: { id: string; userId: string }[] = [];
 
-        return result;
-    } else {
-        throw new Error(`List members in chat thread failed with http status code ${response.statusCode}.`);
-    }
+		for (const user of userList) {
+			result.push({
+				id: user.id,
+				userId: user.userId,
+			});
+		}
+
+		return result;
+	}
+	throw new Error(`List members in chat thread failed with http status code ${response.statusCode}.`);
 };

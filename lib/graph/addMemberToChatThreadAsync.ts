@@ -1,55 +1,49 @@
-import { HttpStatusCode, IHttp, IHttpRequest } from "@rocket.chat/apps-engine/definition/accessors";
-import { getGraphApiChatMemberUrl } from "../Const";
+import type { IHttp, IHttpRequest } from '@rocket.chat/apps-engine/definition/accessors';
+import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
-export type AddMemberResult =
-    | { status: 'added' }
-    | { status: 'already_member' }
-    | { status: 'failed'; statusCode: number };
+import { getGraphApiChatMemberUrl } from '../Const';
 
-export const addMemberToChatThreadAsync = async (
-    http: IHttp,
-    threadId: string,
-    teamsUserId: string,
-    userAccessToken: string,
-): Promise<AddMemberResult> => {
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userAccessToken}`,
-    };
+export type AddMemberResult = { status: 'added' } | { status: 'already_member' } | { status: 'failed'; statusCode: number };
 
-    const filterUrl = `${getGraphApiChatMemberUrl(threadId)}?$filter=microsoft.graph.aadUserConversationMember/userId eq '${teamsUserId}'`;
-    const checkResponse = await http.get(filterUrl, { headers });
-    if (checkResponse.statusCode === HttpStatusCode.OK) {
-        const members = (checkResponse.data?.value ?? []) as any[];
-        if (members.length > 0) {
-            return { status: 'already_member' };
-        }
-    }
+export const addMemberToChatThreadAsync = async (http: IHttp, threadId: string, teamsUserId: string, userAccessToken: string): Promise<AddMemberResult> => {
+	const headers = {
+		'Content-Type': 'application/json',
+		Authorization: `Bearer ${userAccessToken}`,
+	};
 
-    const url = getGraphApiChatMemberUrl(threadId);
+	const filterUrl = `${getGraphApiChatMemberUrl(threadId)}?$filter=microsoft.graph.aadUserConversationMember/userId eq '${teamsUserId}'`;
+	const checkResponse = await http.get(filterUrl, { headers });
+	if (checkResponse.statusCode === HttpStatusCode.OK) {
+		const members = (checkResponse.data?.value ?? []) as any[];
+		if (members.length > 0) {
+			return { status: 'already_member' };
+		}
+	}
 
-    const body = {
-        '@odata.type': '#microsoft.graph.aadUserConversationMember',
-        'roles': ['owner'],
-        'user@odata.bind': `https://graph.microsoft.com/v1.0/users/${teamsUserId}`,
-        'visibleHistoryStartDateTime': '0001-01-01T00:00:00Z',
-    };
+	const url = getGraphApiChatMemberUrl(threadId);
 
-    const httpRequest: IHttpRequest = {
-        headers,
-        content: JSON.stringify(body),
-    };
+	const body = {
+		'@odata.type': '#microsoft.graph.aadUserConversationMember',
+		roles: ['owner'],
+		'user@odata.bind': `https://graph.microsoft.com/v1.0/users/${teamsUserId}`,
+		visibleHistoryStartDateTime: '0001-01-01T00:00:00Z',
+	};
 
-    const response = await http.post(url, httpRequest);
+	const httpRequest: IHttpRequest = {
+		headers,
+		content: JSON.stringify(body),
+	};
 
-    if (response.statusCode === HttpStatusCode.CREATED) {
-        return { status: 'added' };
-    }
+	const response = await http.post(url, httpRequest);
 
-    // 409 Conflict = user is already a member of the chat
-    if (response.statusCode === 409) {
-        return { status: 'already_member' };
-    }
+	if (response.statusCode === HttpStatusCode.CREATED) {
+		return { status: 'added' };
+	}
 
-    return { status: 'failed', statusCode: response.statusCode };
+	// 409 Conflict = user is already a member of the chat
+	if (response.statusCode === 409) {
+		return { status: 'already_member' };
+	}
+
+	return { status: 'failed', statusCode: response.statusCode };
 };
