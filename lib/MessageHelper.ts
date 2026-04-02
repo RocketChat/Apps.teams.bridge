@@ -241,7 +241,7 @@ export const getBridgedMessageFormatV2 = (originalSenderName: string, message: s
 		`<blockquote style="font-size:14px; font-style:inherit; font-weight:inherit; margin:0.7rem 0">` +
 		// Sender name paragraph
 		`<p style="font-style:inherit; font-weight:inherit; margin-bottom:0; margin-left:0; margin-right:0; margin-top:0">` +
-		`<strong>${originalSenderName}:</strong>` +
+		`<strong>${originalSenderName}</strong>` +
 		`<hr/>` +
 		`</p>` +
 		// Message paragraph

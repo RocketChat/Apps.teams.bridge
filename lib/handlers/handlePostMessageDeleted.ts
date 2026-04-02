@@ -98,7 +98,8 @@ export const handlePostMessageDeletedAsync = async (options: {
 		deletedMessages: deletedIds.messages,
 		deletedUploads: deletedIds.uploads,
 		forceBridgedMessage: isBridge,
-		originalSenderName: isBridge ? message.sender.name || message.sender.username : undefined,
+		// eslint-disable-next-line no-nested-ternary
+		originalSenderName: isBridge ? (message.sender.name ? `${message.sender.name} (@${message.sender.username})` : message.sender.username) : undefined,
 		uploadMappings,
 		http,
 		accessToken,

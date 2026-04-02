@@ -91,7 +91,7 @@ export const handlePostMessageUpdatedAsync = async (options: {
 		const { text, attachments } = await mapRocketChatMessageToTeamsMessageV2({
 			message,
 			read,
-			originalSenderName: message.sender.name || message.sender.username,
+			originalSenderName: message.sender.name ? `${message.sender.name} (@${message.sender.username})` : message.sender.username,
 			forceBridgedMessage: true,
 			http,
 			accessToken: appAccessToken,
