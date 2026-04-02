@@ -20,8 +20,7 @@ export const deleteTextMessageInChatThreadAsync = async (
 
 	const response = await http.post(url, httpRequest);
 
-	if (response.statusCode === HttpStatusCode.NO_CONTENT) {
-	} else {
+	if (response.statusCode !== HttpStatusCode.NO_CONTENT) {
 		throw new Error(`Delete message in chat thread failed with http status code ${response.statusCode}.`);
 	}
 };

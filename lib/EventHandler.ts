@@ -1,6 +1,5 @@
 export { handlePreMessageSentPreventAsync } from './handlers/handlePreMessageSentPrevent';
 export { handlePostMessageSentAsync } from './handlers/handlePostMessageSent';
-export { handlePreMessageOperationPreventAsync } from './handlers/handlePreMessageOperationPrevent';
 export { handlePostMessageUpdatedAsync } from './handlers/handlePostMessageUpdated';
 export { handlePostMessageDeletedAsync } from './handlers/handlePostMessageDeleted';
 export { handlePreFileUploadAsync } from './handlers/handlePreFileUpload';

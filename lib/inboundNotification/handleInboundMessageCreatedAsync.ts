@@ -8,7 +8,7 @@ import type { TeamsBridgeApp } from '../../TeamsBridgeApp';
 import { DefaultTeamName } from '../Const';
 import { mapTeamsMessageToRocketChatMessage, sendRocketChatMessageInRoomAsync } from '../MessageHelper';
 import { MessageMapping, RecentActivity, Room, UploadMapping, UserMapping } from '../PersistHelper';
-import { getChatThreadWithMembersAsync, getMessageWithResourceStringAsync, getTeamsUserProfileByIdAsync, MessageType, ThreadType } from '../graph';
+import { getChatThreadWithMembersAsync, getMessageWithResourceStringAsync, MessageType, ThreadType } from '../graph';
 import { getSenderUser } from './getSender';
 import type { InBoundNotification } from './handleInboundNotificationAsync';
 import { PreventRegistry } from '../PreventRegistry';
@@ -94,7 +94,7 @@ export const handleInboundMessageCreatedAsync = async (
 				}
 
 				const teamsMemberIds = threadInfo.memberIds;
-				if (!teamsMemberIds || teamsMemberIds.length == 0) {
+				if (!teamsMemberIds || teamsMemberIds.length === 0) {
 					throw new Error(`No members found for Teams thread ${threadInfo.threadId}`);
 				}
 

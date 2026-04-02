@@ -7,14 +7,11 @@ import type { TeamsBridgeApp } from '../../TeamsBridgeApp';
 import { UnsupportedScenarioHintMessageText } from '../Const';
 import { notifyRocketChatUserInRoomAsync } from '../Notifier';
 import { MessageMapping, Room } from '../PersistHelper';
-import { PreventRegistry } from '../PreventRegistry';
 
 export const handlePreMessageSentPreventAsync = async ({
 	message,
 	read,
-	persistence,
 	app,
-	http,
 }: {
 	message: IMessage;
 	read: IRead;

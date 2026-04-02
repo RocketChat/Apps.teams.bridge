@@ -1,6 +1,5 @@
 import type { IHttp, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';
 import type { ISlashCommand, SlashCommandContext } from '@rocket.chat/apps-engine/definition/slashcommands';
-import { IUser } from '@rocket.chat/apps-engine/definition/users';
 
 import type { TeamsBridgeApp } from '../TeamsBridgeApp';
 import { getUserAccessTokenAsync } from '../lib/AuthHelper';

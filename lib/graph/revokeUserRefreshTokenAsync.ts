@@ -16,8 +16,7 @@ export const revokeUserRefreshTokenAsync = async (http: IHttp, userAccessToken: 
 
 	const response = await http.post(url, httpRequest);
 
-	if (response.statusCode === HttpStatusCode.OK) {
-	} else {
+	if (response.statusCode !== HttpStatusCode.OK) {
 		throw new Error(`Revoke user refresh token failed with http status code ${response.statusCode}.\nReceived: ${JSON.stringify(response.data, null, 2)}`);
 	}
 };

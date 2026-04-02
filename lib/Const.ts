@@ -34,7 +34,7 @@ const GraphApiEndpoint = {
 
 export const AppSetupVerificationPassMessageText: string = 'TeamsBridge app setup verification PASSED!';
 export const AppUserNotLoggedInSetupVerificationHintText: string =
-	'⚠️ Azure AD connection is verified, but the **App Bot User is not logged into Teams**. Relaying will not work. Please run `/teamsbridge-login-app-user` to fix this.';
+	':warning: Azure AD connection is verified, but the **App Bot User is not logged into Teams**. Relaying will not work. Please run `/teamsbridge-login-app-user` to fix this.';
 export const AppSetupVerificationFailMessageText: string =
 	'TeamsBridge app setup verification FAILED! Please check trouble shooting guide for further actions.';
 export const ProvisionTeamsBotUserSucceedMessageText: string = 'Provision Teams bot user succeed!';

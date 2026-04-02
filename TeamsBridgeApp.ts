@@ -20,16 +20,12 @@ import type {
 	IPostMessageDeleted,
 	IPostMessageSent,
 	IPostMessageUpdated,
-	IPreMessageDeletePrevent,
 	IPreMessageSentModify,
 	IPreMessageSentPrevent,
-	IPreMessageUpdatedPrevent,
 } from '@rocket.chat/apps-engine/definition/messages';
 import type { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
 import type { IPostRoomUserJoined, IPreRoomUserLeave, IRoom, IRoomUserJoinedContext, IRoomUserLeaveContext } from '@rocket.chat/apps-engine/definition/rooms';
 import type { IJobContext } from '@rocket.chat/apps-engine/definition/scheduler';
-import { StartupType } from '@rocket.chat/apps-engine/definition/scheduler';
-import { ISetting } from '@rocket.chat/apps-engine/definition/settings';
 import { RoomTypeFilter, UIActionButtonContext } from '@rocket.chat/apps-engine/definition/ui';
 import type {
 	IUIKitResponse,
@@ -64,7 +60,6 @@ import {
 	handlePostMessageUpdatedAsync,
 	handlePostRoomUserJoinedAsync,
 	handlePreFileUploadAsync,
-	handlePreMessageOperationPreventAsync,
 	handlePreMessageSentPreventAsync,
 	handlePreRoomUserLeaveAsync,
 	handleUninstallApp,
@@ -74,7 +69,6 @@ import {
 } from './lib/EventHandler';
 import { notifyRocketChatUserInRoomAsync } from './lib/Notifier';
 import { OAuthNonce, Room, SubscriptionRenewalJob, WebhookSecret } from './lib/PersistHelper';
-import { PreventRegistry } from './lib/PreventRegistry';
 import { getRocketChatAppEndpointUrl } from './lib/UrlHelper';
 import {
 	decodeButtonState,
@@ -90,12 +84,12 @@ import { handleInboundNotificationAsync } from './lib/inboundNotification/handle
 import { RecentActivity } from './lib/persistence';
 import { AddUserSlashCommand } from './slashcommands/AddUserSlashCommand';
 import { BridgeStatusSlashCommand } from './slashcommands/BridgeStatusSlashCommand';
-import { LoginAppUserSlashCommand } from "./slashcommands/LoginAppUserSlashCommand";
-import { LoginTeamsSlashCommand } from "./slashcommands/LoginTeamsSlashCommand";
-import { LogoutTeamsSlashCommand } from "./slashcommands/LogoutTeamsSlashCommand";
-import { SetupVerificationSlashCommand } from "./slashcommands/SetupVerificationSlashCommand";
+import { LoginAppUserSlashCommand } from './slashcommands/LoginAppUserSlashCommand';
+import { LoginTeamsSlashCommand } from './slashcommands/LoginTeamsSlashCommand';
 import { LogoutAppUserSlashCommand } from './slashcommands/LogoutAppUserSlashCommand';
+import { LogoutTeamsSlashCommand } from './slashcommands/LogoutTeamsSlashCommand';
 import { ResubscribeMessages } from './slashcommands/ResubscriptionMessages';
+import { SetupVerificationSlashCommand } from './slashcommands/SetupVerificationSlashCommand';
 import { ViewTeamsMembersSlashCommand } from './slashcommands/ViewTeamsMembersSlashCommand';
 
 export class TeamsBridgeApp
@@ -104,9 +98,7 @@ export class TeamsBridgeApp
 		IPreMessageSentPrevent,
 		IPostMessageSent,
 		IPostMessageUpdated,
-		IPreMessageUpdatedPrevent,
 		IPostMessageDeleted,
-		IPreMessageDeletePrevent,
 		IPreFileUpload,
 		IPreMessageSentModify,
 		IPreRoomUserLeave,
@@ -117,7 +109,7 @@ export class TeamsBridgeApp
 		super(info, logger, accessors);
 	}
 
-	protected recentActivityCleanupJob = async (jobContext: IJobContext, read: IRead, modify: IModify, http: IHttp, persis: IPersistence): Promise<void> => {
+	protected recentActivityCleanupJob = async (_jobContext: IJobContext, read: IRead, _modify: IModify, _http: IHttp, persis: IPersistence): Promise<void> => {
 		const deletedCount = await RecentActivity.deleteStale(read, persis);
 		this.getLogger().info(`Deleted ${deletedCount} stale recent activities.`);
 	};
@@ -126,7 +118,7 @@ export class TeamsBridgeApp
 		return this.getAccessors().environmentReader.getSettings().getValueById(id);
 	}
 
-	async onInstall(context: IAppInstallationContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {
+	async onInstall(_context: IAppInstallationContext, _read: IRead, _http: IHttp, persistence: IPersistence, _modify: IModify): Promise<void> {
 		await WebhookSecret.create({ persistence });
 	}
 
@@ -137,7 +129,7 @@ export class TeamsBridgeApp
 		http: IHttp,
 		persistence: IPersistence,
 	): Promise<IMessage> {
-		return await handlePreMessageSentModifyAsync({
+		return handlePreMessageSentModifyAsync({
 			app: this,
 			message,
 			builder,
@@ -147,7 +139,7 @@ export class TeamsBridgeApp
 		});
 	}
 
-	async onEnable(environment: IEnvironmentRead, configurationModify: IConfigurationModify): Promise<boolean> {
+	async onEnable(_environment: IEnvironmentRead, configurationModify: IConfigurationModify): Promise<boolean> {
 		try {
 			await configurationModify.scheduler.scheduleOnce({
 				id: WebhookSecretCreationJobId,
@@ -188,7 +180,7 @@ export class TeamsBridgeApp
 		await configurationModify.scheduler.cancelAllJobs();
 	}
 
-	public async onUninstall(context: IAppUninstallationContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {
+	public async onUninstall(_context: IAppUninstallationContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {
 		return handleUninstallApp({
 			read,
 			http,
@@ -199,7 +191,7 @@ export class TeamsBridgeApp
 	}
 
 	public async executePreMessageSentPrevent(message: IMessage, read: IRead, http: IHttp, persistence: IPersistence): Promise<boolean> {
-		return await handlePreMessageSentPreventAsync({
+		return handlePreMessageSentPreventAsync({
 			app: this,
 			message,
 			read,
@@ -219,28 +211,8 @@ export class TeamsBridgeApp
 		});
 	}
 
-	public async executePreMessageUpdatedPrevent(message: IMessage, read: IRead, http: IHttp, persistence: IPersistence): Promise<boolean> {
-		return await handlePreMessageOperationPreventAsync({
-			app: this,
-			message,
-			read,
-			persistence,
-			http,
-		});
-	}
-
-	public async executePostMessageUpdated(message: IMessage, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {
+	public async executePostMessageUpdated(message: IMessage, read: IRead, http: IHttp, persistence: IPersistence, _modify: IModify): Promise<void> {
 		await handlePostMessageUpdatedAsync({
-			app: this,
-			message,
-			read,
-			persistence,
-			http,
-		});
-	}
-
-	public async executePreMessageDeletePrevent(message: IMessage, read: IRead, http: IHttp, persistence: IPersistence): Promise<boolean> {
-		return await handlePreMessageOperationPreventAsync({
 			app: this,
 			message,
 			read,
@@ -254,8 +226,8 @@ export class TeamsBridgeApp
 		read: IRead,
 		http: IHttp,
 		persistence: IPersistence,
-		modify: IModify,
-		context: IMessageDeleteContext,
+		_modify: IModify,
+		_context: IMessageDeleteContext,
 	): Promise<void> {
 		await handlePostMessageDeletedAsync({
 			app: this,
@@ -266,7 +238,7 @@ export class TeamsBridgeApp
 		});
 	}
 
-	public async executePreFileUpload(context: IFileUploadContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {
+	public async executePreFileUpload(context: IFileUploadContext, read: IRead, http: IHttp, persistence: IPersistence, _modify: IModify): Promise<void> {
 		await handlePreFileUploadAsync({
 			app: this,
 			context,
@@ -303,7 +275,8 @@ export class TeamsBridgeApp
 		});
 	}
 
-	public async executePostUserCreated(context: IUserContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {}
+	// eslint-disable-next-line @typescript-eslint/no-empty-function
+	public async executePostUserCreated(_context: IUserContext, _read: IRead, _http: IHttp, _persistence: IPersistence, _modify: IModify): Promise<void> {}
 
 	public async executePostUserDeleted(context: IUserContext, read: IRead, http: IHttp, persistence: IPersistence, modify: IModify): Promise<void> {
 		await handlePostUserDeletedAsync({
@@ -369,7 +342,7 @@ export class TeamsBridgeApp
 		persistence: IPersistence,
 		modify: IModify,
 	): Promise<IUIKitResponse> {
-		const { actionId, value, room, blockId } = context.getInteractionData();
+		const { actionId, value, room } = context.getInteractionData();
 		const roomId = getRoomIdFromActionId(actionId) ?? room?.id ?? '';
 
 		if (isActionId(actionId, UIActionId.TeamsUserSearchInput)) {
@@ -429,9 +402,9 @@ export class TeamsBridgeApp
 	}
 
 	public async executeViewClosedHandler(): Promise<IUIKitResponse> {
-		return {
+		return Promise.resolve({
 			success: true,
-		};
+		});
 	}
 
 	public async executeViewSubmitHandler(
@@ -504,13 +477,13 @@ export class TeamsBridgeApp
 	};
 
 	protected webhookSecretCreationJob = async (
-		jobContext: IJobContext,
+		_jobContext: IJobContext,
 		read: IRead,
-		modify: IModify,
+		_modify: IModify,
 		http: IHttp,
 		persistence: IPersistence,
 	): Promise<void> => {
-		handleWebhookSecretCreationAsync({
+		await handleWebhookSecretCreationAsync({
 			app: this,
 			read,
 			http,
@@ -518,7 +491,7 @@ export class TeamsBridgeApp
 		});
 	};
 
-	protected registrationRenewalsJob = async (jobContext: IJobContext, read: IRead, modify: IModify, http: IHttp, persistence: IPersistence) => {
+	protected registrationRenewalsJob = async (jobContext: IJobContext, read: IRead, _modify: IModify, http: IHttp, persistence: IPersistence) => {
 		try {
 			this.getLogger().info(`[Teams Bridge] Start renew registrations! (from: ${jobContext.from})`);
 			const jobState = await SubscriptionRenewalJob.find({
@@ -603,7 +576,7 @@ export class TeamsBridgeApp
 		});
 
 		// Config a scheduler for UserAccessToken & Subscription auto renew and start it
-		configuration.scheduler.registerProcessors([
+		await configuration.scheduler.registerProcessors([
 			{
 				id: RegistrationAutoRenewSchedulerId,
 				processor: this.registrationRenewalsJob,

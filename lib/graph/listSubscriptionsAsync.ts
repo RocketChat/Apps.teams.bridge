@@ -32,4 +32,5 @@ export const listSubscriptionsAsync = async (
 		return subscriptions.filter((subscription) => subscription.notificationUrl.includes(pathWithQuery));
 	}
 	console.error(`List subscriptions failed with http status code ${response.statusCode}. \nReceived: ${JSON.stringify(response.data, null, 2)}`);
+	return undefined;
 };

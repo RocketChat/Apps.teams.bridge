@@ -7,11 +7,8 @@ import { PreventRegistry } from '../PreventRegistry';
 
 export const handlePreMessageSentModifyAsync = async ({
 	message,
-	builder,
 	read,
-	http,
 	persistence,
-	app,
 }: {
 	message: IMessage;
 	builder: IMessageBuilder;
@@ -55,9 +52,11 @@ export const handlePreMessageSentModifyAsync = async ({
 		const targetAttachment = message.attachments![targetAttachmentIndex];
 		const currentTitle = targetAttachment.title?.value;
 
-		const unmappedFiles = message._unmappedProperties_?.files;
+		const unmappedFiles = (message as any)._unmappedProperties_?.files;
 		if (Array.isArray(unmappedFiles)) {
-			message._unmappedProperties_.files = unmappedFiles.map((file: any) => (file.name === currentTitle ? { ...file, name: originalFilename } : file));
+			(message as any)._unmappedProperties_.files = unmappedFiles.map((file: any) =>
+				file.name === currentTitle ? { ...file, name: originalFilename } : file,
+			);
 		}
 
 		message.attachments![targetAttachmentIndex] = {

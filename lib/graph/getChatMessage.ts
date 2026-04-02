@@ -1,9 +1,10 @@
 import type { IHttp, IHttpRequest } from '@rocket.chat/apps-engine/definition/accessors';
 import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
-import { getChatMessageUrl, getGraphApiResourceUrl } from '../Const';
+import { getChatMessageUrl } from '../Const';
 import { parseMessageType, parseMessageContentType } from './parsers';
-import type { Attachment, GetMessageResponse, MessageType } from './types';
+import type { Attachment, GetMessageResponse } from './types';
+import { MessageType } from './types';
 
 // TODO: Test it.
 export const getChatMessage = async (http: IHttp, threadId: string, messageId: string, userAccessToken: string): Promise<GetMessageResponse> => {

@@ -43,8 +43,7 @@ export const updateTextMessageInChatThreadAsync = async ({
 
 	const response = await http.patch(url, httpRequest);
 
-	if (response.statusCode === HttpStatusCode.NO_CONTENT) {
-	} else {
+	if (response.statusCode !== HttpStatusCode.NO_CONTENT) {
 		throw new Error(`Update message in chat thread failed with http status code ${response.statusCode}.`);
 	}
 };

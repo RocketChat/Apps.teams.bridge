@@ -3,7 +3,8 @@ import { HttpStatusCode } from '@rocket.chat/apps-engine/definition/accessors';
 
 import { getGraphApiResourceUrl } from '../Const';
 import { parseMessageType, parseMessageContentType } from './parsers';
-import type { Attachment, GetMessageResponse, MessageType } from './types';
+import type { Attachment, GetMessageResponse } from './types';
+import { MessageType } from './types';
 
 export const getMessageWithResourceStringAsync = async (http: IHttp, resourceString: string, userAccessToken: string): Promise<GetMessageResponse> => {
 	const url = getGraphApiResourceUrl(resourceString);

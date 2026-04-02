@@ -59,7 +59,7 @@ export const notifyRoomMembersAppUserNotLoggedInAsync = async (options: {
 	app: TeamsBridgeApp;
 	roomId: string;
 }): Promise<void> => {
-	const { read, modify, http, persistence, app, roomId } = options;
+	const { read, modify, persistence, app, roomId } = options;
 
 	const appUser = await read.getUserReader().getAppUser(app.getID());
 	if (!appUser) {

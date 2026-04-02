@@ -220,6 +220,7 @@ export type Inlines = Markup | Timestamp | InlineCode | Image | Link | UserMenti
 
 export type Blocks = Code | Heading | Quote | ListItem | Tasks | OrderedList | UnorderedList | LineBreak | KaTeX;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type MessageBlock = Emoji | ChannelMention | UserMention | Link | MarkupExcluding<Bold> | InlineCode;
 
 type RootNode = Paragraph | Blocks | BigEmoji;
@@ -251,7 +252,6 @@ const stripHtml = (s: string) => {
 };
 
 export const createTeamsHTMLMessage = (root: Root, siteUrl?: string) => {
-	const renderChildren = (arr: AnyNode[] | undefined) => (arr ?? []).map(render).join('');
 	const renderInlineArray = (arr: (Inlines | { type: undefined; fallback: Plain })[]) => arr.map(render).join('');
 
 	const render = (node: AnyNode): string => {

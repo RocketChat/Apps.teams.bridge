@@ -7,7 +7,7 @@ import type { TeamsBridgeApp } from '../TeamsBridgeApp';
 import { getAppAccessTokenAsync, getUserAccessTokenAsync } from './AuthHelper';
 import { UIActionId, UIElementId, UIElementText } from './Const';
 import { getTeamsChatMembersAsync, searchTeamsUsersAsync } from './MicrosoftGraphApi';
-import type { TeamsChatMember, GetTeamsChatMembersResult } from './MicrosoftGraphApi';
+import type { TeamsChatMember } from './MicrosoftGraphApi';
 import { notifyRocketChatUserInRoomAsync } from './Notifier';
 import { Room, UserMapping } from './PersistHelper';
 import type { UserModel } from './PersistHelper';

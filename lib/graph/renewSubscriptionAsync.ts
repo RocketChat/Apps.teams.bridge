@@ -47,4 +47,5 @@ export const renewSubscriptionAsync = async (
 		return result;
 	}
 	console.error(`Renew subscription failed with http status code ${response.statusCode}.\nReceived: ${JSON.stringify(response.data, null, 2)}`);
+	return undefined;
 };

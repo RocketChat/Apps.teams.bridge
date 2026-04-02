@@ -60,11 +60,11 @@ export const sendRocketChatMessageInRoomAsync = async (
 		text: messageText,
 		sender,
 		room,
-		attachments: [await buildExtraInfoAttachment({ source: 'ms-teams', ...(options?.alias && { alias: options.alias }) })],
+		attachments: [buildExtraInfoAttachment({ source: 'ms-teams', ...(options?.alias && { alias: options.alias }) })],
 	};
 
 	const messageBuilder: IMessageBuilder = creator.startMessage(message);
-	return await creator.finish(messageBuilder);
+	return creator.finish(messageBuilder);
 };
 
 export const generateUploadCallback =
@@ -272,7 +272,7 @@ export const mapRocketChatMessageToTeamsMessageV2 = async ({
 }) => {
 	// Handle emoji in text
 	const text = message.text ?? '';
-	const md = message._unmappedProperties_?.md ?? [];
+	const md = (message as any)._unmappedProperties_?.md ?? [];
 	if (md.length === 0 && text) {
 		return {
 			text: mapRocketChatMessageToTeamsMessage(text, originalSenderName),

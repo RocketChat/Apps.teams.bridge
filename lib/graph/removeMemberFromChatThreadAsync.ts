@@ -14,8 +14,7 @@ export const removeMemberFromChatThreadAsync = async (http: IHttp, threadId: str
 
 	const response = await http.del(url, httpRequest);
 
-	if (response.statusCode === HttpStatusCode.NO_CONTENT) {
-	} else {
+	if (response.statusCode !== HttpStatusCode.NO_CONTENT) {
 		throw new Error(`Remove member from chat thread failed with http status code ${response.statusCode}.`);
 	}
 };

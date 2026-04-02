@@ -6,7 +6,7 @@ import { getUserAccessTokenAsync } from '../AuthHelper';
 import { AppUserAddedToRoomMessageText } from '../Const';
 import { addMemberToChatThreadAsync } from '../MicrosoftGraphApi';
 import { notifyRocketChatUserInRoomAsync, notifyRoomMembersAppUserNotLoggedInAsync } from '../Notifier';
-import { AppUserLoginNotified, Room, UserMapping } from '../PersistHelper';
+import { Room, UserMapping } from '../PersistHelper';
 import { PreventRegistry } from '../PreventRegistry';
 
 export const handlePostRoomUserJoinedAsync = async (options: {

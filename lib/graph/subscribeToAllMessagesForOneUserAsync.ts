@@ -43,7 +43,7 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
 
 	const url = getGraphApiSubscriptionUrl();
 
-	const notificationUrl = getNotificationEndpointUrl({
+	const notificationUrl = await getNotificationEndpointUrl({
 		subscriberEndpoint: subscriberEndpointUrl,
 		rocketChatUserId,
 	});
@@ -81,7 +81,7 @@ export const subscribeToAllMessagesForOneUserAsync = async (options: {
 				if (!shouldRenew && !forceRenew) {
 					return;
 				}
-				return await renewSubscriptionAsync(http, existingSubscriptions[0].id, userAccessToken, expirationDateTime, clientState);
+				return renewSubscriptionAsync(http, existingSubscriptions[0].id, userAccessToken, expirationDateTime, clientState);
 			}
 		}
 	}

@@ -13,7 +13,7 @@ export const getReplyAttachment = async ({
 	userAccessToken: string;
 	parentMessageId: string;
 	threadId: string;
-}) => {
+}): Promise<{ id: string; contentType: string; content: string } | undefined> => {
 	const url = getGraphApiMessageUrl(threadId, parentMessageId, false);
 
 	const httpRequest: IHttpRequest = {
@@ -44,4 +44,5 @@ export const getReplyAttachment = async ({
 		};
 	}
 	console.error(`Get Teams message by ID failed with http status code ${response.statusCode}.`);
+	return undefined;
 };

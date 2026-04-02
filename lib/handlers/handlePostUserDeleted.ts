@@ -9,8 +9,6 @@ export const handlePostUserDeletedAsync = async ({
 	context,
 	read,
 	persistence,
-	http,
-	modify,
 }: {
 	app: App;
 	context: IUserContext;

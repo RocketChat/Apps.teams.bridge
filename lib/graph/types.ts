@@ -68,7 +68,7 @@ export interface TeamsMessageReaction {
 			'@odata.type': '#microsoft.graph.teamworkUserIdentity';
 			id: string;
 			displayName: string | null;
-			userIdentityType: 'aadUser' | string;
+			userIdentityType: string;
 			tenantId: string;
 		};
 	};

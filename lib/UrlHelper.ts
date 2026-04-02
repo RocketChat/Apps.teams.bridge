@@ -24,7 +24,7 @@ export const getRocketChatAppEndpointUrl = async (appAccessors: IAppAccessors, a
 };
 
 export function getNotificationEndpointUrl(params: { appAccessors: IAppAccessors; rocketChatUserId: string }): Promise<string>;
-export function getNotificationEndpointUrl(params: { rocketChatUserId: string; subscriberEndpoint: string }): string;
+export function getNotificationEndpointUrl(params: { rocketChatUserId: string; subscriberEndpoint: string }): Promise<string>;
 export function getNotificationEndpointUrl({
 	appAccessors,
 	rocketChatUserId,
@@ -33,15 +33,14 @@ export function getNotificationEndpointUrl({
 	appAccessors?: IAppAccessors;
 	rocketChatUserId?: string;
 	subscriberEndpoint?: string;
-}): Promise<string> | string {
+}): Promise<string> {
 	if (appAccessors) {
-		return new Promise(async (resolve) => {
-			const subscriberEndpointUrl = await getRocketChatAppEndpointUrl(appAccessors, SubscriberEndpointPath);
-			resolve(`${subscriberEndpointUrl}?userId=${rocketChatUserId}`);
-		});
+		return getRocketChatAppEndpointUrl(appAccessors, SubscriberEndpointPath).then(
+			(subscriberEndpointUrl) => `${subscriberEndpointUrl}?userId=${rocketChatUserId}`,
+		);
 	}
 	if (subscriberEndpoint && rocketChatUserId) {
-		return `${subscriberEndpoint}?userId=${rocketChatUserId}&hasClientState=1`;
+		return Promise.resolve(`${subscriberEndpoint}?userId=${rocketChatUserId}&hasClientState=1`);
 	}
 	throw new Error('Invalid parameters');
 }

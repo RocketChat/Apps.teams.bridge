@@ -1,4 +1,4 @@
-import type { IRead, IModify, IHttp, IPersistence } from '@rocket.chat/apps-engine/definition/accessors';
+import type { IRead } from '@rocket.chat/apps-engine/definition/accessors';
 import type { ISlashCommand, SlashCommandContext } from '@rocket.chat/apps-engine/definition/slashcommands';
 import type { IUser } from '@rocket.chat/apps-engine/definition/users';
 
@@ -20,7 +20,7 @@ export class BridgeStatusSlashCommand implements ISlashCommand {
 
 	constructor(private app: TeamsBridgeApp) {}
 
-	public async executor(context: SlashCommandContext, read: IRead, modify: IModify, http: IHttp, persis: IPersistence): Promise<void> {
+	public async executor(context: SlashCommandContext, read: IRead): Promise<void> {
 		const currentRoom = context.getRoom();
 		const commandSender = context.getSender();
 		const appUser = (await read.getUserReader().getAppUser()) as IUser;

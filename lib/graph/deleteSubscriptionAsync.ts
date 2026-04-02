@@ -15,8 +15,7 @@ export const deleteSubscriptionAsync = async (http: IHttp, subscriptionId: strin
 
 	const response = await http.del(url, httpRequest);
 
-	if (response.statusCode === HttpStatusCode.NO_CONTENT) {
-	} else {
+	if (response.statusCode !== HttpStatusCode.NO_CONTENT) {
 		throw new Error(`Delete subscription failed with http status code ${response.statusCode}.`);
 	}
 };

@@ -16,7 +16,7 @@ export interface RecentActivityModel {
 
 export const RecentActivity = {
 	async set(options: { read: IRead; persistence: IPersistence; rcUserId: string; teamsThreadId: string; kind: ActivityKind }): Promise<string | null> {
-		const { persistence, rcUserId, teamsThreadId, kind, read } = options;
+		const { persistence, rcUserId, teamsThreadId, kind } = options;
 		const associations = [
 			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY),
 			new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, `${rcUserId}:${teamsThreadId}:${kind}`),

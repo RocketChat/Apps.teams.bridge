@@ -229,7 +229,7 @@ export const extractMainTextNodesFromBridgedMessageNodes = (nodes: ParseResult):
 			child.type === 'element' &&
 			child.tagName === 'p' &&
 			child.children.length > 0 &&
-			!child.children.every((c) => c.type === 'text' && c.content == '\n')
+			!child.children.every((c) => c.type === 'text' && c.content === '\n')
 		) {
 			start = true;
 		}
