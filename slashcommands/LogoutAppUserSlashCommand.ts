@@ -32,6 +32,11 @@ export class LogoutAppUserSlashCommand implements ISlashCommand {
 		const commandSender = context.getSender();
 		const currentRoom = context.getRoom();
 
+		if (!commandSender.roles.includes('admin')) {
+			await notifyRocketChatUserInRoomAsync('This command is only for admin users.', commandSender, commandSender, currentRoom, notifier);
+			return;
+		}
+
 		const appUserToken = await getUserAccessTokenAsync({
 			read,
 			persistence,

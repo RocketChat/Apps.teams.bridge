@@ -36,6 +36,11 @@ export class LoginAppUserSlashCommand implements ISlashCommand {
 		const commandSender = context.getSender();
 		const room = context.getRoom();
 
+		if (!commandSender.roles.includes('admin')) {
+			await notifyRocketChatUserInRoomAsync('This command is only for admin users.', commandSender, commandSender, room, modify.getNotifier());
+			return;
+		}
+
 		// Check if the app user already has a valid Teams token
 		const existingToken = await getUserAccessTokenAsync({
 			read,

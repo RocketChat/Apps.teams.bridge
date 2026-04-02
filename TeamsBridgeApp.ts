@@ -343,7 +343,7 @@ export class TeamsBridgeApp
 		modify: IModify,
 	): Promise<IUIKitResponse> {
 		const { actionId, value, room } = context.getInteractionData();
-		const roomId = getRoomIdFromActionId(actionId) ?? room?.id ?? '';
+		const roomId = room?.id ?? getRoomIdFromActionId(actionId) ?? '';
 
 		if (isActionId(actionId, UIActionId.TeamsUserSearchInput)) {
 			// Fires on every keystroke (ON_CHARACTER_ENTERED dispatch).
