@@ -39,6 +39,8 @@ const GraphApiEndpoint = {
 };
 
 export const AppSetupVerificationPassMessageText: string = 'TeamsBridge app setup verification PASSED!';
+export const AppUserNotLoggedInSetupVerificationHintText: string =
+    '⚠️ Azure AD connection is verified, but the **App Bot User is not logged into Teams**. Relaying will not work. Please run `/teamsbridge-login-app-user` to fix this.';
 export const AppSetupVerificationFailMessageText: string =
     'TeamsBridge app setup verification FAILED! Please check trouble shooting guide for further actions.';
 export const ProvisionTeamsBotUserSucceedMessageText: string = 'Provision Teams bot user succeed!';
@@ -96,6 +98,12 @@ export const AppUserLoginRequiredHintMessageText: string =
     + 'Messages in this room may not be fully relayed. '
     + 'Please ask your Rocket.Chat administrator to run /teamsbridge-login-app-user to fix this.';
 export const AppUserAddedToRoomMessageText: string = 'Hey, I been added to this room. So the room is now an active bridge room and I will start relaying messages between Rocket.Chat and Microsoft Teams.';
+export const RoomNotBridgedHintMessageText: string =
+    'This room is not bridged to Microsoft Teams. To activate bridging, add me to this room.';
+export const BridgeStatusActiveMessageText: string =
+    '✅ This room is **bridged** to Microsoft Teams. Messages are being relayed between Rocket.Chat and Teams.';
+export const BridgeStatusInactiveMessageText: string =
+    '❌ This room is **not bridged** to Microsoft Teams. To activate bridging, add me to this room.';
 export const LoginButtonText: string = 'Login Teams';
 
 export const NormalUserAuthenticationScopes = [

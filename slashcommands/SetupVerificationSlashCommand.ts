@@ -6,11 +6,13 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { getApplicationAccessTokenAsync } from "../lib/MicrosoftGraphApi";
+import { getApplicationAccessTokenAsync, verifyUserAccessTokenAsync } from "../lib/MicrosoftGraphApi";
 import { notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
 import { AppSetting } from "../config/Settings";
 import { AppToken } from "../lib/PersistHelper";
-import { AppSetupVerificationFailMessageText, AppSetupVerificationPassMessageText } from "../lib/Const";
+import { AppSetupVerificationFailMessageText, AppSetupVerificationPassMessageText, AppUserNotLoggedInSetupVerificationHintText } from "../lib/Const";
+import { getUserAccessTokenAsync } from "../lib/AuthHelper";
+import { TeamsBridgeApp } from "../TeamsBridgeApp";
 
 export class SetupVerificationSlashCommand implements ISlashCommand {
     public command: string = 'teamsbridge-setup-verification';
@@ -20,6 +22,8 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
     // This slash command should only be seen/used by admin user
     public permission?: string | undefined = 'manage-apps';
     public providesPreview: boolean = false;
+
+    constructor(private readonly app: TeamsBridgeApp) {}
 
     public async executor(
         context: SlashCommandContext,
@@ -40,7 +44,24 @@ export class SetupVerificationSlashCommand implements ISlashCommand {
             const epochNow = Math.round(Date.now() / 1000);
             await AppToken.persist(persis, response.accessToken, epochNow + response.expiresIn);
 
-            await notifyRocketChatUserInRoomAsync(AppSetupVerificationPassMessageText, appUser, messageReceiver, room, modify.getNotifier());
+            const appUserToken = await getUserAccessTokenAsync({
+                read,
+                persistence: persis,
+                rocketChatUserId: appUser.id,
+                http,
+                app: this.app,
+            });
+
+            if (!appUserToken) {
+                await notifyRocketChatUserInRoomAsync(AppUserNotLoggedInSetupVerificationHintText, appUser, messageReceiver, room, modify.getNotifier());
+            } else {
+                const isTokenValid = await verifyUserAccessTokenAsync(http, appUserToken);
+                if (!isTokenValid) {
+                    await notifyRocketChatUserInRoomAsync(AppUserNotLoggedInSetupVerificationHintText, appUser, messageReceiver, room, modify.getNotifier());
+                } else {
+                    await notifyRocketChatUserInRoomAsync(AppSetupVerificationPassMessageText, appUser, messageReceiver, room, modify.getNotifier());
+                }
+            }
         } catch (error) {
             await notifyRocketChatUserInRoomAsync(AppSetupVerificationFailMessageText, appUser, messageReceiver, room, modify.getNotifier());
         }

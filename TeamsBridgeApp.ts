@@ -109,10 +109,13 @@ import { LoginAppUserSlashCommand } from "./slashcommands/LoginAppUserSlashComma
 import { LogoutAppUserSlashCommand } from "./slashcommands/LogoutAppUserSlashCommand";
 import { ResubscribeMessages } from "./slashcommands/ResubscriptionMessages";
 import { ViewTeamsMembersSlashCommand } from "./slashcommands/ViewTeamsMembersSlashCommand";
-import { OAuthNonce, SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
+import { BridgeStatusSlashCommand } from "./slashcommands/BridgeStatusSlashCommand";
+import { OAuthNonce, Room, SubscriptionRenewalJob, WebhookSecret } from "./lib/PersistHelper";
 import { PreventRegistry } from "./lib/PreventRegistry";
 import { handleInboundNotificationAsync } from "./lib/inboundNotification/handleInboundNotificationAsync";
 import { handleWebhookSecretCreationAsync } from "./lib/handlers/handleWebhookSecretCreation";
+import { notifyRocketChatUserInRoomAsync } from "./lib/Notifier";
+import { RoomNotBridgedHintMessageText } from "./lib/Const";
 
 export class TeamsBridgeApp
     extends App
@@ -421,6 +424,18 @@ export class TeamsBridgeApp
                 throw new Error("App user not found");
             }
 
+            const isBridged = await Room.isBridged(read, data.room.id);
+            if (!isBridged) {
+                await notifyRocketChatUserInRoomAsync(
+                    RoomNotBridgedHintMessageText,
+                    appUser,
+                    data.user,
+                    data.room,
+                    read.getNotifier(),
+                );
+                return { success: true };
+            }
+
             await openAddTeamsUserContextualBarBlocksAsync(
                 data.triggerId,
                 data.room,
@@ -435,6 +450,24 @@ export class TeamsBridgeApp
         }
 
         if (data.actionId === UIActionId.ViewTeamsMembersButtonClicked) {
+            const appUser = await read.getUserReader().getAppUser();
+
+            if (!appUser) {
+                throw new Error("App user not found");
+            }
+
+            const isBridged = await Room.isBridged(read, data.room.id);
+            if (!isBridged) {
+                await notifyRocketChatUserInRoomAsync(
+                    RoomNotBridgedHintMessageText,
+                    appUser,
+                    data.user,
+                    data.room,
+                    read.getNotifier(),
+                );
+                return { success: true };
+            }
+
             await openViewTeamsMembersContextualBarAsync(
                 data.triggerId,
                 data.room,
@@ -698,7 +731,7 @@ export class TeamsBridgeApp
 
         await Promise.all([
             configuration.slashCommands.provideSlashCommand(
-                new SetupVerificationSlashCommand(),
+                new SetupVerificationSlashCommand(this),
             ),
             configuration.slashCommands.provideSlashCommand(
                 new LoginTeamsSlashCommand(this),
@@ -720,6 +753,9 @@ export class TeamsBridgeApp
             ),
             configuration.slashCommands.provideSlashCommand(
                 new ViewTeamsMembersSlashCommand(this),
+            ),
+            configuration.slashCommands.provideSlashCommand(
+                new BridgeStatusSlashCommand(this),
             ),
         ]);
 

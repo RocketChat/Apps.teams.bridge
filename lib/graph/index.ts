@@ -29,3 +29,4 @@ export * from './downloadOneDriveFileAsync';
 export * from './uploadFileToOneDriveAsync';
 export * from './shareOneDriveFileAsync';
 export * from './getOneDriveFileLinkAsync';
+export * from './verifyUserAccessTokenAsync';

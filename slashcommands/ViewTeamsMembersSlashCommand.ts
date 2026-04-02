@@ -2,10 +2,11 @@ import { IRead, IModify, IHttp, IPersistence } from "@rocket.chat/apps-engine/de
 import { ISlashCommand, SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
-import { AddUserRoomTypeInvalidHintMessageText } from "../lib/Const";
+import { AddUserRoomTypeInvalidHintMessageText, RoomNotBridgedHintMessageText } from "../lib/Const";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { openViewTeamsMembersContextualBarAsync } from "../lib/UserInterfaceHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
+import { Room } from "../lib/PersistHelper";
 
 
 export class ViewTeamsMembersSlashCommand implements ISlashCommand {
@@ -32,6 +33,15 @@ export class ViewTeamsMembersSlashCommand implements ISlashCommand {
         if (currentRoom.type === RoomType.DIRECT_MESSAGE || currentRoom.type === RoomType.CHANNEL) {
             await notifyRocketChatUserInRoomAsync(
                 AddUserRoomTypeInvalidHintMessageText,
+                appUser, commandSender, currentRoom, read.getNotifier(),
+            );
+            return;
+        }
+
+        const isBridged = await Room.isBridged(read, currentRoom.id);
+        if (!isBridged) {
+            await notifyRocketChatUserInRoomAsync(
+                RoomNotBridgedHintMessageText,
                 appUser, commandSender, currentRoom, read.getNotifier(),
             );
             return;

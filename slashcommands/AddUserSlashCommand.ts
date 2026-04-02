@@ -4,10 +4,12 @@ import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 import { notifyRocketChatUserInRoomAsync } from "../lib/Notifier";
 import {
     AddUserRoomTypeInvalidHintMessageText,
+    RoomNotBridgedHintMessageText,
 } from "../lib/Const";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { openAddTeamsUserContextualBarBlocksAsync } from "../lib/UserInterfaceHelper";
 import { TeamsBridgeApp } from "../TeamsBridgeApp";
+import { Room } from "../lib/PersistHelper";
 
 
 export class AddUserSlashCommand implements ISlashCommand {
@@ -33,6 +35,12 @@ export class AddUserSlashCommand implements ISlashCommand {
 
         if (currentRoom.type === RoomType.DIRECT_MESSAGE || currentRoom.type === RoomType.CHANNEL) {
             await notifyRocketChatUserInRoomAsync(AddUserRoomTypeInvalidHintMessageText, appUser, commandSender, currentRoom, read.getNotifier());
+            return;
+        }
+
+        const isBridged = await Room.isBridged(read, currentRoom.id);
+        if (!isBridged) {
+            await notifyRocketChatUserInRoomAsync(RoomNotBridgedHintMessageText, appUser, commandSender, currentRoom, read.getNotifier());
             return;
         }
 
