@@ -1,132 +1,77 @@
-import {
-    IHttp,
-    IModify,
-    IPersistence,
-    IRead,
-} from '@rocket.chat/apps-engine/definition/accessors';
-import {
-    ISlashCommand,
-    SlashCommandContext,
-} from '@rocket.chat/apps-engine/definition/slashcommands';
-import { IUser } from '@rocket.chat/apps-engine/definition/users';
-import {
-    LogoutNoNeedHintMessageText,
-    LogoutSuccessHintMessageText,
-} from '../lib/Const';
-import { notifyRocketChatUserInRoomAsync } from '../lib/MessageHelper';
-import {
-    deleteAllSubscriptions,
-    revokeUserRefreshTokenAsync,
-} from '../lib/MicrosoftGraphApi';
-import {
-    deleteUserAccessTokenAsync,
-    deleteUserAsync,
-    retrieveLoginMessageSentStatus,
-    saveLoginMessageSentStatus,
-} from '../lib/PersistHelper';
-import { getNotificationEndpointUrl } from '../lib/UrlHelper';
-import { TeamsBridgeApp } from '../TeamsBridgeApp';
+import type { IHttp, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';
+import type { ISlashCommand, SlashCommandContext } from '@rocket.chat/apps-engine/definition/slashcommands';
+
+import type { TeamsBridgeApp } from '../TeamsBridgeApp';
 import { getUserAccessTokenAsync } from '../lib/AuthHelper';
+import { LogoutNoNeedHintMessageText, LogoutSuccessHintMessageText } from '../lib/Const';
+import { deleteAllSubscriptions } from '../lib/MicrosoftGraphApi';
+import { notifyRocketChatUserInRoomAsync } from '../lib/Notifier';
+import { LoginMessage, UserMapping, UserRegistration } from '../lib/PersistHelper';
+import { getNotificationEndpointUrl } from '../lib/UrlHelper';
 
 export class LogoutTeamsSlashCommand implements ISlashCommand {
-    public command: string = 'teamsbridge-logout-teams';
-    public i18nParamsExample: string;
-    public i18nDescription: string = 'logout_teams_slash_command_description';
+	public command: string = 'teamsbridge-logout-teams';
 
-    public permission?: string | undefined;
-    public providesPreview: boolean = false;
+	public i18nParamsExample: string;
 
-    public constructor(private readonly app: TeamsBridgeApp) {}
+	public i18nDescription: string = 'logout_teams_slash_command_description';
 
-    public async executor(
-        context: SlashCommandContext,
-        read: IRead,
-        modify: IModify,
-        http: IHttp,
-        persistence: IPersistence
-    ): Promise<void> {
-        const notifier = modify.getNotifier();
-        const appUser = (await read.getUserReader().getByUsername('microsoftteamsbridge.bot')) as IUser;
-        const sender = context.getSender();
-        const currentRoom = context.getRoom();
+	public permission?: string | undefined;
 
-        // Retrieve existing access token
-        const rocketChatUserId = sender.id;
-        const userAccessToken = await getUserAccessTokenAsync({
-            read,
-            persistence,
-            rocketChatUserId,
-            app: this.app,
-            http,
-        });
+	public providesPreview: boolean = false;
 
-        const wasSent = await retrieveLoginMessageSentStatus({
-            read,
-            rocketChatUserId,
-        });
+	public constructor(private readonly app: TeamsBridgeApp) {}
 
-        if (!userAccessToken) {
-            if (wasSent) {
-                return;
-            }
-            // No need to log out
-            await notifyRocketChatUserInRoomAsync(
-                LogoutNoNeedHintMessageText,
-                appUser,
-                sender,
-                currentRoom,
-                notifier
-            );
+	public async executor(context: SlashCommandContext, read: IRead, modify: IModify, http: IHttp, persistence: IPersistence): Promise<void> {
+		const notifier = modify.getNotifier();
+		const appUser = await read.getUserReader().getAppUser();
+		const sender = context.getSender();
+		const currentRoom = context.getRoom();
 
-            await saveLoginMessageSentStatus({
-                persistence,
-                rocketChatUserId,
-                wasSent: false,
-            });
+		// Retrieve existing access token
+		const rocketChatUserId = sender.id;
+		const userAccessToken = await getUserAccessTokenAsync({
+			read,
+			persistence,
+			rocketChatUserId,
+			app: this.app,
+			http,
+		});
 
-            return;
-        }
+		// Delete remote subscriptions only when we have a token; cleanup is always performed
+		// so stale records don't linger even if the token has already expired or was lost.
+		if (userAccessToken) {
+			try {
+				await deleteAllSubscriptions(
+					http,
+					userAccessToken,
+					await getNotificationEndpointUrl({
+						appAccessors: this.app.getAccessors(),
+						rocketChatUserId,
+					}),
+				);
+			} catch (error) {
+				this.app.getLogger().warn(`[teamsbridge-logout-teams] Failed to delete subscriptions for user ${rocketChatUserId}. Continuing cleanup.`, error);
+			}
+		}
 
-        await deleteAllSubscriptions(
-            http,
-            userAccessToken,
-            await getNotificationEndpointUrl({
-                appAccessors: this.app.getAccessors(),
-                rocketChatUserId,
-            })
-        );
-
-        // Revoke refresh token
-        try {
-            await revokeUserRefreshTokenAsync(http, userAccessToken);
-        } catch (error) {
-            console.error(
-                `Error during user log out revoking user refresh token. ${error}`
-            );
-            console.error('This error will be ignored and continue log out.');
-        }
-
-        await Promise.all([
-            deleteUserAccessTokenAsync(persistence, rocketChatUserId),
-
-            // Delete user record
-            deleteUserAsync(read, persistence, rocketChatUserId),
-
-            // Notify the user
-            notifyRocketChatUserInRoomAsync(
-                LogoutSuccessHintMessageText,
-                appUser,
-                sender,
-                currentRoom,
-                notifier
-            ),
-
-            // Set the login message status to false
-            saveLoginMessageSentStatus({
-                persistence,
-                rocketChatUserId,
-                wasSent: false,
-            }),
-        ]);
-    }
+		await Promise.all([
+			UserRegistration.delete(persistence, rocketChatUserId),
+			UserMapping.delete(read, persistence, rocketChatUserId),
+			appUser
+				? notifyRocketChatUserInRoomAsync(
+						userAccessToken ? LogoutSuccessHintMessageText : LogoutNoNeedHintMessageText,
+						appUser,
+						sender,
+						currentRoom,
+						notifier,
+					)
+				: Promise.resolve(),
+			LoginMessage.save({
+				persistence,
+				rocketChatUserId,
+				wasSent: false,
+			}),
+		]);
+	}
 }

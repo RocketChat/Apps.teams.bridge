@@ -1,142 +1,118 @@
-import {
-    IHttp,
-    IModify,
-    IPersistence,
-    IRead,
-} from "@rocket.chat/apps-engine/definition/accessors";
-import {
-    ApiEndpoint,
-    IApiEndpointInfo,
-    IApiRequest,
-    IApiResponse,
-} from "@rocket.chat/apps-engine/definition/api";
-import { IncomingNotificationProcessorId, SubscriberEndpointPath } from "../lib/Const";
-import {
-    InBoundNotification,
-    NotificationChangeType,
-    NotificationResourceType,
-} from "../lib/InboundNotificationHelper";
-import { getSubscriptionStateHashForUser } from "../lib/PersistHelper";
-import { TeamsBridgeApp } from "../TeamsBridgeApp";
+import type { IHttp, IModify, IPersistence, IRead } from '@rocket.chat/apps-engine/definition/accessors';
+import type { IApiEndpointInfo, IApiRequest, IApiResponse } from '@rocket.chat/apps-engine/definition/api';
+import { ApiEndpoint } from '@rocket.chat/apps-engine/definition/api';
+
+import type { TeamsBridgeApp } from '../TeamsBridgeApp';
+import { IncomingNotificationProcessorId, SubscriberEndpointPath } from '../lib/Const';
+import { WebhookSecret } from '../lib/PersistHelper';
+import type { InBoundNotification } from '../lib/inboundNotification/handleInboundNotificationAsync';
+import { NotificationChangeType, NotificationResourceType } from '../lib/inboundNotification/handleInboundNotificationAsync';
 
 export class SubscriberEndpoint extends ApiEndpoint {
-    app: TeamsBridgeApp;
-    private supportedChangeTypeMapping = {
-        created: NotificationChangeType.Created,
-        updated: NotificationChangeType.Updated,
-        deleted: NotificationChangeType.Deleted,
-    };
+	app: TeamsBridgeApp;
 
-    private supportedResourceTypeMapping = {
-        "#Microsoft.Graph.chatMessage": NotificationResourceType.ChatMessage,
-    };
+	private supportedChangeTypeMapping = {
+		created: NotificationChangeType.Created,
+		updated: NotificationChangeType.Updated,
+		deleted: NotificationChangeType.Deleted,
+	};
 
-    public path = SubscriberEndpointPath;
+	private supportedResourceTypeMapping = {
+		'#Microsoft.Graph.chatMessage': NotificationResourceType.ChatMessage,
+	};
 
-    constructor(app: TeamsBridgeApp) {
-        super(app);
-        this.parseChangeType = this.parseChangeType.bind(this);
-        this.parseResourceType = this.parseResourceType.bind(this);
-    }
+	public path = SubscriberEndpointPath;
 
-    public async post(
-        request: IApiRequest,
-        endpoint: IApiEndpointInfo,
-        read: IRead,
-        modify: IModify,
-        http: IHttp,
-        persis: IPersistence
-    ): Promise<IApiResponse> {
-        if (request && request.query && request.query.validationToken) {
-            return this.success(request.query.validationToken);
-        }
+	constructor(app: TeamsBridgeApp) {
+		super(app);
+		this.parseChangeType = this.parseChangeType.bind(this);
+		this.parseResourceType = this.parseResourceType.bind(this);
+	}
 
-        const receiverRocketChatUserId: string = request.query.userId;
+	public async post(
+		request: IApiRequest,
+		endpoint: IApiEndpointInfo,
+		read: IRead,
+		modify: IModify,
+		http: IHttp,
+		persis: IPersistence,
+	): Promise<IApiResponse> {
+		if (request && request.query && request.query.validationToken) {
+			return this.success(request.query.validationToken);
+		}
 
-        const notifications = request.content.value as any[];
-        for (let index = 0; index < notifications.length; index++) {
-            try {
-                const rawNotification = notifications[index];
+		const receiverRocketChatUserId: string = request.query.userId;
 
-                const changeType = this.parseChangeType(
-                    rawNotification.changeType
-                );
-                if (!changeType) {
-                    continue;
-                }
+		const notifications = request.content.value as any[];
+		for (let index = 0; index < notifications.length; index++) {
+			try {
+				const rawNotification = notifications[index];
 
-                const resourceType = this.parseResourceType(
-                    rawNotification.resourceData["@odata.type"]
-                );
-                if (!resourceType) {
-                    continue;
-                }
+				const changeType = this.parseChangeType(rawNotification.changeType);
+				if (!changeType) {
+					continue;
+				}
 
-                const clientState = rawNotification.clientState;
+				const resourceType = this.parseResourceType(rawNotification.resourceData['@odata.type']);
+				if (!resourceType) {
+					continue;
+				}
 
-                if (!clientState) {
-                    // If clientState is not present, either it's an old subscription or
-                    // the notification is not from our app. We should ignore it.
-                    const message = `Source of notification cannot be verified. clientState is missing. Processing skipped.`;
-                    this.app.getLogger().error(message);
-                    return {
-                        status: 401,
-                        content: message,
-                    };
-                }
+				const clientState = rawNotification.clientState;
 
-                if (
-                    clientState !==
-                    (await getSubscriptionStateHashForUser(
-                        read.getPersistenceReader(),
-                        persis,
-                        {
-                            rocketChatUserId: receiverRocketChatUserId
-                        }
-                    ))
-                ) {
-                    const message = `Source of notification cannot be verified. clientState is invalid. Processing skipped.`;
-                    this.app.getLogger().error(message);
-                    return {
-                        status: 401,
-                        content: message,
-                    };
-                }
+				if (!clientState) {
+					// If clientState is not present, either it's an old subscription or
+					// the notification is not from our app. We should ignore it.
+					const message = `Source of notification cannot be verified. clientState is missing. Processing skipped.`;
+					this.app.getLogger().error(message);
+					return {
+						status: 401,
+						content: message,
+					};
+				}
 
-                const inBoundNotification: InBoundNotification = {
-                    receiverRocketChatUserId: receiverRocketChatUserId,
-                    subscriptionId: rawNotification.subscriptionId,
-                    changeType: changeType,
-                    resourceId: rawNotification.resourceData.id,
-                    resourceString: rawNotification.resource,
-                    resourceType: resourceType,
-                };
+				if (
+					clientState !==
+					(await WebhookSecret.getSubscriptionStateHash(read.getPersistenceReader(), persis, {
+						rocketChatUserId: receiverRocketChatUserId,
+					}))
+				) {
+					const message = `Source of notification cannot be verified. clientState is invalid. Processing skipped.`;
+					this.app.getLogger().error(message);
+					return {
+						status: 401,
+						content: message,
+					};
+				}
 
-                await modify.getScheduler().scheduleOnce({
-                    when: new Date(),
-                    data: { inBoundNotification },
-                    id: IncomingNotificationProcessorId,
-                });
-            } catch (error) {
-                // If there's an error, print a warning but not block the whole process
-                console.error(
-                    `Error when handling inbound notification. Details: ${error.message}`
-                );
-            }
-        }
+				const inBoundNotification: InBoundNotification = {
+					receiverRocketChatUserId,
+					subscriptionId: rawNotification.subscriptionId,
+					changeType,
+					resourceId: rawNotification.resourceData.id,
+					resourceString: rawNotification.resource,
+					resourceType,
+				};
 
-        return this.success("OK");
-    }
+				await modify.getScheduler().scheduleOnce({
+					when: new Date(),
+					data: { inBoundNotification },
+					id: IncomingNotificationProcessorId,
+				});
+			} catch (error) {
+				// If there's an error, print a warning but not block the whole process
+				console.error(`Error when handling inbound notification. Details: ${error.message}`);
+			}
+		}
 
-    private parseChangeType(
-        changeType: string
-    ): NotificationChangeType | undefined {
-        return this.supportedChangeTypeMapping[changeType];
-    }
+		return this.success('OK');
+	}
 
-    private parseResourceType(
-        resourceType: string
-    ): NotificationResourceType | undefined {
-        return this.supportedResourceTypeMapping[resourceType];
-    }
+	private parseChangeType(changeType: string): NotificationChangeType | undefined {
+		return this.supportedChangeTypeMapping[changeType];
+	}
+
+	private parseResourceType(resourceType: string): NotificationResourceType | undefined {
+		return this.supportedResourceTypeMapping[resourceType];
+	}
 }
