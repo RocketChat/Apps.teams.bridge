@@ -1,18 +1,30 @@
-# TeamsBridge
-Rocket.Chat app to support connecting collaborators across Rocket.Chat and Microsoft Teams
+# Microsoft Teams Bridge
 
-## Getting Started with Rocket.Chat App
-Here are some commands to get started:
-- `rc-apps package`: this command will generate a packaged app file (zip) which can be installed **if** it compiles with TypeScript
-- `rc-apps deploy`: this will do what `package` does but will then ask you for your server url, username, and password to deploy it for you
-
-## Getting Started with TeamsBridge App
-See [Support document](./docs/support.md) for how to use TeamsBridge App.
+Rocket.Chat app to support connecting collaborators across Rocket.Chat and Microsoft Teams. Messages, files, and member updates are relayed in real time so that users on each platform can collaborate without leaving their preferred tool.
 
 ## Documentation
-Here are some links to examples and documentation:
-- [Rocket.Chat Apps TypeScript Definitions Documentation](https://rocketchat.github.io/Rocket.Chat.Apps-engine/)
-- [Rocket.Chat Apps TypeScript Definitions Repository](https://github.com/RocketChat/Rocket.Chat.Apps-engine)
+
+| Guide | Description |
+|-------|-------------|
+| [Overview & Capabilities](./docs/capabilities.md) | What the app does, supported features, and architecture overview |
+| [Setting Up the MS Teams Bridge](./docs/setup.md) | End-to-end admin guide — Azure registration, permissions, settings, and verification |
+| [Creating a Bridged Room](./docs/bridged-rooms.md) | How to activate bridging and add Microsoft Teams users |
+| [Slash Commands Reference](./docs/slash-commands.md) | Complete reference for all slash commands |
+| [App Settings](./docs/settings.md) | Detailed explanation of every configurable setting |
+| [FAQs](./docs/faq.md) | Frequently asked questions |
+| [Troubleshooting](./docs/troubleshooting.md) | Common issues, root causes, and resolution steps |
+
+## Development
+
+### Commands
+
+- `rc-apps package` — Generate a packaged app file (zip) which can be installed if it compiles with TypeScript
+- `rc-apps deploy` — Package and deploy; will prompt for your server URL, username, and password
+
+### Resources
+
+- [Rocket.Chat Apps Engine Documentation](https://rocketchat.github.io/Rocket.Chat.Apps-engine/)
+- [Rocket.Chat Apps Engine Repository](https://github.com/RocketChat/Rocket.Chat.Apps-engine)
 - [Example Rocket.Chat Apps](https://github.com/graywolf336/RocketChatApps)
 - Community Forums
   - [App Requests](https://forums.rocket.chat/c/rocket-chat-apps/requests)
