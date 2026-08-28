@@ -1,74 +1,100 @@
-# This workflow will be responsible to pack the app (compiled and not compiled version) to be added as asset on the release
+# Packages the app (compiled and not compiled) so the zips can be installed manually.
+# On a tag push the zips are kept as a workflow artifact; on a published release
+# they are also attached to that release.
 name: Package App
-# L4-L7 - This section is the push tags trigger that will run the package job
+
 on:
-  workflow_dispatch:
-    push:
-      tags:
-        - '*'
+  push:
+    tags:
+      - '*'
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
-# This is the main job that will be running in a virtual machine (ubuntu)
+
 jobs:
   package:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      # L21-L25 This is the checkout step wich is responsible authenticate the workflow
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-          ssh-key: '${{ secrets.COMMIT_KEY }}'
-      # L26-L31 This will set all properties from the app.json to github action env variables
-      - name: JSON to variables
-        uses: antifree/json-to-variables@v1.0.1
-        with:
-          filename: 'app.json'
-          prefix: app
-      # L33-L36 Setup the nodejs version
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2.1.2
-        with:
-          node-version: '12'
-      # L40-L41 Install the dependencies
-      - name: Install dependencies
-        run: npm i
-      # L43-L44 Install the apps cli
-      - name: Install Rocket.Chat Apps cli
-        run: npm i -g @rocket.chat/apps-cli
-      # L46-L47 Pack the app (compiled)
-      - name: Bundle App Compiled
-        run: rc-apps package
-      # L49-L50 Renames the pack (compiled)
-      - name: Renaming Package Name
-        run: cd dist && mv ${{ env.app_nameSlug }}_${{ env.app_version }}.zip ${{ env.app_nameSlug }}_${{ env.app_version }}-compiled.zip
-      # L52-L53 Pack the app (not compiled)
-      - name: Bundle App Not Compiled
-        run: rc-apps package --no-compile
-      # L55-L56 Renames the pack (not compiled)
-      - name: Renaming Not Compiled Package Name
-        run: cd dist && mv ${{ env.app_nameSlug }}_${{ env.app_version }}.zip ${{ env.app_nameSlug }}_${{ env.app_version }}-not-compiled.zip
-      # L58-L76 Uploads both compiled and not compiled files inside the release
-      - name: Upload MS Teams bridge Compiled
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: dist/${{ env.app_nameSlug}}_${{ env.app_version }}-compiled.zip
-          asset_name: ${{ env.app_nameSlug}}_${{ env.app_version }}-compiled.zip
-          tag: ${{ env.app_version }}
-          overwrite: true
-          body: ${{ github.event.release.body }}
 
-      - name: Upload MS Teams bridge Not Compiled
-        uses: svenstaro/upload-release-action@v2
+      - name: Read app metadata
+        id: app
+        run: |
+          {
+            echo "version=$(jq -r .version app.json)"
+            echo "name_slug=$(jq -r .nameSlug app.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      # A tag whose name disagrees with app.json produces zips nobody can match
+      # to a marketplace version, so fail loudly instead.
+      - name: Verify tag matches app.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          APP_VERSION: ${{ steps.app.outputs.version }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          if [ "$tag" != "$APP_VERSION" ]; then
+            echo "::error::Tag $tag does not match app.json version $APP_VERSION"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: dist/${{ env.app_nameSlug }}_${{ env.app_version }}-not-compiled.zip
-          asset_name: ${{ env.app_nameSlug }}_${{ env.app_version }}-not-compiled.zip
-          tag: ${{ env.app_version }}
-          overwrite: true
-          body: ${{ github.event.release.body }}
+          node-version: '22.16.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Rocket.Chat Apps CLI
+        run: npm install -g @rocket.chat/apps-cli@1.13.0
+
+      # rc-apps names its output itself and the name differs between modes
+      # (--no-compile appends _no_compile), so each build gets a clean dist/
+      # and whatever zip lands there is moved out under our own name.
+      - name: Bundle app (compiled)
+        env:
+          SLUG: ${{ steps.app.outputs.name_slug }}
+          APP_VERSION: ${{ steps.app.outputs.version }}
+        run: |
+          rm -rf dist && mkdir -p artifacts
+          rc-apps package
+          mv dist/*.zip "artifacts/${SLUG}_${APP_VERSION}-compiled.zip"
+
+      - name: Bundle app (not compiled)
+        env:
+          SLUG: ${{ steps.app.outputs.name_slug }}
+          APP_VERSION: ${{ steps.app.outputs.version }}
+        run: |
+          rm -rf dist
+          rc-apps package --no-compile
+          mv dist/*.zip "artifacts/${SLUG}_${APP_VERSION}-not-compiled.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.app.outputs.name_slug }}_${{ steps.app.outputs.version }}
+          path: artifacts/*.zip
+          if-no-files-found: error
+
+      - name: Attach packages to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLUG: ${{ steps.app.outputs.name_slug }}
+          APP_VERSION: ${{ steps.app.outputs.version }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$TAG" \
+            "artifacts/${SLUG}_${APP_VERSION}-compiled.zip" \
+            "artifacts/${SLUG}_${APP_VERSION}-not-compiled.zip" \
+            --clobber
