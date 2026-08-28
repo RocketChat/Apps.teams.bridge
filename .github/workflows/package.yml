@@ -1,11 +1,6 @@
-# Packages the app (compiled and not compiled) so the zips can be installed manually.
-# On a tag push the zips are kept as a workflow artifact; on a published release
-# they are also attached to that release.
-#
-# The `tag` dispatch input builds an existing tag and attaches the zips to its
-# release. A release event runs the workflow file stored at the tag's own commit,
-# so a release cut from a tag that predates this file cannot package itself —
-# dispatching from the default branch is how those get their assets.
+# A release event runs the workflow file stored at the tag's own commit, so a
+# release cut from a tag predating this file cannot package itself. Dispatch
+# with `tag` from the default branch to give those releases their assets.
 name: Package App
 
 on:
@@ -30,7 +25,6 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      # An empty ref makes checkout fall back to the ref that triggered the run.
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -62,8 +56,6 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      # A tag whose name disagrees with app.json produces zips nobody can match
-      # to a marketplace version, so fail loudly instead.
       - name: Verify tag matches app.json version
         if: steps.target.outputs.tag != ''
         env:
@@ -87,17 +79,17 @@ jobs:
       - name: Install Rocket.Chat Apps CLI
         run: npm install -g @rocket.chat/apps-cli@1.13.0
 
-      # rc-apps names its output itself and the name differs between modes
-      # (--no-compile appends _no_compile), so each build gets a clean dist/
-      # and whatever zip lands there is moved out under our own name.
+      # rc-apps packages the working directory and names its own output, so each
+      # build gets a clean dist/ and is staged outside the checkout — a finished
+      # zip parked inside it would be swept into the next build.
       - name: Bundle app (compiled)
         env:
           SLUG: ${{ steps.app.outputs.name_slug }}
           APP_VERSION: ${{ steps.app.outputs.version }}
         run: |
-          rm -rf dist && mkdir -p artifacts
+          rm -rf dist && mkdir -p "$RUNNER_TEMP/artifacts"
           rc-apps package
-          mv dist/*.zip "artifacts/${SLUG}_${APP_VERSION}-compiled.zip"
+          mv dist/*.zip "$RUNNER_TEMP/artifacts/${SLUG}_${APP_VERSION}-compiled.zip"
 
       - name: Bundle app (not compiled)
         env:
@@ -106,13 +98,31 @@ jobs:
         run: |
           rm -rf dist
           rc-apps package --no-compile
-          mv dist/*.zip "artifacts/${SLUG}_${APP_VERSION}-not-compiled.zip"
+          mv dist/*.zip "$RUNNER_TEMP/artifacts/${SLUG}_${APP_VERSION}-not-compiled.zip"
+
+      - name: Verify packages contain no nested archives
+        env:
+          SLUG: ${{ steps.app.outputs.name_slug }}
+          APP_VERSION: ${{ steps.app.outputs.version }}
+        run: |
+          status=0
+          for kind in compiled not-compiled; do
+            zip="$RUNNER_TEMP/artifacts/${SLUG}_${APP_VERSION}-${kind}.zip"
+            nested=$(unzip -Z1 "$zip" | grep -i '\.zip$' || true)
+            if [ -n "$nested" ]; then
+              echo "::error::${kind} package contains nested archives:"
+              echo "$nested"
+              status=1
+            fi
+            echo "$kind: $(unzip -Z1 "$zip" | wc -l) files"
+          done
+          exit $status
 
       - name: Upload build artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.app.outputs.name_slug }}_${{ steps.app.outputs.version }}
-          path: artifacts/*.zip
+          path: ${{ runner.temp }}/artifacts/*.zip
           if-no-files-found: error
 
       - name: Attach packages to release
@@ -124,6 +134,6 @@ jobs:
           TAG: ${{ steps.target.outputs.tag }}
         run: |
           gh release upload "$TAG" \
-            "artifacts/${SLUG}_${APP_VERSION}-compiled.zip" \
-            "artifacts/${SLUG}_${APP_VERSION}-not-compiled.zip" \
+            "$RUNNER_TEMP/artifacts/${SLUG}_${APP_VERSION}-compiled.zip" \
+            "$RUNNER_TEMP/artifacts/${SLUG}_${APP_VERSION}-not-compiled.zip" \
             --clobber
