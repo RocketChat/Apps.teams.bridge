@@ -10,14 +10,16 @@ export const sendTextMessageToChatThreadAsync = async ({
 	threadId,
 	accessToken,
 	attachments,
+	teamId,
 }: {
 	http: IHttp;
 	textMessage: string;
 	threadId: string;
 	accessToken: string;
 	attachments?: any[];
+	teamId?: string; // set for channel-linked rooms
 }): Promise<SendMessageResponse> => {
-	const url = getGraphApiMessageUrl(threadId);
+	const url = getGraphApiMessageUrl(threadId, undefined, false, teamId);
 
 	const body = {
 		body: {

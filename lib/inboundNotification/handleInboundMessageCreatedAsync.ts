@@ -5,10 +5,10 @@ import { RoomType } from '@rocket.chat/apps-engine/definition/rooms';
 import type { IUser } from '@rocket.chat/apps-engine/definition/users';
 
 import type { TeamsBridgeApp } from '../../TeamsBridgeApp';
-import { DefaultTeamName } from '../Const';
+import { DefaultTeamName, UIActionId } from '../Const';
 import { mapTeamsMessageToRocketChatMessage, sendRocketChatMessageInRoomAsync } from '../MessageHelper';
-import { MessageMapping, RecentActivity, Room, UploadMapping, UserMapping } from '../PersistHelper';
-import { getChatThreadWithMembersAsync, getMessageWithResourceStringAsync, MessageType, ThreadType } from '../graph';
+import { ChannelUserPrompted, MessageMapping, RecentActivity, Room, UploadMapping, UserMapping } from '../PersistHelper';
+import { getChatThreadWithMembersAsync, getMessageWithResourceStringAsync, getTeamsUserProfileByIdAsync, MessageType, ThreadType } from '../graph';
 import { getSenderUser } from './getSender';
 import type { InBoundNotification } from './handleInboundNotificationAsync';
 import { PreventRegistry } from '../PreventRegistry';
@@ -163,9 +163,6 @@ export const handleInboundMessageCreatedAsync = async (
 				throw new Error('No user found to send the message');
 			}
 
-			// When the sender has no RC registration the app bot relays the message.
-			// Prefix the message text with the Teams sender's display name so RC
-			// users can see who originally sent it.
 			const usesBotFallback = !fromUserRocketChatUser;
 
 			const messageOptions = usesBotFallback ? { alias: getMessageResponse.fromTeamsUser.displayName ?? getMessageResponse.fromTeamsUser.id } : undefined;
@@ -214,6 +211,32 @@ export const handleInboundMessageCreatedAsync = async (
 				teamsThreadId: getMessageResponse.threadId,
 				relayedByAppUser: usesBotFallback,
 			});
+
+			// Channel-linked room + unmapped Teams sender: prompt (once per user) to map them.
+			if (usesBotFallback && roomRecord.teamsTeamId && appUser) {
+				const alreadyPrompted = await ChannelUserPrompted.isSet(read, getMessageResponse.threadId, fromUserTeamsId);
+				if (!alreadyPrompted) {
+					await ChannelUserPrompted.set(persis, getMessageResponse.threadId, fromUserTeamsId);
+					const senderName = getMessageResponse.fromTeamsUser.displayName ?? fromUserTeamsId;
+					const blocks = modify.getCreator().getBlockBuilder();
+					blocks.addSectionBlock({
+						text: blocks.newMarkdownTextObject(
+							`🆕 *${senderName}* is in the linked Teams channel but is not mapped to a Rocket.Chat user yet. Their messages will show as the bridge bot until mapped.`,
+						),
+					});
+					blocks.addActionsBlock({
+						blockId: 'TeamsBridge.NewChannelUserPrompt',
+						elements: [
+							blocks.newButtonElement({
+								actionId: `${UIActionId.MapIdentityButtonClicked}--${room.id}`,
+								text: blocks.newPlainTextObject('Map this user'),
+							}),
+						],
+					});
+					const promptBuilder = modify.getCreator().startMessage().setRoom(room).setSender(appUser).setBlocks(blocks);
+					await modify.getCreator().finish(promptBuilder);
+				}
+			}
 		} else if (getMessageResponse.messageType === MessageType.SystemAddMembers) {
 			const memberToAddTeamsIds = getMessageResponse.memberIds;
 			if (!memberToAddTeamsIds || memberToAddTeamsIds.length === 0) {
@@ -238,6 +261,38 @@ export const handleInboundMessageCreatedAsync = async (
 					// Under single-bot arch there are no dummy users. Teams members without
 					// a registered RC account are not added to the RC room.
 					console.log(`No RC user found for Teams member ${memberToAddTeamsId}, skipping room membership.`);
+
+					// Channel-linked room: prompt (once per user) to map the newly added Teams member.
+					if (roomRecord.teamsTeamId && appUser) {
+						const alreadyPrompted = await ChannelUserPrompted.isSet(read, getMessageResponse.threadId, memberToAddTeamsId);
+						if (!alreadyPrompted) {
+							await ChannelUserPrompted.set(persis, getMessageResponse.threadId, memberToAddTeamsId);
+							let addedName = memberToAddTeamsId;
+							try {
+								const profile = await getTeamsUserProfileByIdAsync(http, userAccessToken, memberToAddTeamsId);
+								addedName = profile?.displayName ?? memberToAddTeamsId;
+							} catch (error) {
+								console.log(`Could not resolve display name for Teams member ${memberToAddTeamsId}`);
+							}
+							const blocks = modify.getCreator().getBlockBuilder();
+							blocks.addSectionBlock({
+								text: blocks.newMarkdownTextObject(
+									`🆕 *${addedName}* was added to the linked Teams channel but is not mapped to a Rocket.Chat user yet. Their messages will show as the bridge bot until mapped.`,
+								),
+							});
+							blocks.addActionsBlock({
+								blockId: 'TeamsBridge.NewChannelUserPrompt',
+								elements: [
+									blocks.newButtonElement({
+										actionId: `${UIActionId.MapIdentityButtonClicked}--${room.id}`,
+										text: blocks.newPlainTextObject('Map this user'),
+									}),
+								],
+							});
+							const promptBuilder = modify.getCreator().startMessage().setRoom(room).setSender(appUser).setBlocks(blocks);
+							await modify.getCreator().finish(promptBuilder);
+						}
+					}
 					continue;
 				}
 

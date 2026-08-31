@@ -1,6 +1,6 @@
 {
     "id": "30d2e4bf-2402-4197-b844-e7082b07dc65",
-    "version": "2.0.0",
+    "version": "3.4.0",
     "requiredApiVersion": "^1.40.0",
     "iconFile": "icon.png",
     "author": {
@@ -24,6 +24,7 @@
         "IPreFileUpload",
         "IPreMessageSentModify",
         "IPreRoomUserLeave",
+        "IPreRoomUserJoined",
         "IPostRoomUserJoined",
         "IPostUserDeleted"
     ],

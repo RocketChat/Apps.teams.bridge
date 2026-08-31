@@ -2,8 +2,8 @@ import type { IHttp, IPersistence, IRead } from '@rocket.chat/apps-engine/defini
 
 import type { TeamsBridgeApp } from '../../TeamsBridgeApp';
 import { getUserAccessTokenAsync } from '../AuthHelper';
-import { subscribeToAllMessagesForOneUserAsync } from '../MicrosoftGraphApi';
-import { UserMapping, UserRegistration } from '../PersistHelper';
+import { subscribeToAllMessagesForOneUserAsync, subscribeToChannelMessagesAsync } from '../MicrosoftGraphApi';
+import { Room, UserMapping, UserRegistration } from '../PersistHelper';
 
 export const handleUserRegistrationAutoRenewAsync = async (options: {
 	subscriberEndpointUrl: string;
@@ -53,6 +53,42 @@ export const handleUserRegistrationAutoRenewAsync = async (options: {
 			});
 		} catch (error) {
 			console.error(`Error during renew registration for user ${registration.rocketChatUserId}. Ignore this error and continue. Error: ${error}`);
+		}
+
+		// Renew per-channel subscriptions for channel-linked rooms (chat subscription above
+		// does not cover Team channels).
+		try {
+			const userAccessToken = await getUserAccessTokenAsync({
+				app,
+				http,
+				persistence,
+				read,
+				rocketChatUserId: registration.rocketChatUserId,
+			});
+			if (userAccessToken) {
+				const rooms = await Room.findAll(read);
+				for (const room of rooms) {
+					if (room.teamsTeamId && room.teamsThreadId) {
+						try {
+							await subscribeToChannelMessagesAsync({
+								http,
+								read,
+								persis: persistence,
+								rocketChatUserId: registration.rocketChatUserId,
+								teamId: room.teamsTeamId,
+								channelId: room.teamsThreadId,
+								subscriberEndpointUrl,
+								userAccessToken,
+								renewIfExists: true,
+							});
+						} catch (error) {
+							console.error(`Error renewing channel subscription for room ${room.rocketChatRoomId}: ${error}`);
+						}
+					}
+				}
+			}
+		} catch (error) {
+			console.error(`Error during channel subscription renewal sweep: ${error}`);
 		}
 	}
 };

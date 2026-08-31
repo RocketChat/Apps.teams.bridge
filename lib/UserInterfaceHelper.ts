@@ -6,7 +6,7 @@ import type { IUser } from '@rocket.chat/apps-engine/definition/users';
 import type { TeamsBridgeApp } from '../TeamsBridgeApp';
 import { getAppAccessTokenAsync, getUserAccessTokenAsync } from './AuthHelper';
 import { UIActionId, UIElementId, UIElementText } from './Const';
-import { getTeamsChatMembersAsync, searchTeamsUsersAsync } from './MicrosoftGraphApi';
+import { getChannelMembersAsync, getTeamsChatMembersAsync, searchTeamsUsersAsync } from './MicrosoftGraphApi';
 import type { TeamsChatMember } from './MicrosoftGraphApi';
 import { notifyRocketChatUserInRoomAsync } from './Notifier';
 import { Room, UserMapping } from './PersistHelper';
@@ -299,7 +299,9 @@ export const openViewTeamsMembersContextualBarAsync = async (
 		return;
 	}
 
-	const result = await getTeamsChatMembersAsync(http, roomRecord.teamsThreadId, accessToken);
+	const result = roomRecord.teamsTeamId
+		? await getChannelMembersAsync(http, roomRecord.teamsTeamId, roomRecord.teamsThreadId, accessToken)
+		: await getTeamsChatMembersAsync(http, roomRecord.teamsThreadId, accessToken);
 	const view = await createViewMembersContextualBarBlocks({
 		modify,
 		members: result?.members ?? [],

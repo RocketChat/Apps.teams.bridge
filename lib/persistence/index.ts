@@ -14,6 +14,7 @@ export { WebhookSecret } from './WebhookSecret';
 
 export { OAuthNonce } from './OAuthNonce';
 export { RecentActivity } from './RecentActivity';
+export { ChannelUserPrompted } from './ChannelUserPrompted';
 
 export type { UserRegistrationModel } from './UserRegistration';
 export type { UserModel } from './UserMapping';

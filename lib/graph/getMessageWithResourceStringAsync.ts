@@ -51,7 +51,8 @@ export const getMessageWithResourceStringAsync = async (http: IHttp, resourceStr
 		}
 
 		const result: GetMessageResponse = {
-			threadId: responseBody.chatId,
+			// Chat messages carry chatId; channel messages carry channelIdentity instead.
+			threadId: responseBody.chatId ?? responseBody.channelIdentity?.channelId,
 			messageId: responseBody.id,
 			messageType,
 			fromTeamsUser: {
