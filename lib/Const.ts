@@ -30,6 +30,10 @@ const GraphApiEndpoint = {
 	OneDriveItem: (driveItemId: string) => `/me/drive/items/${driveItemId}`,
 	ShareLink: (driveItemId: string) => `/me/drive/items/${driveItemId}/createLink`,
 	ChatMessage: (threadId: string, messageId: string) => `chats/${threadId}/messages/${messageId}`,
+	JoinedTeams: 'me/joinedTeams',
+	TeamChannels: (teamId: string) => `teams/${teamId}/channels`,
+	ChannelMembers: (teamId: string, channelId: string) => `teams/${teamId}/channels/${channelId}/members`,
+	ChannelMessage: (teamId: string, channelId: string) => `teams/${teamId}/channels/${channelId}/messages`,
 };
 
 export const AppSetupVerificationPassMessageText: string = 'TeamsBridge app setup verification PASSED!';
@@ -118,6 +122,12 @@ export const BotUserAuthenticationScopes = [
 	'chatmessage.read',
 	'chatmessage.send',
 	'files.readwrite',
+	// Team-channel bridging
+	'team.readbasic.all',
+	'channel.readbasic.all',
+	'channelmember.read.all',
+	'channelmessage.read.all',
+	'channelmessage.send',
 ];
 
 export const ApplicationAuthenticationScopes = [
@@ -169,11 +179,33 @@ export const UIActionId = {
 	TeamsUserSearchButton: 'TeamsBridge.TeamsUserSearchButton',
 	ViewMembersLoadMore: 'TeamsBridge.ViewMembersLoadMore',
 	SaveChanges: 'TeamsBridge.SaveChanges',
+	MapIdentityButtonClicked: 'TeamsBridge.MapIdentityButtonClicked',
+	MapIdentityRcUserSelect: 'TeamsBridge.MapIdentityRcUserSelect',
+	MapIdentityTeamsUserSelect: 'TeamsBridge.MapIdentityTeamsUserSelect',
+	MapIdentitySubmit: 'TeamsBridge.MapIdentitySubmit',
+	MapIdentityRcUsernameInput: 'TeamsBridge.MapIdentityRcUsernameInput',
+	BridgeRoomButtonClicked: 'TeamsBridge.BridgeRoomButtonClicked',
+	AppUserSessionButtonClicked: 'TeamsBridge.AppUserSessionButtonClicked',
+	BridgeAutoCreateClicked: 'TeamsBridge.BridgeAutoCreateClicked',
+	BridgeLinkExistingClicked: 'TeamsBridge.BridgeLinkExistingClicked',
+	BridgeChatSelected: 'TeamsBridge.BridgeChatSelected',
+	BridgeLinkChannelClicked: 'TeamsBridge.BridgeLinkChannelClicked',
+	BridgeChannelSelected: 'TeamsBridge.BridgeChannelSelected',
+	BridgeLinkSubmit: 'TeamsBridge.BridgeLinkSubmit',
+	TeamsBridgeHubButtonClicked: 'TeamsBridge.TeamsBridgeHubButtonClicked',
+	TeamsBridgeHubRefresh: 'TeamsBridge.TeamsBridgeHubRefresh',
+	TeamsBridgeRestoreMappings: 'TeamsBridge.TeamsBridgeRestoreMappings',
+	BridgeUnlinkClicked: 'TeamsBridge.BridgeUnlinkClicked',
+	BridgeUnlinkConfirm: 'TeamsBridge.BridgeUnlinkConfirm',
+	BridgeUnlinkCancel: 'TeamsBridge.BridgeUnlinkCancel',
 };
 
 export const UIElementId = {
 	ContextualBarId: 'TeamsBridge.ContextualBarId',
 	ViewMembersContextualBarId: 'TeamsBridge.ViewMembersContextualBarId',
+	MapIdentityContextualBarId: 'TeamsBridge.MapIdentityContextualBarId',
+	BridgeRoomContextualBarId: 'TeamsBridge.BridgeRoomContextualBarId',
+	TeamsBridgeHubContextualBarId: 'TeamsBridge.TeamsBridgeHubContextualBarId',
 };
 
 export const UIElementText = {
@@ -229,13 +261,16 @@ export const getGraphApiChatMemberRemoveUrl = (threadId: string, membershipId: s
 	return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.RemoveChatMember(threadId, membershipId)}`;
 };
 
-export const getGraphApiMessageUrl = (threadId: string, messageId?: string, useBetaVersion?: boolean) => {
+export const getGraphApiMessageUrl = (threadId: string, messageId?: string, useBetaVersion?: boolean, teamId?: string) => {
 	let version = GraphApiVersion.V1;
 	if (useBetaVersion) {
 		version = GraphApiVersion.Beta;
 	}
 
-	let url = `${GraphApiBaseUrl}/${version}/${GraphApiEndpoint.Message(threadId)}`;
+	// When a teamId is provided, threadId is a channel id and the channel endpoint applies.
+	let url = teamId
+		? `${GraphApiBaseUrl}/${version}/${GraphApiEndpoint.ChannelMessage(teamId, threadId)}`
+		: `${GraphApiBaseUrl}/${version}/${GraphApiEndpoint.Message(threadId)}`;
 	if (messageId) {
 		url = `${url}/${messageId}`;
 	}
@@ -273,6 +308,18 @@ export const getGraphApiMessageBetaUrl = (threadId: string, messageId?: string) 
 
 export const getGraphApiSubscriptionUrl = () => {
 	return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.Subscription}`;
+};
+
+export const getGraphApiJoinedTeamsUrl = () => {
+	return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.JoinedTeams}`;
+};
+
+export const getGraphApiTeamChannelsUrl = (teamId: string) => {
+	return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.TeamChannels(teamId)}`;
+};
+
+export const getGraphApiChannelMembersUrl = (teamId: string, channelId: string) => {
+	return `${GraphApiBaseUrl}/${GraphApiVersion.V1}/${GraphApiEndpoint.ChannelMembers(teamId, channelId)}`;
 };
 
 export const getGraphApiSubscriptionOperationUrl = (subscriptionId: string) => {

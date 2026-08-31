@@ -6,6 +6,7 @@ export enum AppSetting {
 	AadClientId = 'teamsbridge_aad_client_id',
 	AadClientSecret = 'teamsbridge_aad_client_secret',
 	ProxyUrl = 'teamsbridge_proxy_url',
+	MappingsBackup = 'teamsbridge_mappings_backup',
 }
 
 export const settings: Array<ISetting> = [
@@ -32,6 +33,16 @@ export const settings: Array<ISetting> = [
 		packageValue: '',
 		i18nLabel: AppSetting.AadClientSecret,
 		required: true,
+	},
+	{
+		id: AppSetting.MappingsBackup,
+		public: false,
+		type: SettingType.STRING,
+		multiline: true,
+		packageValue: '',
+		i18nLabel: AppSetting.MappingsBackup,
+		i18nDescription: 'teamsbridge_mappings_backup_description',
+		required: false,
 	},
 	{
 		id: AppSetting.ProxyUrl,

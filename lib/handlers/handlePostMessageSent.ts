@@ -147,6 +147,7 @@ export const handlePostMessageSentAsync = async (options: {
 			shareRecord.shareLink,
 			roomRecord.teamsThreadId,
 			accessToken,
+			roomRecord.teamsTeamId,
 		);
 
 		teamsMessageId = response.messageId;
@@ -174,6 +175,7 @@ export const handlePostMessageSentAsync = async (options: {
 			threadId: roomRecord.teamsThreadId,
 			accessToken,
 			attachments,
+			teamId: roomRecord.teamsTeamId,
 		});
 
 		teamsMessageId = response.messageId;

@@ -53,6 +53,24 @@ export const UserMapping = {
 		return results[0] as UserModel;
 	},
 
+	// All mappings, deduped (each pair is stored under two associations).
+	async findAll(read: IRead): Promise<UserModel[]> {
+		const associations: Array<RocketChatAssociationRecord> = [new RocketChatAssociationRecord(RocketChatAssociationModel.MISC, KEY)];
+		const results = ((await read.getPersistenceReader().readByAssociations(associations)) ?? []) as UserModel[];
+		const seen = new Set<string>();
+		return results.filter((r) => {
+			if (!r?.rocketChatUserId || !r?.teamsUserId) {
+				return false;
+			}
+			const key = `${r.rocketChatUserId}:${r.teamsUserId}`;
+			if (seen.has(key)) {
+				return false;
+			}
+			seen.add(key);
+			return true;
+		});
+	},
+
 	async delete(read: IRead, persis: IPersistence, rocketChatUserId: string): Promise<void> {
 		const user = await UserMapping.findByRCUserId(read, rocketChatUserId);
 		if (!user) {

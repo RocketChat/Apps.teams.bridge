@@ -4,6 +4,11 @@ export * from './getApplicationAccessTokenAsync';
 export * from './listTeamsUserProfilesAsync'; // searchTeamsUsersAsync + SearchTeamsUsersResult
 export * from './getTeamsUserProfileByIdAsync';
 export * from './getTeamsChatMembersAsync';
+export * from './listMyChatsAsync';
+export * from './listJoinedTeamsAsync';
+export * from './listTeamChannelsAsync';
+export * from './getChannelMembersAsync';
+export * from './subscribeToChannelMessagesAsync';
 export * from './getUserAccessTokenAsync';
 export * from './renewUserAccessTokenAsync';
 export * from './revokeUserRefreshTokenAsync';
